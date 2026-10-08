@@ -13,11 +13,8 @@ describe('LiveExperimentMonitor', () => {
     vi.clearAllMocks();
   });
 
-  it('renders Loading monitor... initially', () => {
+  it('renders loading state initially before data arrives', () => {
     render(<LiveExperimentMonitor experimentId="123" onComplete={() => {}} />);
-    expect(screen.getByText(/Loading monitor.../i)).toBeInTheDocument();
+    expect(screen.getByText(/Loading monitor/i)).toBeInTheDocument();
   });
-
-  // Note: For fully testing async data fetch in vitest, we'd need waitFor or flushPromises,
-  // but as per basic requirements, we only check the structure here.
 });

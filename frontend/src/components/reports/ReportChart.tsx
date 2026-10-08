@@ -9,10 +9,11 @@ interface Props {
 export default function ReportChart({ reports }: Props) {
   if (reports.length === 0) return null;
 
-  const data = reports.slice(-10).map(r => ({
-    name: r.experiment_name,
-    recovery: r.recovery_time_seconds,
+  const data = reports.slice(-10).map((r) => ({
+    name: r.experimentName,
+    recovery: r.recoveryTimeSeconds ?? 0,
   }));
+
 
   return (
     <div className="h-72 w-full bg-slate-800 p-4 rounded-lg border border-slate-700 mb-6">

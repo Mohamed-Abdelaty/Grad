@@ -257,6 +257,7 @@ async def list_experiments(
         run_result = await db.execute(run_stmt)
         latest_run = run_result.scalar_one_or_none()
 
+        run_params = latest_run.params if latest_run and latest_run.params else {}
         output.append(
             {
                 "experiment_id": str(exp.id),
@@ -264,6 +265,8 @@ async def list_experiments(
                 "created_at": exp.created_at.isoformat(),
                 "latest_run_status": latest_run.status if latest_run else None,
                 "latest_run_id": str(latest_run.id) if latest_run else None,
+                "target_service": run_params.get("target_service"),
+                "fault_type": run_params.get("fault_type"),
             }
         )
     return output
@@ -297,6 +300,9 @@ async def get_experiment(
 
     params = latest_run.params if latest_run and latest_run.params else {}
     results = latest_run.results if latest_run and latest_run.results else {}
+    # Stage-transition log lines are stored in results["logs"] by the runner.
+    # Fall back to an empty list so the UI always receives a list (never null).
+    execution_logs = results.get("logs") if isinstance(results.get("logs"), list) else []
     return {
         "id": str(experiment.id),
         "name": experiment.name,
@@ -308,13 +314,13 @@ async def get_experiment(
         "status": latest_run.status if latest_run else "pending",
         "createdAt": experiment.created_at.isoformat(),
         "lifecycleStage": latest_run.stage if latest_run and latest_run.stage else "pending",
-        "logs": [
-            f"Target: {params.get('target_service', 'not started')}",
-            f"Fault: {params.get('fault_type', 'not started')}",
-            f"Stage: {latest_run.status if latest_run else 'pending'}",
-        ],
+        # Real timestamps so the UI can compute elapsed time from server clock.
+        "runStartedAt": latest_run.started_at.isoformat() if latest_run and latest_run.started_at else None,
+        "runFinishedAt": latest_run.finished_at.isoformat() if latest_run and latest_run.finished_at else None,
+        "logs": execution_logs,
         "results": results,
     }
+
 
 
 @router.post(

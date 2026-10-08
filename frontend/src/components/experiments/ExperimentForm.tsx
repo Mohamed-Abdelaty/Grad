@@ -14,6 +14,7 @@ export default function ExperimentForm({ onExperimentStarted }: Props) {
   const [delayMs, setDelayMs] = useState<number>(200);
   const [expectedLoss, setExpectedLoss] = useState<number>(0);
   const [maxRecovery, setMaxRecovery] = useState<number>(120);
+  const [pipelineYaml, setPipelineYaml] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,8 +58,8 @@ validation:
   expected_data_loss: ${expectedLoss}
   max_recovery_time: ${maxRecovery}
 `;
-      const { experiment_id } = await createExperiment(yaml);
-      await runExperiment(experiment_id, yaml);
+      const { experiment_id } = await createExperiment(yaml, pipelineYaml);
+      await runExperiment(experiment_id);
       onExperimentStarted(experiment_id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start experiment');
@@ -132,6 +133,16 @@ validation:
             type="number" 
             value={maxRecovery} onChange={e => setMaxRecovery(Number(e.target.value))}
             className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-slate-200"
+          />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-sm text-slate-400 mb-1">Pipeline YAML (optional)</label>
+          <textarea
+            value={pipelineYaml}
+            onChange={e => setPipelineYaml(e.target.value)}
+            rows={6}
+            placeholder="Attach a pipeline to validate post-recovery output"
+            className="w-full bg-slate-900 border border-slate-700 rounded p-2 font-mono text-sm text-slate-200"
           />
         </div>
       </div>

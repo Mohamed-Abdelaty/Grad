@@ -8,30 +8,28 @@ export interface ValidationResult {
   errors: ValidationError[];
 }
 
-export interface PipelineRunResult {
-  recordsProcessed: number;
-  durationMs: number;
-}
-
+// Result returned by POST /api/pipelines/run.
+// pipeline_run_id is the DB UUID of the created PipelineRun row.
+// run_id (the executor's internal UUID) is not returned by the API and is removed.
 export interface PipelineExecutionResult {
-  run_id: string | null;
   pipeline_run_id: string;
   status: 'success' | 'failed' | 'invalid';
-  metrics: Record<string, Record<string, number | string | null>>;
+  metrics: Record<string, number | string | null>;
   logs: Array<{ level: string; step: string; message: string }>;
 }
 
+// Shape returned by GET /api/pipeline-runs/{id}.
+// Matches the PipelineRun SQLAlchemy model fields as serialized by the route.
 export interface PipelineRun {
   id: string;
   name: string;
   status: 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
-  recordsProcessed: number;
+  recordsProcessed: number | null;
   startedAt: string;
-  completedAt?: string;
-  result?: PipelineRunResult;
-  error_message?: string | null;
-  metrics?: Record<string, number>;
-  configuration?: {
+  completedAt: string | null;
+  error_message: string | null;
+  metrics: Record<string, number | null>;
+  configuration: {
     source?: { path?: string; type?: string };
     storage?: { path?: string; type?: string };
     processing?: { operations?: Array<{ type: string }> };

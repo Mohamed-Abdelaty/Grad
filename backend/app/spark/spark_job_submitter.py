@@ -65,6 +65,7 @@ class SparkJobSubmitter:
         input_source: str,
         output_path: str,
         processing_config: dict[str, Any],
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Submit ``batch_processing_job.py`` to the Spark cluster.
@@ -109,13 +110,14 @@ class SparkJobSubmitter:
         ]
 
         logger.info(
-            "Submitting batch Spark job: input=%s output=%s master=%s",
+            "Submitting batch Spark job: input=%s output=%s master=%s run_id=%s",
             input_source,
             output_path,
             self._settings.SPARK_MASTER_URL,
+            run_id,
         )
 
-        stdout, stderr = await self._run_subprocess(cmd)
+        stdout, stderr = await self._run_subprocess(cmd, run_id=run_id)
         return self._parse_result(stdout, stderr)
 
     async def health_check(self) -> dict[str, Any]:
@@ -164,7 +166,7 @@ class SparkJobSubmitter:
     # ── Private helpers ────────────────────────────────────────────────────────
 
     async def _run_subprocess(
-        self, cmd: list[str]
+        self, cmd: list[str], run_id: str | None = None
     ) -> tuple[str, str]:
         """
         Execute *cmd* asynchronously, enforcing the configured timeout.
@@ -173,6 +175,10 @@ class SparkJobSubmitter:
         ----------
         cmd : list[str]
             Command and arguments to execute.
+        run_id : str | None
+            If provided, the subprocess PID is registered with the global
+            :data:`~app.pipeline.progress.tracker` so the cancel endpoint
+            can send SIGTERM while the job is running.
 
         Returns
         -------
@@ -186,13 +192,21 @@ class SparkJobSubmitter:
         SparkJobFailedError
             Process exited with a non-zero return code.
         """
+        from app.pipeline.progress import tracker  # avoid circular import at module level
+
         timeout = self._settings.SPARK_SUBMIT_TIMEOUT_SECONDS
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env={**os.environ, "HADOOP_USER_NAME": self._settings.HDFS_USER},
+            start_new_session=True,
         )
+
+        # Register the PID with the tracker so cancel can kill this process.
+        if run_id is not None:
+            tracker.register_proc_pid(run_id, proc.pid)
+
         try:
             raw_stdout, raw_stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=float(timeout)
@@ -205,6 +219,10 @@ class SparkJobSubmitter:
                 stdout="",
                 stderr="",
             )
+        finally:
+            # Always deregister — whether the job succeeded, failed, or was killed.
+            if run_id is not None:
+                tracker.deregister_proc_pid(run_id)
 
         stdout = raw_stdout.decode("utf-8", errors="replace")
         stderr = raw_stderr.decode("utf-8", errors="replace")

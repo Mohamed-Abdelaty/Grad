@@ -1,66 +1,143 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getSystemStatus } from '../api/system';
+import { Link } from 'react-router-dom';
+import { getSystemStatus, SystemStatus } from '../api/system';
 import { getPipelineRuns } from '../api/pipelines';
 import { listExperiments } from '../api/experiments';
 import ServiceStatusBadge from '../components/pipelines/ServiceStatusBadge';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  EmptyState,
+  ErrorState,
+  SkeletonCard,
+  StatCard,
+  StatusPill,
+} from '../components/ui';
+
+type ServiceKey = keyof Omit<SystemStatus, 'status'>;
+
+const SERVICES: Array<[ServiceKey, string]> = [
+  ['database', 'Database'],
+  ['kafka', 'Kafka'],
+  ['spark', 'Spark'],
+  ['hdfs', 'HDFS'],
+];
 
 export default function Dashboard() {
-  const { data: status } = useQuery({
+  const status = useQuery({
     queryKey: ['systemStatus'],
     queryFn: getSystemStatus,
-    refetchInterval: 5000
+    refetchInterval: 5000,
   });
-
-  const { data: runs } = useQuery({
+  const runs = useQuery({
     queryKey: ['pipelineRuns'],
     queryFn: getPipelineRuns,
-    refetchInterval: 5000
+    refetchInterval: 5000,
   });
-
-  const { data: experiments } = useQuery({
+  const experiments = useQuery({
     queryKey: ['experiments'],
     queryFn: listExperiments,
-    refetchInterval: 5000
+    refetchInterval: 5000,
   });
+
+  const runList = runs.data ?? [];
+  const experimentList = experiments.data ?? [];
+  const runningRuns = runList.filter((r) => r.status === 'running').length;
+  const failedRuns = runList.filter((r) => r.status === 'failed').length;
+  const runningExperiments = experimentList.filter((e) => e.status === 'running').length;
 
   return (
     <div className="space-y-6">
-      <section>
-        <h2 className="text-xl font-semibold mb-4">System Status</h2>
-        <div className="flex flex-wrap gap-4">
-          {status ? (
-            Object.entries(status).map(([service, connected]) => (
-              <ServiceStatusBadge key={service} serviceName={service} connected={connected} />
-            ))
-          ) : (
-            <div className="text-slate-400">Loading status...</div>
-          )}
-        </div>
+      <section aria-labelledby="system-status-heading">
+        <h2 id="system-status-heading" className="text-lg font-semibold mb-3">
+          System Status
+        </h2>
+        {status.isLoading && <SkeletonCard />}
+        {status.isError && (
+          <ErrorState
+            title="Could not load system status"
+            onRetry={() => void status.refetch()}
+          />
+        )}
+        {status.data && (
+          <div className="flex flex-wrap gap-4">
+            {SERVICES.map(([key, label]) => (
+              <ServiceStatusBadge
+                key={key}
+                serviceName={label}
+                connected={status.data[key].connected}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <section className="bg-slate-800 p-6 rounded-lg border border-slate-700">
-          <h2 className="text-lg font-medium text-slate-300 mb-2">Pipelines Overview</h2>
-          <div className="text-4xl font-bold text-indigo-400">{runs?.length || 0}</div>
-          <p className="text-sm text-slate-400 mt-1">Total runs tracked</p>
-        </section>
+      <section aria-label="Key figures" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {runs.isLoading || experiments.isLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <StatCard label="Pipeline runs" value={runs.isError ? null : runList.length} sub="Total tracked" />
+            <StatCard
+              label="Active pipelines"
+              value={runs.isError ? null : runningRuns}
+              sub={runs.isError ? 'Unavailable' : `${failedRuns} failed`}
+              accent={failedRuns > 0 ? 'warning' : 'success'}
+            />
+            <StatCard
+              label="Running experiments"
+              value={experiments.isError ? null : runningExperiments}
+              sub={experiments.isError ? 'Unavailable' : `${experimentList.length} total`}
+            />
+          </>
+        )}
+      </section>
 
-        <section className="bg-slate-800 p-6 rounded-lg border border-slate-700 overflow-hidden">
-          <h2 className="text-lg font-medium text-slate-300 mb-4">Recent Experiments</h2>
-          <div className="space-y-2">
-            {experiments?.slice(0, 5).map(exp => (
-              <div key={exp.id} className="flex justify-between items-center text-sm border-b border-slate-700 pb-2">
-                <span className="font-mono">{exp.name}</span>
-                <span className={`px-2 py-0.5 rounded text-xs ${exp.status === 'succeeded' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-300'}`}>
-                  {exp.status}
-                </span>
-              </div>
+      <Card as="section">
+        <CardHeader>
+          <CardTitle>Recent Experiments</CardTitle>
+          <Link to="/reliability" className="text-sm text-brand-light hover:underline">
+            View all
+          </Link>
+        </CardHeader>
+        {experiments.isLoading && <SkeletonCard />}
+        {experiments.isError && (
+          <ErrorState
+            title="Could not load experiments"
+            onRetry={() => void experiments.refetch()}
+          />
+        )}
+        {experiments.data && experimentList.length === 0 && (
+          <EmptyState
+            title="No experiments yet"
+            description="Run a fault-injection experiment from Reliability Testing."
+          />
+        )}
+        {experimentList.length > 0 && (
+          <ul className="space-y-2">
+            {experimentList.slice(0, 5).map((exp) => (
+              <li
+                key={exp.id}
+                className="flex justify-between items-center text-sm border-b border-surface-border pb-2 last:border-0"
+              >
+                <div className="min-w-0">
+                  <span className="font-mono">{exp.name}</span>
+                  {exp.target && (
+                    <span className="ml-2 text-xs text-slate-500">→ {exp.target}</span>
+                  )}
+                </div>
+                <StatusPill status={exp.status ?? 'pending'} />
+              </li>
             ))}
-            {!experiments?.length && <div className="text-slate-400 text-sm">No recent experiments.</div>}
-          </div>
-        </section>
-      </div>
+          </ul>
+        )}
+      </Card>
     </div>
   );
 }

@@ -70,6 +70,15 @@ class PipelineRun(Base):
         comment="Human-readable error detail when status is 'failed'.",
     )
 
+    output_path: Mapped[str | None] = mapped_column(
+        String(1024),
+        nullable=True,
+        comment=(
+            "Actual output path for the run's data (may differ from the "
+            "configured path when the executor redirects a local path to HDFS)."
+        ),
+    )
+
     # ── Relationships ──────────────────────────────────────────────────────────
     pipeline: Mapped["Pipeline"] = relationship(  # noqa: F821
         "Pipeline",
@@ -91,6 +100,13 @@ class PipelineRun(Base):
         "FaultInjection",
         back_populates="pipeline_run",
         cascade="all, delete-orphan",
+    )
+
+    events: Mapped[list["PipelineRunEvent"]] = relationship(  # noqa: F821
+        "PipelineRunEvent",
+        back_populates="pipeline_run",
+        cascade="all, delete-orphan",
+        order_by="PipelineRunEvent.seq",
     )
 
     def __repr__(self) -> str:

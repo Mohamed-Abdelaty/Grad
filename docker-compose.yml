@@ -2,6 +2,13 @@
 # -------------------
 # Defines the full development environment for the Resilient Big Data Pipeline Platform.
 #
+# The top-level "name:" field pins the Docker Compose project name to
+# "resilient-big-data-platform" regardless of the directory this repo is
+# cloned into.  Docker sets COMPOSE_PROJECT_NAME from this value, which
+# safety.py reads via Settings.PROJECT_CONTAINER_PREFIX.
+# Without this pin, cloning into a folder with a different name would
+# produce a different project name, breaking the container label check.
+#
 # Services:
 #   postgres          — Platform's main PostgreSQL 16 database
 #   kafka             — Apache Kafka (KRaft mode, single-node)
@@ -22,6 +29,13 @@
 #   docker-compose up --build          # first run
 #   docker-compose up                  # subsequent runs
 #   docker-compose down -v             # stop and remove all volumes
+
+# ── Project name (pinned) ───────────────────────────────────────────────────────
+# Compose reads this as COMPOSE_PROJECT_NAME.  Without it, Docker defaults to
+# the parent directory name (which changes on every clone).  Safety.py reads
+# COMPOSE_PROJECT_NAME via PROJECT_CONTAINER_PREFIX in Settings to verify that
+# chaos-targeted containers belong to this project.
+name: resilient-big-data-platform
 
 # ── Shared network ─────────────────────────────────────────────────────────────
 networks:
@@ -362,6 +376,11 @@ services:
       SPARK_JOBS_PATH: /app/spark-jobs
       HDFS_NAMENODE_URL: http://namenode:9870
       HDFS_USER: root
+      # ── Auth admin ────────────────────────────────────────────────────────────
+      # Read from .env (via env_file above). Explicit entries here ensure the
+      # values are visible in `docker-compose config` output for auditing.
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?ADMIN_USERNAME must be set in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
       # ── Phase 7: ChaosLab Reliability Engine ─────────────────────────────────
       # PROJECT_CONTAINER_PREFIX must match the Docker Compose project name
       # (the directory name or COMPOSE_PROJECT_NAME env var).
@@ -420,7 +439,7 @@ services:
       - platform-network
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-grafana123}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro

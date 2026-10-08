@@ -8,8 +8,13 @@ export async function validatePipeline(yamlContent: string): Promise<ValidationR
   return res.data;
 }
 
-export async function runPipeline(yamlContent: string): Promise<PipelineExecutionResult> {
-  const res = await apiClient.post<PipelineExecutionResult>('/api/pipelines/run', {
+export type RunPipelineResponse =
+  | { pipeline_run_id: string; status: 'running' }
+  | PipelineExecutionResult;
+
+export async function runPipeline(yamlContent: string, wait: boolean = false): Promise<RunPipelineResponse> {
+  const url = wait ? '/api/pipelines/run?wait=true' : '/api/pipelines/run';
+  const res = await apiClient.post<RunPipelineResponse>(url, {
     yaml_content: yamlContent
   });
   return res.data;

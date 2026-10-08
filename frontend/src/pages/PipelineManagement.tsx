@@ -37,7 +37,8 @@ export default function PipelineManagement() {
     setActionError(null);
     setExecution(null);
     try {
-      setExecution(await runPipeline(yaml));
+      const result = await runPipeline(yaml, true); // Use wait=true to keep existing synchronous behavior for UI-2
+      setExecution(result as PipelineExecutionResult);
       refetch();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Pipeline execution request failed.');

@@ -37,8 +37,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import tempfile
 import time
+import uuid
 from typing import Any
 
 import pandas as pd
@@ -47,7 +47,130 @@ from app.pipeline.context import PipelineExecutionContext
 from app.pipeline.generator import ExecutionPlan, ExecutionStep
 from app.spark.spark_job_submitter import SparkJobSubmitter
 
+# Import the global progress tracker (populated during app startup by main.py).
+# The import is at module level so the singleton is shared across all callers.
+# In testing, the tracker is a no-op when run_id is None.
+from app.pipeline.progress import tracker as _progress_tracker
+
 logger = logging.getLogger(__name__)
+
+# ── Shared-filesystem rule ─────────────────────────────────────────────────────
+#
+# In Spark standalone cluster mode (spark://spark-master:7077 with client
+# deploy mode) the driver runs on the backend container but executors run on
+# spark-worker containers.  Local file-system paths (/tmp/, /app/ etc.) are
+# container-local: a file in the backend's /tmp/ is invisible to Spark workers,
+# and part files written by workers into their /tmp/ are invisible to the
+# backend.
+#
+# Rule: for Spark pipelines ALL inputs and outputs must live on a shared
+# filesystem — either HDFS (hdfs://namenode:9000/...) or a Docker volume
+# mounted to BOTH the backend and all spark-worker containers.
+#
+# Currently the only shared bind-mount is ./backend/sample-data:/app/sample-data
+# (present on backend, spark-master, and spark-worker in docker-compose.yml).
+# Everything else, including /tmp/, must go to HDFS.
+#
+# _upload_df_to_hdfs() and the output-path normalisation in _run_spark_job()
+# enforce this rule automatically so callers never need to know about it.
+
+
+def _upload_df_to_hdfs(df: pd.DataFrame, hdfs_path: str) -> None:
+    """
+    Upload *df* as a UTF-8 CSV to HDFS using the WebHDFS REST API.
+
+    WebHDFS CREATE uses a mandatory two-step HTTP redirect:
+
+    1. ``PUT NameNode?op=CREATE`` → 307 Temporary Redirect with the DataNode
+       upload URL in the ``Location`` header.
+    2. ``PUT DataNode`` with the CSV bytes → 201 Created.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame to serialise and upload.
+    hdfs_path : str
+        Absolute HDFS path (e.g. ``/tmp/spark-input-abc123.csv``).
+
+    Raises
+    ------
+    RuntimeError
+        If either WebHDFS step fails (non-redirect / non-2xx response).
+    """
+    import requests as _requests
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    namenode_url = settings.HDFS_NAMENODE_URL   # http://namenode:9870
+    user = settings.HDFS_USER                   # root
+
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+
+    # Step 1 — initiate CREATE; NameNode returns 307 Redirect to DataNode
+    create_url = (
+        f"{namenode_url}/webhdfs/v1{hdfs_path}"
+        f"?op=CREATE&user.name={user}&overwrite=true&replication=1"
+    )
+    resp1 = _requests.put(create_url, allow_redirects=False, timeout=15)
+    if resp1.status_code not in (200, 201, 307):
+        raise RuntimeError(
+            f"HDFS CREATE (step 1) failed with HTTP {resp1.status_code}: "
+            f"{resp1.text[:300]}"
+        )
+
+    datanode_url = resp1.headers.get("Location", "")
+    if not datanode_url:
+        raise RuntimeError("HDFS CREATE (step 1) returned no Location header.")
+
+    # Step 2 — upload CSV bytes to the DataNode URL
+    resp2 = _requests.put(datanode_url, data=csv_bytes, timeout=60)
+    if resp2.status_code not in (200, 201):
+        raise RuntimeError(
+            f"HDFS CREATE (step 2) failed with HTTP {resp2.status_code}: "
+            f"{resp2.text[:300]}"
+        )
+
+    logger.info(
+        "Staged %d-row DataFrame (%d bytes) to HDFS %s",
+        len(df), len(csv_bytes), hdfs_path,
+    )
+
+
+def _delete_hdfs_path(hdfs_path: str) -> None:
+    """
+    Delete an HDFS path using the WebHDFS REST DELETE API.
+
+    Called in the ``finally`` block of :meth:`PipelineExecutor._run_spark_job`
+    to clean up temporary input files created for non-file sources (carry-over b).
+
+    Failures are logged as warnings and never propagated — cleanup is best-effort.
+
+    Parameters
+    ----------
+    hdfs_path : str
+        Absolute HDFS path (e.g. ``/tmp/spark-input-abc123.csv``).
+    """
+    try:
+        import requests as _requests
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        url = (
+            f"{settings.HDFS_NAMENODE_URL}/webhdfs/v1{hdfs_path}"
+            f"?op=DELETE&recursive=false&user.name={settings.HDFS_USER}"
+        )
+        resp = _requests.delete(url, timeout=10)
+        if resp.status_code in (200, 404):
+            logger.info("Deleted HDFS temp file %s (HTTP %d).", hdfs_path, resp.status_code)
+        else:
+            logger.warning(
+                "HDFS DELETE %s returned unexpected HTTP %d: %s",
+                hdfs_path,
+                resp.status_code,
+                resp.text[:200],
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to delete HDFS temp file %s: %s", hdfs_path, exc)
 
 
 # ── Executor exception ─────────────────────────────────────────────────────────
@@ -104,7 +227,9 @@ class PipelineExecutor:
         print(context.metrics)  # {step: {rows_out, duration_ms}, ...}
     """
 
-    def execute(self, plan: ExecutionPlan) -> PipelineExecutionContext:
+    def execute(
+        self, plan: ExecutionPlan, tracker_run_id: str | None = None
+    ) -> PipelineExecutionContext:
         """
         Run all steps in *plan* in order and return the execution context.
 
@@ -112,6 +237,11 @@ class PipelineExecutor:
         ----------
         plan : ExecutionPlan
             Resolved execution plan from :class:`~app.pipeline.generator.PipelineGenerator`.
+        tracker_run_id : str | None
+            When provided, progress events are emitted to the global
+            :data:`~app.pipeline.progress.tracker` under this key.  This must
+            match the ``pipeline_run_id`` stored in the database so the SSE
+            endpoint and REST endpoints can serve the same events.
 
         Returns
         -------
@@ -135,24 +265,52 @@ class PipelineExecutor:
 
         # ── Source step ────────────────────────────────────────────────────────
         source_step = next(s for s in plan.steps if s.step_type == "source")
-        df = self._run_source(source_step, ctx)
+        df = self._run_source(source_step, ctx, tracker_run_id)
+
+        # ── Cancel check ───────────────────────────────────────────────────────
+        if tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id):
+            ctx.status = "failed"
+            ctx.log_info("executor", "Pipeline cancelled after source stage.")
+            raise PipelineExecutionError(
+                message="Cancelled",
+                step_name="executor",
+                context=ctx,
+                cause=RuntimeError("Cancelled by user request"),
+            )
 
         # ── Optional Kafka publish ─────────────────────────────────────────────
         if plan.messaging_config:
-            self._publish_to_kafka(plan.messaging_config, df, ctx)
+            self._publish_to_kafka(plan.messaging_config, df, ctx, tracker_run_id)
+
+        # ── Cancel check ───────────────────────────────────────────────────────
+        if tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id):
+            ctx.status = "failed"
+            ctx.log_info("executor", "Pipeline cancelled after Kafka stage.")
+            raise PipelineExecutionError(
+                message="Cancelled",
+                step_name="executor",
+                context=ctx,
+                cause=RuntimeError("Cancelled by user request"),
+            )
 
         # ── Processing branch ──────────────────────────────────────────────────
         if plan.processing_engine_type == "spark":
             # Spark path: submit the whole processing block as a Spark job.
             # The storage step afterward is skipped — Spark writes Parquet directly.
-            self._run_spark_job(plan, df, ctx)
+            self._run_spark_job(plan, df, ctx, tracker_run_id)
         else:
             # Pandas path (Phase 3): run processors in-process, then storage.
             for step in plan.steps:
                 if step.step_type == "processor":
                     df = self._run_processor(step, df, ctx)
                 elif step.step_type == "storage":
+                    _progress_tracker.emit(tracker_run_id, "storage_verify")
                     self._run_storage(step, df, ctx)
+                    _progress_tracker.emit(
+                        tracker_run_id,
+                        "storage_done",
+                        {"rows": len(df)},
+                    )
                 # source already handled above
 
         ctx.status = "success"
@@ -168,8 +326,10 @@ class PipelineExecutor:
         self,
         step: ExecutionStep,
         ctx: PipelineExecutionContext,
+        tracker_run_id: str | None = None,
     ) -> pd.DataFrame:
         """Execute the source step and record metrics."""
+        _progress_tracker.emit(tracker_run_id, "source_start", {"plugin": step.plugin_type})
         ctx.log_info(step.name, f"Reading data via '{step.plugin_type}' source.")
         t0 = time.perf_counter()
 
@@ -184,6 +344,11 @@ class PipelineExecutor:
         from app.metrics import pipeline_processing_latency_seconds
         pipeline_processing_latency_seconds.labels(step.name).observe(duration_ms / 1000)
         ctx.log_info(step.name, f"Read {rows} row(s) in {duration_ms}ms.")
+        _progress_tracker.emit(
+            tracker_run_id,
+            "source_done",
+            {"rows": rows, "duration_ms": duration_ms},
+        )
         return df
 
     def _run_processor(
@@ -254,6 +419,7 @@ class PipelineExecutor:
         messaging_config: dict,
         df: pd.DataFrame,
         ctx: PipelineExecutionContext,
+        tracker_run_id: str | None = None,
     ) -> None:
         """
         Publish raw source records to Kafka if messaging configuration is present.
@@ -266,6 +432,8 @@ class PipelineExecutor:
             Raw source DataFrame to publish.
         ctx : PipelineExecutionContext
             Execution context to record metrics and logs.
+        tracker_run_id : str | None
+            If provided, emits kafka_start / kafka_done events to the tracker.
         """
         topic = messaging_config.get("topic")
         if not topic:
@@ -274,6 +442,7 @@ class PipelineExecutor:
         partitions = messaging_config.get("partitions", 1)
         replication_factor = messaging_config.get("replication_factor", 1)
 
+        _progress_tracker.emit(tracker_run_id, "kafka_start", {"topic": topic})
         ctx.log_info(
             "kafka_publish", f"Publishing raw source records to Kafka topic '{topic}'."
         )
@@ -299,10 +468,16 @@ class PipelineExecutor:
             duration_ms = round((time.perf_counter() - t0) * 1000, 2)
             meta_with_timing = {**result, "duration_ms": duration_ms}
             ctx.record_stage("kafka_publish", meta_with_timing)
+            published = result.get("produced", 0)
             ctx.log_info(
                 "kafka_publish",
-                f"Published {result.get('produced', 0)} record(s) to topic "
+                f"Published {published} record(s) to topic "
                 f"'{topic}' in {duration_ms}ms.",
+            )
+            _progress_tracker.emit(
+                tracker_run_id,
+                "kafka_done",
+                {"count": published, "topic": topic, "duration_ms": duration_ms},
             )
         except Exception as exc:
             publish_step = ExecutionStep(
@@ -321,29 +496,34 @@ class PipelineExecutor:
         plan: ExecutionPlan,
         df: pd.DataFrame,
         ctx: PipelineExecutionContext,
+        tracker_run_id: str | None = None,
     ) -> None:
         """
         Submit a Spark batch job for the pipeline's processing + storage steps.
 
         Workflow
         --------
-        1. Write the post-source DataFrame to a temporary CSV (accessible by
-           the Spark cluster via the shared ``spark-jobs`` volume mount).
+        1. Stage the post-source DataFrame to HDFS when the source has no file
+           path (e.g. api_source). Temp files are deleted in the finally block
+           regardless of outcome (carry-over b).
         2. Collect the processing operations from the plan's processor steps
            back into a config dict for ``batch_processing_job.py``.
-        3. Use the storage step's configured ``path`` as the Parquet output
-           destination (skipping the pandas storage plugin entirely).
-        4. Call ``SparkJobSubmitter.submit_batch_job()`` and record the returned
-           metrics under ``"spark_job"`` in the execution context.
+        3. Normalise the output path to HDFS (shared filesystem rule).
+        4. Submit via ``SparkJobSubmitter``, passing ``tracker_run_id`` so the
+           subprocess PID is registered for cancel support.
+        5. Emit ``spark_start`` / ``spark_done`` progress events.
 
         Parameters
         ----------
         plan : ExecutionPlan
-            The full execution plan (used to extract operations and output path).
+            The full execution plan.
         df : pandas.DataFrame
             Post-source, post-Kafka DataFrame to process.
         ctx : PipelineExecutionContext
             Execution context for logging and metrics.
+        tracker_run_id : str | None
+            When provided, emits spark_start/spark_done events and registers
+            the subprocess PID with the tracker for cancel support.
 
         Raises
         ------
@@ -352,50 +532,74 @@ class PipelineExecutor:
         """
         from app.spark.exceptions import SparkJobFailedError, SparkJobTimeoutError
 
+        _progress_tracker.emit(tracker_run_id, "spark_start", {})
         ctx.log_info("spark_job", "Submitting batch Spark job for processing steps.")
         t0 = time.perf_counter()
 
-        # ── Build temp input file ──────────────────────────────────────────────
-        # Prefer the original mounted CSV/JSON source. It is available to
-        # backend, Spark master, and worker containers via docker-compose.
-        # A temporary file is only used for non-file sources such as API/Kafka.
-        tmp_file = None
+        hdfs_tmp_input: str | None = None   # HDFS path created for non-file sources
         try:
             source_step = next(s for s in plan.steps if s.step_type == "source")
-            input_source = source_step.config.get("path")
+            input_source: str | None = source_step.config.get("path")
+
             if not input_source:
-                with tempfile.NamedTemporaryFile(
-                    suffix=".csv", delete=False, mode="w", encoding="utf-8"
-                ) as f:
-                    df.to_csv(f, index=False)
-                    tmp_file = f.name
-                    input_source = tmp_file
+                # Source has no file path (e.g. api_source, kafka_source).
+                # The executor has already read data into *df* via the source plugin.
+                # We must stage *df* to HDFS so that Spark workers can read it —
+                # the backend's local /tmp/ is invisible to spark-worker containers.
+                hdfs_tmp_input = f"/tmp/spark-input-{uuid.uuid4().hex[:8]}.csv"
+                _upload_df_to_hdfs(df, hdfs_tmp_input)
+                input_source = f"hdfs://namenode:9000{hdfs_tmp_input}"
+                ctx.log_info(
+                    "spark_job",
+                    f"Staged non-file source DataFrame ({len(df)} rows) "
+                    f"to HDFS at {input_source}.",
+                )
 
             # ── Collect operations from plan ───────────────────────────────────
-            operations = []
-            for step in plan.steps:
-                if step.step_type == "processor":
-                    operations.append(step.config)
+            operations = [
+                step.config
+                for step in plan.steps
+                if step.step_type == "processor"
+            ]
 
-            # ── Determine output path from storage step ────────────────────────
+            # ── Determine output path ──────────────────────────────────────────
             storage_step = next(
                 (s for s in plan.steps if s.step_type == "storage"), None
             )
-            output_path = (
+            raw_path = (
                 storage_step.config.get("path", "/tmp/spark-output")
                 if storage_step
                 else "/tmp/spark-output"
             )
-            if storage_step and storage_step.plugin_type == "hdfs" and output_path.startswith("/"):
-                output_path = f"hdfs://namenode:9000{output_path}"
+            is_hdfs_storage = (
+                storage_step is not None
+                and storage_step.plugin_type == "hdfs"
+            )
+
+            if raw_path.startswith("hdfs://"):
+                # Already a qualified HDFS URI — use as-is
+                output_path = raw_path
+            elif is_hdfs_storage and raw_path.startswith("/"):
+                # hdfs plugin with an absolute path — qualify it
+                output_path = f"hdfs://namenode:9000{raw_path}"
+            else:
+                # Local path (local plugin, /tmp fallback, or any non-HDFS path).
+                # Spark workers cannot access the backend's local filesystem, so
+                # we redirect to HDFS preserving the original path component.
+                # Rule: in Spark mode, ALL outputs must be on a shared filesystem.
+                if raw_path.startswith("/"):
+                    output_path = f"hdfs://namenode:9000{raw_path}"
+                else:
+                    output_path = f"hdfs://namenode:9000/tmp/spark-output-{uuid.uuid4().hex[:8]}"
+                ctx.log_info(
+                    "spark_job",
+                    f"Redirected local storage path '{raw_path}' to HDFS "
+                    f"'{output_path}' (Spark workers cannot see backend-local paths).",
+                )
 
             processing_config = {"processing": {"operations": operations}}
 
-            # ── Submit job (async bridge) ──────────────────────────────────────
-            # executor.execute() is called synchronously from the FastAPI service
-            # layer, but SparkJobSubmitter.submit_batch_job() is async.  We run
-            # it in a new event loop on the current thread to avoid blocking the
-            # uvicorn event loop.
+            # ── Submit job ─────────────────────────────────────────────────────
             submitter = SparkJobSubmitter()
 
             async def _submit() -> dict[str, Any]:
@@ -403,6 +607,7 @@ class PipelineExecutor:
                     input_source=input_source,
                     output_path=output_path,
                     processing_config=processing_config,
+                    run_id=tracker_run_id,   # register PID for cancel
                 )
 
             result = asyncio.run(_submit())
@@ -424,6 +629,16 @@ class PipelineExecutor:
                 f"{result.get('output_rows')} rows in {result.get('duration_seconds')}s. "
                 f"Output: {output_path}",
             )
+            _progress_tracker.emit(
+                tracker_run_id,
+                "spark_done",
+                {
+                    "input_rows": result.get("input_rows"),
+                    "output_rows": result.get("output_rows"),
+                    "output_path": output_path,
+                    "duration_ms": duration_ms,
+                },
+            )
 
         except (SparkJobFailedError, SparkJobTimeoutError) as exc:
             spark_step = ExecutionStep(
@@ -433,7 +648,6 @@ class PipelineExecutor:
                 plugin=None,
                 config={},
             )
-            # Surface stderr in logs for debugging
             if hasattr(exc, "stderr") and exc.stderr:
                 logger.error(
                     "Spark job stderr:\n%s", "\n".join(exc.stderr.splitlines()[-30:])
@@ -449,8 +663,11 @@ class PipelineExecutor:
             )
             self._handle_failure(spark_step, ctx, exc)
         finally:
-            if tmp_file and os.path.exists(tmp_file):
-                os.unlink(tmp_file)
+            # Carry-over (b): always delete temporary HDFS input files to prevent
+            # orphaned /tmp/spark-input-*.csv files on the namenode.
+            if hdfs_tmp_input is not None:
+                _delete_hdfs_path(hdfs_tmp_input)
+
 
     # ── Error handling ─────────────────────────────────────────────────────────
 

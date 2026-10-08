@@ -146,8 +146,16 @@ class SafetyValidator:
         """
         Locate the Docker container for ``service_name``.
 
-        Tries both compose-naming patterns and the explicit ``platform-*``
-        container names used in docker-compose.yml.
+        Search strategy (in order):
+        1. Name-based: try all Compose naming conventions (v1/v2 prefix patterns
+           and explicit ``platform-*`` names from docker-compose.yml).
+        2. Label-based: if no name matches, search all running containers for
+           one whose ``com.docker.compose.service`` label equals ``service_name``.
+           This covers containers created with a custom name but the correct
+           Compose service label (e.g. integration-test fixtures).
+
+        Safety is **not** weakened by strategy 2: ``validate_target`` still
+        enforces the allow-list and the project label check independently.
 
         Returns the container object or raises ``UnsafeTargetError``.
         """
@@ -171,9 +179,37 @@ class SafetyValidator:
                 # A non-Docker error is treated as a name miss so the next
                 # Compose naming convention can still be tried.
                 continue
+
+        # Fallback: search by com.docker.compose.service AND com.docker.compose.project.
+        # Two-label filter is required: Docker has many compose projects on the host,
+        # and a service name like "kafka" is common.  Using only the service label would
+        # silently match a container from a completely different project.
+        # all=True includes stopped/exited containers — _find_container is called before
+        # is_container_running, start_container, and exec_in_container, all of which may
+        # legitimately target a stopped container.
+        try:
+            project = get_settings().PROJECT_CONTAINER_PREFIX
+            matches = self._client.containers.list(
+                all=True,
+                filters={
+                    "label": [
+                        f"com.docker.compose.service={service_name}",
+                        f"com.docker.compose.project={project}",
+                    ]
+                },
+            )
+            if matches:
+                return matches[0]
+        except (DockerException, OSError, PermissionError) as exc:
+            raise UnsafeTargetError(
+                "ChaosLab cannot access the Docker socket.",
+                service_name=service_name,
+            ) from exc
+
         raise UnsafeTargetError(
             f"No running container found for service '{service_name}'. "
-            f"Tried names: {candidates}. Is the platform running?",
+            f"Tried names: {candidates} and label "
+            f"com.docker.compose.service={service_name!r}. Is the platform running?",
             service_name=service_name,
         )
 

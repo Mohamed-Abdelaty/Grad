@@ -249,3 +249,158 @@ class TestEnforceMaxConcurrentExperiments:
         assert reaped == 1
         assert stale_run.status == "failed"
         assert "exceeding" in stale_run.results["error"]
+
+
+# ── Tests: _find_container label fallback project isolation ────────────────────
+
+
+class TestFindContainerLabelFallback:
+    """
+    _find_container must restrict its label-based fallback to the platform's
+    own compose project.  A container from a different project that happens to
+    share the same service name must never be returned.
+
+    These tests mock the Docker SDK to avoid any real Docker dependency.
+    """
+
+    def _make_safety(
+        self,
+        name_matches: dict[str, object] | None = None,
+        label_matches: list[object] | None = None,
+    ) -> SafetyValidator:
+        """
+        Build a SafetyValidator with a fully mocked Docker client.
+
+        Parameters
+        ----------
+        name_matches : dict, optional
+            Mapping ``container_name → container`` for ``containers.get(name)``.
+        label_matches : list, optional
+            List of containers returned by ``containers.list(...)``.
+        """
+        from docker.errors import NotFound
+
+        mock_client = MagicMock()
+
+        def fake_get(name: str):
+            if name_matches and name in name_matches:
+                return name_matches[name]
+            raise NotFound("not found")
+
+        mock_client.containers.get.side_effect = fake_get
+        mock_client.containers.list.return_value = label_matches or []
+        return SafetyValidator(docker_client=mock_client)
+
+    def _make_container(
+        self,
+        name: str,
+        service: str,
+        project: str,
+    ) -> MagicMock:
+        """Create a mock container with the given compose labels."""
+        container = MagicMock()
+        container.name = name
+        container.labels = {
+            "com.docker.compose.service": service,
+            "com.docker.compose.project": project,
+        }
+        return container
+
+    def test_label_fallback_returns_container_from_our_project(self) -> None:
+        """
+        When name search fails, the label fallback must return a container
+        belonging to our compose project.
+        """
+        our_container = self._make_container(
+            name="chaoslab-test-abc",
+            service="kafka",
+            project="resilient-big-data-platform",
+        )
+        safety = self._make_safety(label_matches=[our_container])
+        result = safety._find_container("kafka")
+        assert result is our_container
+
+    def test_label_fallback_excludes_foreign_project_container(self) -> None:
+        """
+        A container from a DIFFERENT compose project with the same service name
+        must NOT be returned.
+
+        The containers.list filter includes BOTH the service label AND the
+        project label.  Docker evaluates them as AND, so a foreign-project
+        container is never included in the result set — the mock returns [] to
+        reflect that Docker filtered it out.
+        """
+        # The mock returns [] because Docker's two-label AND filter
+        # would exclude the foreign container at the daemon level.
+        safety = self._make_safety(label_matches=[])
+        with pytest.raises(UnsafeTargetError) as exc_info:
+            safety._find_container("kafka")
+        assert "kafka" in str(exc_info.value)
+
+    def test_containers_list_includes_project_label_in_filter(self) -> None:
+        """
+        containers.list must be called with both the service label AND the
+        project label to prevent cross-project container matching.
+        """
+        safety = self._make_safety(label_matches=[])
+        with pytest.raises(UnsafeTargetError):
+            safety._find_container("kafka")
+
+        assert safety._client.containers.list.called, (
+            "containers.list must be called during label fallback"
+        )
+        call_kwargs = safety._client.containers.list.call_args.kwargs
+        label_filters: list[str] = call_kwargs.get("filters", {}).get("label", [])
+        service_filters = [f for f in label_filters if "com.docker.compose.service" in f]
+        project_filters = [f for f in label_filters if "com.docker.compose.project" in f]
+        assert len(service_filters) > 0, (
+            "containers.list filter must include com.docker.compose.service"
+        )
+        assert len(project_filters) > 0, (
+            "containers.list filter must include com.docker.compose.project "
+            "to prevent cross-project container matching"
+        )
+
+    def test_validate_target_rejects_service_not_in_allow_list(self) -> None:
+        """
+        validate_target must reject any service name not in ALLOWED_TARGET_SERVICES,
+        even if a container with the matching label exists.
+        The allow-list check is the FIRST guard and runs before _find_container.
+        """
+        # Even with a matching container, the allow-list check fires first
+        our_container = self._make_container(
+            name="platform-evil",
+            service="evil_service",
+            project="resilient-big-data-platform",
+        )
+        safety = self._make_safety(label_matches=[our_container])
+        with pytest.raises(UnsafeTargetError) as exc_info:
+            safety.validate_target("evil_service")
+        assert "allow-list" in str(exc_info.value), (
+            "Error must mention the allow-list — not the container-not-found check"
+        )
+        # _find_container must NOT be called since the allow-list guard fires first
+        safety._client.containers.list.assert_not_called()
+        safety._client.containers.get.assert_not_called()
+
+    def test_label_fallback_all_true_finds_stopped_container(self) -> None:
+        """
+        containers.list must be called with ``all=True`` so that stopped/exited
+        containers are included.  This is needed for start_container and
+        is_container_running which call _find_container on containers that may
+        currently be stopped.
+        """
+        stopped_container = self._make_container(
+            name="platform-kafka",
+            service="kafka",
+            project="resilient-big-data-platform",
+        )
+        safety = self._make_safety(label_matches=[stopped_container])
+        result = safety._find_container("kafka")
+        assert result is stopped_container
+
+        call_kwargs = safety._client.containers.list.call_args.kwargs
+        assert call_kwargs.get("all") is True, (
+            "containers.list must use all=True to include stopped containers"
+        )
+

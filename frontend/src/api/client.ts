@@ -1,20 +1,13 @@
 import axios from 'axios';
 
 export const apiClient = axios.create({
-  baseURL: '', // Empty to use nginx relative paths
+  baseURL: '',
 });
-
-// We need to inject the token from our in-memory AuthContext.
-// Since Axios interceptors don't have access to React context directly,
-// we will export a function to setup the interceptor from a React component,
-// OR we can rely on a dirty hack. The better approach in a pure architecture is to 
-// either pass the token in each request, or update a module-level variable when login happens.
-// For simplicity, we'll keep a reference here that AuthProvider can update,
-// but since the prompt says "Interceptor that attaches Authorization... from AuthContext",
-// we will just set up the interceptor dynamically or use a small store.
 
 let currentToken: string | null = null;
 
+// Called by AuthContext.login() and AuthContext.logout() to keep the
+// module-level token in sync with the in-memory auth state.
 export const setApiToken = (token: string | null) => {
   currentToken = token;
 };
@@ -26,11 +19,21 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+// 401 handler callback — set by AuthProvider on mount so that this module
+// can trigger a clean logout and router navigation without importing React
+// context or the router directly (which would create circular dependencies).
+let onUnauthorized: (() => void) | null = null;
+
+export const registerUnauthorizedHandler = (handler: () => void) => {
+  onUnauthorized = handler;
+};
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      window.location.href = '/login';
+    const hadToken = Boolean(error.config?.headers?.Authorization);
+    if (error.response?.status === 401 && hadToken && onUnauthorized) {
+      onUnauthorized();
     }
     return Promise.reject(error);
   }

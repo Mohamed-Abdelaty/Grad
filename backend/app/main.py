@@ -111,6 +111,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     Shutdown:
         - Log "Application shutting down"
     """
+    import asyncio
+    from app.pipeline.progress import tracker
+
     settings = get_settings()
     _configure_logging(settings.LOG_LEVEL)
 
@@ -124,9 +127,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         },
     )
 
+    # Bind the progress tracker to the main event loop so the synchronous
+    # executor thread can safely notify async SSE subscribers.
+    tracker.set_loop(asyncio.get_running_loop())
+
     yield  # ← the application runs here
 
     logger.info("Application shutting down")
+
 
 
 # ── Application factory ────────────────────────────────────────────────────────

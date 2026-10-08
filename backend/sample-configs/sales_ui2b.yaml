@@ -1,0 +1,29 @@
+pipeline:
+  name: "sales-ui2b"
+  version: "1.0"
+schema:
+  - name: "transaction_id"
+    type: "string"
+  - name: "amount"
+    type: "double"
+  - name: "customer_id"
+    type: "string"
+  - name: "product_id"
+    type: "string"
+  - name: "sale_date"
+    type: "string"
+streaming:
+  enabled: false
+processing_engine:
+  type: "spark"
+source:
+  type: "csv"
+  path: "/app/sample-data/sales_sample.csv"
+processing:
+  operations:
+    - type: "remove_nulls"
+    - type: "filter"
+      condition: "amount > 0"
+storage:
+  type: "local"
+  path: "/tmp/spark-output-fallback"

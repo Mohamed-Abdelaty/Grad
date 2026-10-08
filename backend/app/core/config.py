@@ -10,8 +10,17 @@ Hard-coding secrets or environment-specific values here is forbidden.
 from functools import lru_cache
 from typing import List
 
-from pydantic import AnyUrl, field_validator
+from pydantic import AnyUrl, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Passwords that look like they were copy-pasted from documentation.
+# Defined at module level (not as a Pydantic field) so it is a plain frozenset
+# and not a ModelPrivateAttr.  Rejected in every environment.
+_PLACEHOLDER_PASSWORDS: frozenset[str] = frozenset({
+    'changeme', 'changeme-dev', 'change-me', 'change-me-before-running',
+    'admin123', 'admin', 'password', 'secret', 'letmein',
+    'change_me', 'CHANGE_ME', 'CHANGEME',
+})
 
 
 class Settings(BaseSettings):
@@ -48,9 +57,37 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
-    # ── Auth Phase 8 ───────────────────────────────────────────────────────────
-    ADMIN_USERNAME: str = 'mohamed'
-    ADMIN_PASSWORD: str = '123456'
+    # ── Auth ────────────────────────────────────────────────────────────────────
+    # Required in all environments. Set via ADMIN_USERNAME / ADMIN_PASSWORD env
+    # vars (see .env.example). The application fails fast at startup if these are
+    # absent in non-development modes so a misconfigured deployment is caught
+    # immediately rather than silently accepting an insecure default.
+    ADMIN_USERNAME: str = ''
+    ADMIN_PASSWORD: str = ''
+
+    @field_validator('ADMIN_USERNAME', 'ADMIN_PASSWORD', mode='after')
+    @classmethod
+    def require_credentials_in_production(cls, v: str, info: ValidationInfo) -> str:
+        """Fail fast when credentials are weak or unset in non-dev environments."""
+        import os
+        env = os.environ.get('APP_ENV', 'development')
+        field = info.field_name
+
+        if env != 'development' and not v:
+            raise ValueError(
+                f"{field} must be set via environment variable in "
+                f"APP_ENV={env!r}. See .env.example."
+            )
+
+        # Reject placeholder values in every environment so misconfiguration
+        # is caught at startup rather than at a security review.
+        if field == 'ADMIN_PASSWORD' and v in _PLACEHOLDER_PASSWORDS:
+            raise ValueError(
+                f"ADMIN_PASSWORD is a known placeholder value ({v!r}). "
+                "Set a strong password in your .env file."
+            )
+
+        return v
 
     # ── CORS ───────────────────────────────────────────────────────────────────
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
@@ -74,6 +111,7 @@ class Settings(BaseSettings):
     HDFS_DEFAULT_REPLICATION: int = 1  # single-datanode local dev default
 
     # ── ChaosLab Reliability Engine (Phase 7) ──────────────────────────────────
+    COMPOSE_PROJECT_NAME: str = "resilient-big-data-platform"
     PROJECT_CONTAINER_PREFIX: str = "resilient-big-data-platform"
     """
     Docker Compose project name / container name prefix.
@@ -83,6 +121,12 @@ class Settings(BaseSettings):
        this platform's own project — prevents targeting foreign containers.
     Override with the value of COMPOSE_PROJECT_NAME if set.
     """
+
+    @field_validator("PROJECT_CONTAINER_PREFIX", mode="before")
+    @classmethod
+    def set_project_container_prefix(cls, v: object, info: ValidationInfo) -> str:
+        import os
+        return os.environ.get("COMPOSE_PROJECT_NAME", "resilient-big-data-platform")
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

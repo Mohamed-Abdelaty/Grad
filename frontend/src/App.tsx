@@ -1,17 +1,27 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
-
-// Layout
 import PageLayout from './components/layout/PageLayout';
+import { SkeletonCard } from './components/ui';
 
-// Pages
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import PipelineManagement from './pages/PipelineManagement';
-import PipelineDetails from './pages/PipelineDetails';
-import ReliabilityTesting from './pages/ReliabilityTesting';
-import Reports from './pages/Reports';
+// Route-level code splitting: each page is loaded on demand.
+// The Skeleton fallback shows the same placeholder that page-level loading states use,
+// keeping the transition visually consistent.
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const PipelineManagement = lazy(() => import('./pages/PipelineManagement'));
+const PipelineDetails = lazy(() => import('./pages/PipelineDetails'));
+const ReliabilityTesting = lazy(() => import('./pages/ReliabilityTesting'));
+const Reports = lazy(() => import('./pages/Reports'));
+
+function PageFallback() {
+  return (
+    <div className="p-6 space-y-4">
+      <SkeletonCard />
+      <SkeletonCard />
+    </div>
+  );
+}
 
 const AuthGuard = () => {
   const { token } = useAuth();
@@ -23,17 +33,19 @@ const AuthGuard = () => {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route element={<AuthGuard />}>
-        <Route element={<PageLayout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/pipelines" element={<PipelineManagement />} />
-          <Route path="/pipelines/:runId" element={<PipelineDetails />} />
-          <Route path="/reliability" element={<ReliabilityTesting />} />
-          <Route path="/reports" element={<Reports />} />
+    <Suspense fallback={<PageFallback />}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route element={<AuthGuard />}>
+          <Route element={<PageLayout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/pipelines" element={<PipelineManagement />} />
+            <Route path="/pipelines/:runId" element={<PipelineDetails />} />
+            <Route path="/reliability" element={<ReliabilityTesting />} />
+            <Route path="/reports" element={<Reports />} />
+          </Route>
         </Route>
-      </Route>
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }

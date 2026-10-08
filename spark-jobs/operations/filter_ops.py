@@ -11,6 +11,7 @@ an injection guard identical in spirit to Phase 3's pandas filter processor
 from __future__ import annotations
 
 import logging
+import re
 
 from pyspark.sql import DataFrame
 
@@ -18,7 +19,11 @@ logger = logging.getLogger(__name__)
 
 # ── Injection guard ────────────────────────────────────────────────────────────
 # Patterns that should never appear in a legitimate Spark SQL filter expression.
-_BANNED_SUBSTRINGS: tuple[str, ...] = ("__", "import", "exec", "eval")
+_TOKEN = re.compile(
+    r"\s*(?:(?:'(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")|"
+    r"(?:\d+(?:\.\d+)?)|(?:==|!=|>=|<=|>|<|=)|(?:[()])|"
+    r"(?:[A-Za-z_][A-Za-z0-9_]*))"
+)
 
 
 def _check_condition(condition: str) -> None:
@@ -40,13 +45,17 @@ def _check_condition(condition: str) -> None:
     ValueError
         If the condition contains any banned substring.
     """
-    lowered = condition.lower()
-    for pattern in _BANNED_SUBSTRINGS:
-        if pattern in lowered:
-            raise ValueError(
-                f"Filter condition contains forbidden pattern '{pattern}': {condition!r}. "
-                "Only pure Spark SQL expressions are allowed."
-            )
+    position = 0
+    while position < len(condition):
+        match = _TOKEN.match(condition, position)
+        if match is None:
+            raise ValueError("Filter condition contains unsupported syntax.")
+        token = match.group(0).strip()
+        if token.startswith("__"):
+            raise ValueError("Filter condition cannot reference dunder names.")
+        position = match.end()
+    if not re.search(r"==|!=|>=|<=|>|<|\bis\b|\bin\b", condition, re.I):
+        raise ValueError("Filter condition must contain a comparison.")
 
 
 def apply_filter(df: DataFrame, condition: str) -> DataFrame:

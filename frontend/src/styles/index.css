@@ -2,8 +2,92 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+/* All semantic colours are defined here as CSS custom properties so that     */
+/* Tailwind's JIT can pick them up via the `var()` references in config and   */
+/* component code can also read them directly when needed.                    */
+
 @layer base {
+  :root {
+    /* Surface palette */
+    --surface-base:       #0f172a; /* slate-900 */
+    --surface-raised:     #1e293b; /* slate-800 */
+    --surface-overlay:    #1e293b; /* dialogs, popovers */
+    --surface-border:     #334155; /* slate-700 */
+    --surface-border-subtle: #1e293b; /* slate-800 */
+
+    /* Brand */
+    --brand:              #6366f1; /* indigo-500 */
+    --brand-hover:        #818cf8; /* indigo-400 */
+    --brand-subtle:       rgba(99, 102, 241, 0.12);
+
+    /* Status */
+    --status-success:     #34d399; /* emerald-400 */
+    --status-success-bg:  rgba(52, 211, 153, 0.12);
+    --status-warning:     #fbbf24; /* amber-400 */
+    --status-warning-bg:  rgba(251, 191, 36, 0.12);
+    --status-error:       #f87171; /* rose-400 */
+    --status-error-bg:    rgba(248, 113, 113, 0.12);
+    --status-info:        #60a5fa; /* blue-400 */
+    --status-info-bg:     rgba(96, 165, 250, 0.12);
+    --status-neutral:     #94a3b8; /* slate-400 */
+    --status-neutral-bg:  rgba(148, 163, 184, 0.10);
+
+    /* Text */
+    --text-primary:       #f1f5f9; /* slate-100 */
+    --text-secondary:     #94a3b8; /* slate-400 */
+    --text-muted:         #64748b; /* slate-500 */
+    --text-inverted:      #0f172a;
+
+    /* Sidebar */
+    --sidebar-width:      16rem;   /* 256px — w-64 */
+    --sidebar-collapsed:  3.5rem;  /* 56px  — icon-only */
+    --topbar-height:      4rem;    /* 64px  — h-16 */
+
+    /* Motion */
+    --duration-fast:      120ms;
+    --duration-base:      200ms;
+    --duration-slow:      350ms;
+    --ease-default:       cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
   body {
-    @apply antialiased;
+    @apply antialiased bg-slate-900 text-slate-100;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  /* Smooth focus rings */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-slate-900;
+  }
+
+  /* Thin custom scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #334155;
+    border-radius: 3px;
+  }
+}
+
+/* ── Utility layer additions ─────────────────────────────────────────────── */
+@layer utilities {
+  .surface-raised    { background-color: var(--surface-raised); }
+  .surface-base      { background-color: var(--surface-base); }
+  .border-surface    { border-color: var(--surface-border); }
+
+  /* Sidebar slide transition */
+  .sidebar-transition {
+    transition: width var(--duration-base) var(--ease-default);
   }
 }

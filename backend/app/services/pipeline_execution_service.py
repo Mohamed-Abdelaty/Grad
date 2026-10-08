@@ -58,7 +58,10 @@ _generator = PipelineGenerator()
 _executor = PipelineExecutor()
 
 
-def run_pipeline_from_yaml(yaml_content: str) -> dict:
+def run_pipeline_from_yaml(
+    yaml_content: str,
+    tracker_run_id: str | None = None,
+) -> dict:
     """
     Parse, validate, generate, and execute a pipeline from a YAML string.
 
@@ -70,6 +73,11 @@ def run_pipeline_from_yaml(yaml_content: str) -> dict:
     ----------
     yaml_content : str
         Raw YAML string representing a pipeline configuration document.
+    tracker_run_id : str | None
+        When provided, the executor emits progress events to the global
+        :data:`~app.pipeline.progress.tracker` under this key.  Should match
+        the ``pipeline_run_id`` stored in the database for the current run.
+        Pass ``None`` for the synchronous (``wait=True``) path.
 
     Returns
     -------
@@ -115,7 +123,7 @@ def run_pipeline_from_yaml(yaml_content: str) -> dict:
 
     # ── Phase 4: execute ───────────────────────────────────────────────────────
     try:
-        context = _executor.execute(plan)
+        context = _executor.execute(plan, tracker_run_id=tracker_run_id)
         return context.to_summary()
     except PipelineExecutionError as exc:
         # The partial context already contains the error log entry and
