@@ -427,8 +427,8 @@ services:
       - backend
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9090/-/healthy || exit 1"]
-      interval: 10s
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
       timeout: 5s
       retries: 5
 
