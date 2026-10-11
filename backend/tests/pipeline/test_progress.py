@@ -109,3 +109,140 @@ def test_tracker_cancel_does_not_terminate_backend_process(tracker):
 
     # Process group was identical to backend's own process group, so killpg must not be called
     assert len(killed) == 0, f"Backend process group was targeted: {killed}"
+
+
+def test_progress_canonical_schema_all_keys_and_defaults(tracker):
+    """Verify that get_progress returns all 15 top-level keys with canonical defaults."""
+    run_id = "test-schema-run-1"
+    tracker.start(run_id, "Test Schema")
+
+    prog = tracker.get_progress(run_id)
+    assert prog is not None
+
+    expected_keys = {
+        "runId", "status", "mode", "startedAt", "updatedAt", "completedAt",
+        "stages", "source", "kafka", "spark", "hdfs",
+        "throughput", "etaSeconds", "errors", "fault",
+    }
+    assert set(prog.keys()) == expected_keys
+    assert prog["runId"] == run_id
+    assert prog["status"] == "running"
+    assert prog["mode"] == "batch"
+    assert prog["completedAt"] is None
+    assert prog["etaSeconds"] is None
+    assert prog["fault"] is None
+    assert prog["errors"] == []
+    assert prog["throughput"] == {"recordsPerSecond": None, "samples": []}
+    assert prog["source"] == {"type": None, "rowsTotal": None, "rowsRead": None}
+    assert prog["kafka"] == {
+        "topic": None, "partitions": None, "published": None,
+        "endOffsets": None, "consumerLag": None,
+    }
+    assert prog["spark"] == {
+        "appId": None, "tasksTotal": None, "tasksDone": None,
+        "recordsIn": None, "recordsOut": None, "durationMs": None,
+    }
+    assert prog["hdfs"] == {
+        "path": None, "filesWritten": None, "bytesWritten": None,
+        "rowsWritten": None, "verified": None,
+    }
+
+    # Verify exactly 4 stages present with valid initial states
+    assert len(prog["stages"]) == 4
+    stage_keys = [s["key"] for s in prog["stages"]]
+    assert stage_keys == ["source", "kafka", "spark", "hdfs"]
+    for s in prog["stages"]:
+        assert set(s.keys()) == {"key", "state", "startedAt", "finishedAt", "error"}
+        assert s["state"] == "pending"
+        assert s["startedAt"] is None
+        assert s["finishedAt"] is None
+        assert s["error"] is None
+
+    tracker.finish(run_id)
+
+
+def test_progress_stage_transitions_and_allowed_states(tracker):
+    """Verify stage transitions and that all states come from the allowed set."""
+    run_id = "test-transitions-run"
+    tracker.start(run_id, "Test Transitions")
+
+    # 1. Start source stage
+    tracker.emit(run_id, "source_start", {"plugin": "csv"})
+    prog = tracker.get_progress(run_id)
+    stages = {s["key"]: s for s in prog["stages"]}
+    assert stages["source"]["state"] == "active"
+    assert stages["source"]["startedAt"] is not None
+    assert prog["source"]["type"] == "csv"
+
+    # 2. Finish source stage
+    tracker.emit(run_id, "source_done", {"rows": 150})
+    prog = tracker.get_progress(run_id)
+    stages = {s["key"]: s for s in prog["stages"]}
+    assert stages["source"]["state"] == "done"
+    assert stages["source"]["finishedAt"] is not None
+    assert prog["source"]["rowsTotal"] == 150
+    assert prog["source"]["rowsRead"] == 150
+
+    # 3. Simulate failure during kafka stage
+    tracker.emit(run_id, "kafka_start", {"topic": "test-topic"})
+    tracker.emit(run_id, "run_failed", {"error": "Broker unavailable"})
+    prog = tracker.get_progress(run_id)
+    assert prog["status"] == "failed"
+    assert prog["errors"] == ["Broker unavailable"]
+
+    stages = {s["key"]: s for s in prog["stages"]}
+    assert stages["source"]["state"] == "done"
+    assert stages["kafka"]["state"] == "error"
+    assert stages["kafka"]["error"] == "Broker unavailable"
+    assert stages["spark"]["state"] == "skipped"
+    assert stages["hdfs"]["state"] == "skipped"
+
+    allowed_states = {"pending", "active", "done", "error", "skipped"}
+    for s in prog["stages"]:
+        assert s["state"] in allowed_states
+
+    tracker.finish(run_id)
+
+
+@pytest.mark.asyncio
+async def test_sse_generator_emits_progress_frames_and_done():
+    """Verify _sse_generator emits at least 3 progress frames and ends with event: done."""
+    import uuid
+    from unittest.mock import AsyncMock, MagicMock
+    from app.pipeline.progress import tracker as global_tracker
+    from app.api.routes.pipeline_runs import _sse_generator
+
+    global_tracker.set_loop(asyncio.get_running_loop())
+    run_id = str(uuid.uuid4())
+    global_tracker.start(run_id, "SSE Test")
+
+    # Create mock AsyncSession
+    mock_db = AsyncMock()
+    mock_run = MagicMock()
+    mock_run.status = "running"
+    mock_db.get.return_value = mock_run
+
+    frames = []
+
+    async def _consume():
+        gen = _sse_generator(run_id, mock_db)
+        async for chunk in gen:
+            frames.append(chunk)
+            # Once we see 3 progress frames, end the run to verify clean termination
+            progress_count = sum(1 for f in frames if f.startswith("event: progress"))
+            if progress_count >= 3:
+                global_tracker.emit(run_id, "run_success", {})
+
+    # Run generator with a timeout guard
+    await asyncio.wait_for(_consume(), timeout=5.0)
+
+    # Validate output frames
+    progress_frames = [f for f in frames if f.startswith("event: progress")]
+    done_frames = [f for f in frames if f.startswith("event: done")]
+
+    assert len(progress_frames) >= 3, f"Expected at least 3 progress frames, got {len(progress_frames)}"
+    assert len(done_frames) == 1, f"Expected 1 done frame, got {len(done_frames)}"
+    assert '"status": "succeeded"' in done_frames[0]
+
+    global_tracker.finish(run_id)
+

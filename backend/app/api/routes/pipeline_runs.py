@@ -49,7 +49,7 @@ from app.core.security import decode_access_token
 from app.database.session import get_db
 from app.models.pipeline_run import PipelineRun
 from app.models.pipeline_run_event import PipelineRunEvent
-from app.pipeline.progress import tracker
+from app.pipeline.progress import build_progress_dict, tracker
 
 logger = logging.getLogger(__name__)
 
@@ -214,36 +214,91 @@ async def get_run_progress(
     )
     events = events_result.scalars().all()
 
-    # Build stage summary from event history
-    stages: dict[str, Any] = {}
+    stage_states = {
+        "source": {"key": "source", "state": "pending", "startedAt": None, "finishedAt": None, "error": None},
+        "kafka": {"key": "kafka", "state": "pending", "startedAt": None, "finishedAt": None, "error": None},
+        "spark": {"key": "spark", "state": "pending", "startedAt": None, "finishedAt": None, "error": None},
+        "hdfs": {"key": "hdfs", "state": "pending", "startedAt": None, "finishedAt": None, "error": None},
+    }
+    source_metrics = None
+    source_type = None
+    kafka_metrics = None
+    kafka_topic = None
+    spark_metrics: dict[str, Any] = {}
+    storage_metrics = None
+
     for ev in events:
         et = ev.event_type
         pl = ev.payload or {}
-        if et == "source_done":
-            stages["source"] = {"status": "done", "rows": pl.get("rows")}
+        ts = ev.emitted_at.isoformat() if ev.emitted_at else None
+        if et == "source_start":
+            stage_states["source"]["state"] = "active"
+            stage_states["source"]["startedAt"] = ts
+            source_type = pl.get("plugin")
+        elif et == "source_done":
+            stage_states["source"]["state"] = "done"
+            stage_states["source"]["finishedAt"] = ts
+            source_metrics = pl.get("rows")
+        elif et == "kafka_start":
+            stage_states["kafka"]["state"] = "active"
+            stage_states["kafka"]["startedAt"] = ts
+            kafka_topic = pl.get("topic")
         elif et == "kafka_done":
-            stages["kafka"] = {"status": "done", "published": pl.get("count")}
+            stage_states["kafka"]["state"] = "done"
+            stage_states["kafka"]["finishedAt"] = ts
+            kafka_metrics = pl.get("count")
+            if pl.get("topic"):
+                kafka_topic = pl.get("topic")
+        elif et == "spark_start":
+            stage_states["spark"]["state"] = "active"
+            stage_states["spark"]["startedAt"] = ts
         elif et == "spark_done":
-            stages["spark"] = {
-                "status": "done",
-                "input_rows": pl.get("input_rows"),
-                "output_rows": pl.get("output_rows"),
-                "output_path": pl.get("output_path"),
-            }
-        elif et == "storage_done":
-            stages["storage"] = {"status": "done", "rows": pl.get("rows")}
+            stage_states["spark"]["state"] = "done"
+            stage_states["spark"]["finishedAt"] = ts
+            spark_metrics = pl
+        elif et == "hdfs_start":
+            stage_states["hdfs"]["state"] = "active"
+            stage_states["hdfs"]["startedAt"] = ts
+        elif et == "hdfs_done":
+            stage_states["hdfs"]["state"] = "done"
+            stage_states["hdfs"]["finishedAt"] = ts
+            storage_metrics = pl.get("rows")
 
-    return JSONResponse(
-        content={
-            "run_id": run_id,
-            "status": run.status,
-            "stages": stages,
-            "started_at": run.started_at.isoformat() if run.started_at else None,
-            "finished_at": run.finished_at.isoformat() if run.finished_at else None,
-            "error": run.error_message,
-            "pipeline_name": None,  # not stored on the run row; available via pipeline join
-        }
+    if run.status == "succeeded":
+        for st in stage_states.values():
+            if st["state"] != "done":
+                st["state"] = "done"
+                st["finishedAt"] = run.finished_at.isoformat() if run.finished_at else None
+    elif run.status in ("failed", "cancelled"):
+        for st in stage_states.values():
+            if st["state"] == "active":
+                st["state"] = "error"
+                st["error"] = run.error_message or ("Cancelled" if run.status == "cancelled" else "Failed")
+                st["finishedAt"] = run.finished_at.isoformat() if run.finished_at else None
+            elif st["state"] == "pending":
+                st["state"] = "skipped"
+                st["finishedAt"] = run.finished_at.isoformat() if run.finished_at else None
+
+    if "output_path" not in spark_metrics and run.output_path:
+        spark_metrics["output_path"] = run.output_path
+
+    progress_dict = build_progress_dict(
+        run_id=run_id,
+        status=run.status,
+        mode="batch",
+        started_at=run.started_at.isoformat() if run.started_at else None,
+        updated_at=(run.finished_at or run.started_at or datetime.now(tz=timezone.utc)).isoformat(),
+        completed_at=run.finished_at.isoformat() if run.finished_at else None,
+        stages=list(stage_states.values()),
+        source_metrics=source_metrics,
+        source_type=source_type,
+        kafka_metrics=kafka_metrics,
+        kafka_topic=kafka_topic,
+        spark_metrics=spark_metrics,
+        storage_metrics=storage_metrics,
+        error=run.error_message,
     )
+    return JSONResponse(content=progress_dict)
 
 
 # ── GET /api/pipeline-runs/{id}/events?after= ─────────────────────────────────
@@ -329,7 +384,7 @@ async def _sse_generator(
         return f"event: {name}\ndata: {json.dumps(ev)}\n\n"
 
     def _fmt_heartbeat() -> str:
-        return f"event: heartbeat\ndata: {json.dumps({'ts': datetime.now(tz=timezone.utc).isoformat()})}\n\n"
+        return f": heartbeat\nevent: heartbeat\ndata: {json.dumps({'ts': datetime.now(tz=timezone.utc).isoformat()})}\n\n"
 
     # If the run is already finished, stream events from DB and close immediately
     run = await db.get(PipelineRun, run_uuid)
@@ -361,6 +416,11 @@ async def _sse_generator(
         for ev in tracker.replay_events(run_id):
             yield _fmt_event(ev)
 
+        # Emit initial progress snapshot immediately
+        initial_progress = tracker.get_progress(run_id)
+        if initial_progress:
+            yield _fmt_event(initial_progress, "progress")
+
         import time
         last_progress_ts = time.time()
         last_heartbeat_ts = time.time()
@@ -374,7 +434,7 @@ async def _sse_generator(
                 # Terminal events — close stream after flushing
                 if event.get("event_type") in ("run_success", "run_failed", "run_cancelled"):
                     status_map = {
-                        "run_success": "success",
+                        "run_success": "succeeded",
                         "run_failed": "failed",
                         "run_cancelled": "cancelled",
                     }
@@ -396,17 +456,20 @@ async def _sse_generator(
                 last_progress_ts = now
 
             if now - last_heartbeat_ts >= HEARTBEAT_INTERVAL:
-                # No event in 15 s — send heartbeat to keep the connection alive
+                # No event in 15 s — send heartbeat comment & event to keep connection alive
                 yield _fmt_heartbeat()
                 last_heartbeat_ts = now
 
-                # If the run is no longer tracked (tracker.finish() was called),
-                # close the stream gracefully
-                if not tracker.is_active(run_id):
-                    final_run = await db.get(PipelineRun, run_uuid)
-                    final_status = final_run.status if final_run else "unknown"
-                    yield f"event: done\ndata: {json.dumps({'status': final_status})}\n\n"
-                    return
+            # If the run is no longer active (tracker.finish() was called or marked done),
+            # close the stream gracefully
+            if not tracker.is_active(run_id):
+                progress = tracker.get_progress(run_id)
+                if progress:
+                    yield _fmt_event(progress, "progress")
+                final_run = await db.get(PipelineRun, run_uuid)
+                final_status = progress["status"] if progress else (final_run.status if final_run else "unknown")
+                yield f"event: done\ndata: {json.dumps({'status': final_status})}\n\n"
+                return
     finally:
         tracker.unsubscribe(run_id, queue)
 

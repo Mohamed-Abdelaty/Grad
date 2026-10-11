@@ -42,6 +42,98 @@ def _utc_now() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
 
 
+def build_progress_dict(
+    run_id: str,
+    status: str,
+    mode: str = "batch",
+    started_at: str | None = None,
+    updated_at: str | None = None,
+    completed_at: str | None = None,
+    stages: list[dict[str, Any]] | None = None,
+    source_metrics: Any = None,
+    source_type: str | None = None,
+    kafka_metrics: Any = None,
+    kafka_topic: str | None = None,
+    spark_metrics: dict[str, Any] | None = None,
+    storage_metrics: Any = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """
+    Construct the canonical progress dictionary following Section 8.1 schema.
+
+    Contains all 15 top-level keys:
+    runId, status, mode, startedAt, updatedAt, completedAt,
+    stages, source, kafka, spark, hdfs, throughput, etaSeconds, errors, fault.
+    Unknown values are null (never 0, never invented).
+    stages always contains exactly the 4 keys: source, kafka, spark, hdfs.
+    Allowed stage states: pending | active | done | error | skipped.
+    """
+    spark_m = spark_metrics or {}
+
+    stage_order = ["source", "kafka", "spark", "hdfs"]
+    stage_map = {s["key"]: s for s in (stages or []) if isinstance(s, dict) and "key" in s}
+    final_stages = []
+    for k in stage_order:
+        if k in stage_map:
+            st = stage_map[k]
+            final_stages.append({
+                "key": k,
+                "state": st.get("state", "pending"),
+                "startedAt": st.get("startedAt"),
+                "finishedAt": st.get("finishedAt"),
+                "error": st.get("error"),
+            })
+        else:
+            final_stages.append({
+                "key": k,
+                "state": "pending",
+                "startedAt": None,
+                "finishedAt": None,
+                "error": None,
+            })
+
+    return {
+        "runId": run_id,
+        "status": status,
+        "mode": mode,
+        "startedAt": started_at,
+        "updatedAt": updated_at or _utc_now(),
+        "completedAt": completed_at,
+        "stages": final_stages,
+        "source": {
+            "type": source_type,
+            "rowsTotal": source_metrics,
+            "rowsRead": source_metrics,
+        },
+        "kafka": {
+            "topic": kafka_topic,
+            "partitions": None,
+            "published": kafka_metrics,
+            "endOffsets": None,
+            "consumerLag": None,
+        },
+        "spark": {
+            "appId": None,
+            "tasksTotal": None,
+            "tasksDone": None,
+            "recordsIn": spark_m.get("input_rows"),
+            "recordsOut": spark_m.get("output_rows"),
+            "durationMs": spark_m.get("duration_ms"),
+        },
+        "hdfs": {
+            "path": spark_m.get("output_path"),
+            "filesWritten": None,
+            "bytesWritten": None,
+            "rowsWritten": storage_metrics,
+            "verified": None,
+        },
+        "throughput": {"recordsPerSecond": None, "samples": []},
+        "etaSeconds": None,
+        "errors": [error] if error else [],
+        "fault": None,
+    }
+
+
 class RunProgressTracker:
     """
     In-memory, thread-safe tracker for active pipeline run progress.
@@ -181,6 +273,7 @@ class RunProgressTracker:
             st = stages["source"]
             st["state"] = "active"
             st["startedAt"] = _utc_now()
+            state["source_type"] = payload.get("plugin")
         elif event_type == "source_done":
             st = stages["source"]
             st["state"] = "done"
@@ -190,11 +283,14 @@ class RunProgressTracker:
             st = stages["kafka"]
             st["state"] = "active"
             st["startedAt"] = _utc_now()
+            state["kafka_topic"] = payload.get("topic")
         elif event_type == "kafka_done":
             st = stages["kafka"]
             st["state"] = "done"
             st["finishedAt"] = _utc_now()
             state["kafka_metrics"] = payload.get("count")
+            if payload.get("topic"):
+                state["kafka_topic"] = payload.get("topic")
         elif event_type == "spark_start":
             st = stages["spark"]
             st["state"] = "active"
@@ -215,14 +311,14 @@ class RunProgressTracker:
             state["storage_metrics"] = payload.get("rows")
         elif event_type == "run_success":
             state["status"] = "succeeded"
-            state["finished_at"] = payload.get("finished_at")
+            state["finished_at"] = payload.get("finished_at") or _utc_now()
             for st in stages.values():
                 if st["state"] in ("pending", "active"):
                     st["state"] = "done"
                     st["finishedAt"] = _utc_now()
         elif event_type == "run_failed":
             state["status"] = "failed"
-            state["finished_at"] = payload.get("finished_at")
+            state["finished_at"] = payload.get("finished_at") or _utc_now()
             state["error"] = payload.get("error")
             for st in stages.values():
                 if st["state"] == "active":
@@ -234,7 +330,7 @@ class RunProgressTracker:
                     st["finishedAt"] = _utc_now()
         elif event_type == "run_cancelled":
             state["status"] = "cancelled"
-            state["finished_at"] = payload.get("finished_at")
+            state["finished_at"] = payload.get("finished_at") or _utc_now()
             for st in stages.values():
                 if st["state"] == "active":
                     st["state"] = "error"
@@ -255,49 +351,23 @@ class RunProgressTracker:
             state = self._runs.get(run_id)
             if state is None:
                 return None
-                
-            spark_m = state.get("spark_metrics", {})
 
-            return {
-                "runId": run_id,
-                "status": state["status"],
-                "mode": "batch",
-                "startedAt": state.get("started_at"),
-                "updatedAt": _utc_now(),
-                "completedAt": state.get("finished_at"),
-                "stages": list(state.get("stages", {}).values()),
-                "source": {
-                    "type": None, 
-                    "rowsTotal": state.get("source_metrics"), 
-                    "rowsRead": state.get("source_metrics")
-                },
-                "kafka": {
-                    "topic": None, 
-                    "partitions": None, 
-                    "published": state.get("kafka_metrics"), 
-                    "endOffsets": None, 
-                    "consumerLag": None
-                },
-                "spark": {
-                    "appId": None, 
-                    "tasksTotal": None, 
-                    "tasksDone": None, 
-                    "recordsIn": spark_m.get("input_rows"), 
-                    "recordsOut": spark_m.get("output_rows"), 
-                    "durationMs": spark_m.get("duration_ms")
-                },
-                "hdfs": {
-                    "path": spark_m.get("output_path"), 
-                    "filesWritten": None, 
-                    "bytesWritten": None, 
-                    "rowsWritten": state.get("storage_metrics"), 
-                    "verified": None
-                },
-                "throughput": {"recordsPerSecond": None, "samples": []},
-                "etaSeconds": None,
-                "errors": [state["error"]] if state.get("error") else [],
-                "fault": None
-            }
+            return build_progress_dict(
+                run_id=run_id,
+                status=state["status"],
+                mode="batch",
+                started_at=state.get("started_at"),
+                updated_at=_utc_now(),
+                completed_at=state.get("finished_at"),
+                stages=list(state.get("stages", {}).values()),
+                source_metrics=state.get("source_metrics"),
+                source_type=state.get("source_type"),
+                kafka_metrics=state.get("kafka_metrics"),
+                kafka_topic=state.get("kafka_topic"),
+                spark_metrics=state.get("spark_metrics"),
+                storage_metrics=state.get("storage_metrics"),
+                error=state.get("error"),
+            )
 
     def get_events_after(self, run_id: str, after_seq: int) -> list[dict]:
         """Return all in-memory events with seq > *after_seq*."""
