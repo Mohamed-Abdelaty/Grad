@@ -270,7 +270,7 @@ async def get_run_events(
     run_uuid = _parse_run_id(run_id)
 
     # Active run — serve from tracker
-    if tracker.is_running(run_id):
+    if tracker.is_active(run_id):
         events = tracker.get_events_after(run_id, after)
         return JSONResponse(content={"run_id": run_id, "events": events})
 
@@ -334,7 +334,7 @@ async def _sse_generator(
         yield f"event: error\ndata: {json.dumps({'detail': 'Run not found.'})}\n\n"
         return
 
-    if run.status not in ("running",):
+    if run.status not in ("active",):
         # Run already finished — replay from DB and close
         result = await db.execute(
             select(PipelineRunEvent)
@@ -396,7 +396,7 @@ async def _sse_generator(
 
                 # If the run is no longer tracked (tracker.finish() was called),
                 # close the stream gracefully
-                if not tracker.is_running(run_id):
+                if not tracker.is_active(run_id):
                     final_run = await db.get(PipelineRun, run_uuid)
                     final_status = final_run.status if final_run else "unknown"
                     yield f"event: done\ndata: {json.dumps({'status': final_status})}\n\n"
@@ -484,7 +484,7 @@ async def cancel_pipeline_run(
             {"accepted": False, "detail": "Run not found."},
             status_code=404,
         )
-    if run.status != "running":
+    if run.status != "active":
         return JSONResponse(
             {
                 "accepted": False,

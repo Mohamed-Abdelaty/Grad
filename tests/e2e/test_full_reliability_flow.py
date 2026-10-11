@@ -1,9 +1,11 @@
+import os
+
 import pytest
 import httpx
 import time
 import yaml
 
-BASE_URL = 'http://localhost:8000'
+BASE_URL = os.environ.get('E2E_BASE_URL', 'http://localhost:8000')
 
 KAFKA_EXPERIMENT_YAML = '''
 experiment:
@@ -20,7 +22,11 @@ validation:
 
 @pytest.fixture(scope='module')
 def auth_token():
-    resp = httpx.post(f'{BASE_URL}/api/auth/login', data={'username':'admin','password':'admin123'})
+    username = os.environ.get('ADMIN_USERNAME')
+    password = os.environ.get('ADMIN_PASSWORD')
+    if not username or not password:
+        pytest.fail('Set ADMIN_USERNAME and ADMIN_PASSWORD (same values as in .env) to run e2e tests.')
+    resp = httpx.post(f'{BASE_URL}/api/auth/login', data={'username': username, 'password': password})
     assert resp.status_code == 200
     return resp.json()['access_token']
 

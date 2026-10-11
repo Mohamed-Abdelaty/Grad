@@ -517,6 +517,9 @@ class TestSparkBranchWithMockedSubmitter:
         assert ctx.status == "success"
         mock_upload.assert_called_once()
         mock_delete.assert_called_once()
+        deleted_path = mock_delete.call_args[0][0]
+        assert deleted_path.startswith("/tmp/spark-input-")
+        assert deleted_path.endswith(".csv")
 
     def test_spark_job_cleans_up_hdfs_tmp_input_on_failure(
         self, tmp_path: Path, executor: PipelineExecutor
@@ -550,6 +553,9 @@ class TestSparkBranchWithMockedSubmitter:
 
         mock_upload.assert_called_once()
         mock_delete.assert_called_once()
+        deleted_path = mock_delete.call_args[0][0]
+        assert deleted_path.startswith("/tmp/spark-input-")
+        assert deleted_path.endswith(".csv")
 
     def test_pandas_path_used_when_no_engine_set(
         self, tmp_path: Path, executor: PipelineExecutor

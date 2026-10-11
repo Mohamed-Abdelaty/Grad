@@ -10,13 +10,13 @@ def tracker():
 
 def test_tracker_start_finish(tracker):
     tracker.start("run-123", "Test Pipeline")
-    assert tracker.is_running("run-123")
+    assert tracker.is_active("run-123")
     
     prog = tracker.get_progress("run-123")
-    assert prog["status"] == "running"
+    assert prog["status"] == "active"
     
     tracker.finish("run-123")
-    assert not tracker.is_running("run-123")
+    assert not tracker.is_active("run-123")
 
 def test_tracker_emit_and_get_events(tracker):
     tracker.start("run-1", "Test")

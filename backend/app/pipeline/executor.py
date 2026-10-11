@@ -304,11 +304,11 @@ class PipelineExecutor:
                 if step.step_type == "processor":
                     df = self._run_processor(step, df, ctx)
                 elif step.step_type == "storage":
-                    _progress_tracker.emit(tracker_run_id, "storage_verify")
+                    _progress_tracker.emit(tracker_run_id, "hdfs_start")
                     self._run_storage(step, df, ctx)
                     _progress_tracker.emit(
                         tracker_run_id,
-                        "storage_done",
+                        "hdfs_done",
                         {"rows": len(df)},
                     )
                 # source already handled above
@@ -567,9 +567,9 @@ class PipelineExecutor:
                 (s for s in plan.steps if s.step_type == "storage"), None
             )
             raw_path = (
-                storage_step.config.get("path", "/tmp/spark-output")
+                storage_step.config.get("path", f"/tmp/spark-output-{ctx.run_id}")
                 if storage_step
-                else "/tmp/spark-output"
+                else f"/tmp/spark-output-{ctx.run_id}"
             )
             is_hdfs_storage = (
                 storage_step is not None
@@ -590,7 +590,7 @@ class PipelineExecutor:
                 if raw_path.startswith("/"):
                     output_path = f"hdfs://namenode:9000{raw_path}"
                 else:
-                    output_path = f"hdfs://namenode:9000/tmp/spark-output-{uuid.uuid4().hex[:8]}"
+                    output_path = f"hdfs://namenode:9000/tmp/spark-output-{ctx.run_id}"
                 ctx.log_info(
                     "spark_job",
                     f"Redirected local storage path '{raw_path}' to HDFS "
@@ -667,6 +667,13 @@ class PipelineExecutor:
             # orphaned /tmp/spark-input-*.csv files on the namenode.
             if hdfs_tmp_input is not None:
                 _delete_hdfs_path(hdfs_tmp_input)
+            
+            # Step 3a: Delete fallback output on fail/cancel
+            if ctx.status != "success":
+                fallback_out = f"hdfs://namenode:9000/tmp/spark-output-{ctx.run_id}"
+                # If output_path is defined in locals and matches the fallback, delete it.
+                if locals().get("output_path") == fallback_out:
+                    _delete_hdfs_path(fallback_out)
 
 
     # ── Error handling ─────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ Event types (event_type values)
 source_start, source_done,
 kafka_start, kafka_done,
 spark_start, spark_done,
-storage_verify, storage_done,
+hdfs_start, hdfs_done,
 run_success, run_failed, run_cancelled,
 heartbeat (emitted by the SSE endpoint, not the executor)
 """
@@ -107,8 +107,13 @@ class RunProgressTracker:
             self._runs[run_id] = {
                 "run_id": run_id,
                 "pipeline_name": pipeline_name,
-                "status": "running",
-                "stages": {},
+                "status": "active",
+                "stages": {
+                    "source": {"key": "source", "state": "pending", "startedAt": None, "finishedAt": None, "error": None},
+                    "kafka": {"key": "kafka", "state": "pending", "startedAt": None, "finishedAt": None, "error": None},
+                    "spark": {"key": "spark", "state": "pending", "startedAt": None, "finishedAt": None, "error": None},
+                    "hdfs": {"key": "hdfs", "state": "pending", "startedAt": None, "finishedAt": None, "error": None}
+                },
                 "started_at": _utc_now(),
                 "finished_at": None,
                 "error": None,
@@ -170,57 +175,75 @@ class RunProgressTracker:
         stages = state["stages"]
         
         # Helper to ensure a stage exists
-        def init_stage(key: str):
-            if key not in stages:
-                stages[key] = {"key": key, "state": "pending", "startedAt": None, "finishedAt": None, "error": None}
-            return stages[key]
+
 
         if event_type == "source_start":
-            st = init_stage("source")
-            st["state"] = "running"
+            st = stages["source"]
+            st["state"] = "active"
             st["startedAt"] = _utc_now()
         elif event_type == "source_done":
-            st = init_stage("source")
+            st = stages["source"]
             st["state"] = "done"
             st["finishedAt"] = _utc_now()
             state["source_metrics"] = payload.get("rows")
         elif event_type == "kafka_start":
-            st = init_stage("kafka")
-            st["state"] = "running"
+            st = stages["kafka"]
+            st["state"] = "active"
             st["startedAt"] = _utc_now()
         elif event_type == "kafka_done":
-            st = init_stage("kafka")
+            st = stages["kafka"]
             st["state"] = "done"
             st["finishedAt"] = _utc_now()
             state["kafka_metrics"] = payload.get("count")
         elif event_type == "spark_start":
-            st = init_stage("spark")
-            st["state"] = "running"
+            st = stages["spark"]
+            st["state"] = "active"
             st["startedAt"] = _utc_now()
         elif event_type == "spark_done":
-            st = init_stage("spark")
+            st = stages["spark"]
             st["state"] = "done"
             st["finishedAt"] = _utc_now()
             state["spark_metrics"] = payload
-        elif event_type == "storage_verify":
-            st = init_stage("storage")
-            st["state"] = "running"
+        elif event_type == "hdfs_start":
+            st = stages["hdfs"]
+            st["state"] = "active"
             st["startedAt"] = _utc_now()
-        elif event_type == "storage_done":
-            st = init_stage("storage")
+        elif event_type == "hdfs_done":
+            st = stages["hdfs"]
             st["state"] = "done"
             st["finishedAt"] = _utc_now()
             state["storage_metrics"] = payload.get("rows")
         elif event_type == "run_success":
             state["status"] = "success"
             state["finished_at"] = payload.get("finished_at")
+            for st in stages.values():
+                if st["state"] in ("pending", "active"):
+                    st["state"] = "done"
+                    st["finishedAt"] = _utc_now()
         elif event_type == "run_failed":
             state["status"] = "failed"
             state["finished_at"] = payload.get("finished_at")
             state["error"] = payload.get("error")
+            for st in stages.values():
+                if st["state"] == "active":
+                    st["state"] = "error"
+                    st["error"] = payload.get("error")
+                    st["finishedAt"] = _utc_now()
+                elif st["state"] == "pending":
+                    st["state"] = "skipped"
+                    st["finishedAt"] = _utc_now()
         elif event_type == "run_cancelled":
             state["status"] = "cancelled"
             state["finished_at"] = payload.get("finished_at")
+            for st in stages.values():
+                if st["state"] == "active":
+                    st["state"] = "error"
+                    st["error"] = "Cancelled"
+                    st["finishedAt"] = _utc_now()
+                elif st["state"] == "pending":
+                    st["state"] = "skipped"
+                    st["finishedAt"] = _utc_now()
+
 
     # ── Queries ────────────────────────────────────────────────────────────────
 
@@ -293,10 +316,10 @@ class RunProgressTracker:
             state = self._runs.get(run_id)
             return list(state["events"]) if state else []
 
-    def is_running(self, run_id: str) -> bool:
+    def is_active(self, run_id: str) -> bool:
         with self._lock:
             state = self._runs.get(run_id)
-            return state is not None and state["status"] == "running"
+            return state is not None and state["status"] == "active"
 
     # ── SSE subscriptions ──────────────────────────────────────────────────────
 
@@ -348,7 +371,7 @@ class RunProgressTracker:
         """
         with self._lock:
             state = self._runs.get(run_id)
-            if state is None or state["status"] != "running":
+            if state is None or state["status"] != "active":
                 return False
             self._cancel_requested.add(run_id)
             pid = self._proc_pids.get(run_id)
