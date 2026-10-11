@@ -68,3 +68,14 @@ stream.log
 
 # ── Large data files ───────────────────────────────────────────────────────────
 sample-data/sales_large.csv
+
+# ── Clean-up & Artifacts ───────────────────────────────────────────────────────
+token.txt
+*.token
+/scratch*
+/patch*.py
+/new_*.txt
+/old_*.txt
+/tmp/
+.pytest_cache/
+*.parquet

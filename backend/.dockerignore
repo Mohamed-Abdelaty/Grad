@@ -20,6 +20,8 @@ env/
 .coverage
 htmlcov/
 *.egg-info/
+playwright-report/
+test-results/
 
 # Editor / IDE
 .vscode/
@@ -31,6 +33,7 @@ htmlcov/
 # Secrets / environment
 .env
 *.env.local
+token.txt
 
 # Git
 .git/
@@ -40,14 +43,12 @@ htmlcov/
 docs/_build/
 site/
 
-__pycache__/
-*.pyc
-.pytest_cache/
-scratch/
+# Node / Frontend
+node_modules/
+dist/
+
+# Scratch & logs
+scratch*
 *.log
-.env
-
-
-**/__pycache__
-**/*.pyc
-
+tmp/
+tmp

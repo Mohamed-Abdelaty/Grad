@@ -40,13 +40,16 @@ coverage.xml
 # ── Environment / Secrets ──────────────────────────────────────────────────────
 .env
 *.env.local
+token.txt
 
 # ── Scratch / Temp ─────────────────────────────────────────────────────────────
-scratch/
+scratch*
 stream.log
 *.log
 *.tmp
 *.bak
+tmp/
+tmp
 
 # ── Large data files ───────────────────────────────────────────────────────────
 sample-data/sales_large.csv

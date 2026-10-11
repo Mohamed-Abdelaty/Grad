@@ -5,9 +5,10 @@ from app.pipeline.generator import PipelineGenerator
 from pathlib import Path
 
 
-def test_pipeline_execution_emits_record_metric() -> None:
+def test_pipeline_execution_emits_record_metric(tmp_path: Path) -> None:
     name = "metric-test"
     before = pipeline_records_processed_total.labels(name)._value.get()
+    storage_path = str((tmp_path / "metric-test").resolve())
     config = PipelineConfig.model_validate(
         {
             "pipeline": {"name": name, "version": "1.0"},
@@ -21,7 +22,7 @@ def test_pipeline_execution_emits_record_metric() -> None:
             ],
             "processing": {"operations": [{"type": "filter", "condition": "amount > 0"}]},
             "streaming": {"enabled": False},
-            "storage": {"type": "local", "path": str(Path("../tmp/metric-test").resolve())},
+            "storage": {"type": "local", "path": storage_path},
         }
     )
     assert PipelineExecutor().execute(PipelineGenerator().generate(config)).status == "success"

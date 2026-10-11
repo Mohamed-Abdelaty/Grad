@@ -1,6 +1,21 @@
+# .dockerignore
 
+# Node / Frontend
 node_modules/
 dist/
+
+# Python cache & tests
+__pycache__/
+*.pyc
+.pytest_cache/
 playwright-report/
 test-results/
 
+# Scratch & logs & secrets
+scratch*
+*.log
+.env
+*.env.local
+token.txt
+tmp/
+tmp
