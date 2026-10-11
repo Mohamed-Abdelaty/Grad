@@ -39,7 +39,7 @@ import uuid as _uuid
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -324,8 +324,9 @@ async def _sse_generator(
     HEARTBEAT_INTERVAL = 15.0  # seconds
     _sentinel = object()       # signals end-of-stream
 
-    def _fmt_event(ev: dict, event_name: str = "message") -> str:
-        return f"event: {event_name}\ndata: {json.dumps(ev)}\n\n"
+    def _fmt_event(ev: dict, event_name: str | None = None) -> str:
+        name = event_name or ev.get("event_type", "message")
+        return f"event: {name}\ndata: {json.dumps(ev)}\n\n"
 
     def _fmt_heartbeat() -> str:
         return f"event: heartbeat\ndata: {json.dumps({'ts': datetime.now(tz=timezone.utc).isoformat()})}\n\n"
@@ -336,7 +337,7 @@ async def _sse_generator(
         yield f"event: error\ndata: {json.dumps({'detail': 'Run not found.'})}\n\n"
         return
 
-    if run.status not in ("active",):
+    if run.status in ("succeeded", "failed", "cancelled"):
         # Run already finished — replay from DB and close
         result = await db.execute(
             select(PipelineRunEvent)
@@ -378,6 +379,9 @@ async def _sse_generator(
                         "run_cancelled": "cancelled",
                     }
                     final_status = status_map.get(event["event_type"], "unknown")
+                    progress = tracker.get_progress(run_id)
+                    if progress:
+                        yield _fmt_event(progress, "progress")
                     yield f"event: done\ndata: {json.dumps({'status': final_status})}\n\n"
                     return
 
@@ -422,7 +426,7 @@ async def stream_run_progress(
             "header is preferred."
         ),
     ),
-    authorization: str | None = None,
+    authorization: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """

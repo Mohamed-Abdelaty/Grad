@@ -256,17 +256,14 @@ class RunProgressTracker:
             if state is None:
                 return None
                 
-            events = state.get("events", [])
-            updated_at = events[-1]["ts"] if events else state.get("started_at")
-            
             spark_m = state.get("spark_metrics", {})
-            
+
             return {
                 "runId": run_id,
                 "status": state["status"],
                 "mode": "batch",
                 "startedAt": state.get("started_at"),
-                "updatedAt": updated_at,
+                "updatedAt": _utc_now(),
                 "completedAt": state.get("finished_at"),
                 "stages": list(state.get("stages", {}).values()),
                 "source": {
