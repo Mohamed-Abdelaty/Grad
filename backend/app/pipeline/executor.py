@@ -136,32 +136,41 @@ def _upload_df_to_hdfs(df: pd.DataFrame, hdfs_path: str) -> None:
     )
 
 
-def _delete_hdfs_path(hdfs_path: str) -> None:
+def _delete_hdfs_path(hdfs_path: str, recursive: bool = False) -> None:
     """
     Delete an HDFS path using the WebHDFS REST DELETE API.
 
     Called in the ``finally`` block of :meth:`PipelineExecutor._run_spark_job`
-    to clean up temporary input files created for non-file sources (carry-over b).
+    to clean up temporary input files created for non-file sources (carry-over b),
+    and cleanup partial outputs on failure/cancellation.
 
     Failures are logged as warnings and never propagated — cleanup is best-effort.
 
     Parameters
     ----------
     hdfs_path : str
-        Absolute HDFS path (e.g. ``/tmp/spark-input-abc123.csv``).
+        Absolute HDFS path (e.g. ``/tmp/spark-input-abc123.csv``) or full URI.
+    recursive : bool
+        Whether to delete directories recursively.
     """
     try:
         import requests as _requests
         from app.core.config import get_settings
 
+        if hdfs_path.startswith("hdfs://"):
+            without_scheme = hdfs_path.split("://", 1)[1]
+            slash = without_scheme.find("/")
+            hdfs_path = without_scheme[slash:] if slash >= 0 else "/"
+
         settings = get_settings()
+        rec_str = "true" if recursive else "false"
         url = (
             f"{settings.HDFS_NAMENODE_URL}/webhdfs/v1{hdfs_path}"
-            f"?op=DELETE&recursive=false&user.name={settings.HDFS_USER}"
+            f"?op=DELETE&recursive={rec_str}&user.name={settings.HDFS_USER}"
         )
         resp = _requests.delete(url, timeout=10)
         if resp.status_code in (200, 404):
-            logger.info("Deleted HDFS temp file %s (HTTP %d).", hdfs_path, resp.status_code)
+            logger.info("Deleted HDFS path %s (HTTP %d).", hdfs_path, resp.status_code)
         else:
             logger.warning(
                 "HDFS DELETE %s returned unexpected HTTP %d: %s",
@@ -170,7 +179,7 @@ def _delete_hdfs_path(hdfs_path: str) -> None:
                 resp.text[:200],
             )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Failed to delete HDFS temp file %s: %s", hdfs_path, exc)
+        logger.warning("Failed to delete HDFS path %s: %s", hdfs_path, exc)
 
 
 # ── Executor exception ─────────────────────────────────────────────────────────
@@ -620,6 +629,7 @@ class PipelineExecutor:
                     "output_rows": result.get("output_rows"),
                     "duration_seconds": result.get("duration_seconds"),
                     "output_path": output_path,
+                    "actual_output_path": output_path,
                     "duration_ms": duration_ms,
                 },
             )
@@ -636,6 +646,7 @@ class PipelineExecutor:
                     "input_rows": result.get("input_rows"),
                     "output_rows": result.get("output_rows"),
                     "output_path": output_path,
+                    "actual_output_path": output_path,
                     "duration_ms": duration_ms,
                 },
             )
@@ -673,7 +684,7 @@ class PipelineExecutor:
                 fallback_out = f"hdfs://namenode:9000/tmp/spark-output-{ctx.run_id}"
                 # If output_path is defined in locals and matches the fallback, delete it.
                 if locals().get("output_path") == fallback_out:
-                    _delete_hdfs_path(fallback_out)
+                    _delete_hdfs_path(fallback_out, recursive=True)
 
 
     # ── Error handling ─────────────────────────────────────────────────────────

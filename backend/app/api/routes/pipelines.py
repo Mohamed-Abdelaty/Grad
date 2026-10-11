@@ -153,10 +153,18 @@ async def _finalize_run(
         )
         error_msg = (failed_log or "")[:4000]
 
-    # Resolve output_path from spark metrics
+    # Resolve output_path from spark metrics or storage metrics
     stages = result.get("metrics", {})
     spark_metrics = stages.get("spark_job", {})
-    output_path = spark_metrics.get("output_path")
+    storage_metrics = next(
+        (v for k, v in stages.items() if k.startswith("storage:")), {}
+    )
+    output_path = (
+        spark_metrics.get("actual_output_path")
+        or spark_metrics.get("output_path")
+        or storage_metrics.get("hdfs_path")
+        or storage_metrics.get("path")
+    )
 
     run_uuid = _uuid.UUID(run_id)
 

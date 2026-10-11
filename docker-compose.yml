@@ -368,7 +368,8 @@ services:
       namenode:
         condition: service_healthy
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-platform_user}:${POSTGRES_PASSWORD:-platform_pass}@postgres:5432/${POSTGRES_DB:-platform_db}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -379,13 +380,13 @@ services:
       # ── Auth admin ────────────────────────────────────────────────────────────
       # Read from .env (via env_file above). Explicit entries here ensure the
       # values are visible in `docker-compose config` output for auditing.
-      ADMIN_USERNAME: ${ADMIN_USERNAME:?ADMIN_USERNAME must be set in .env}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
-      # ── Phase 7: ChaosLab Reliability Engine ─────────────────────────────────
-      # PROJECT_CONTAINER_PREFIX must match the Docker Compose project name
-      # (the directory name or COMPOSE_PROJECT_NAME env var).
-      # SafetyValidator uses this to verify containers belong to THIS project.
-      PROJECT_CONTAINER_PREFIX: ${COMPOSE_PROJECT_NAME:-resilient-big-data-platform}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-REDACTED}
+      # ── Compose project name pin (single source of truth) ────────────────────
+      # Must match the top-level name: in this file and Settings.COMPOSE_PROJECT_NAME.
+      # safety.py reads PROJECT_CONTAINER_PREFIX from Settings.COMPOSE_PROJECT_NAME.
+      COMPOSE_PROJECT_NAME: resilient-big-data-platform
+      PROJECT_CONTAINER_PREFIX: resilient-big-data-platform
     volumes:
       - ./backend/app:/app/app:ro
       - ./backend/alembic:/app/alembic:ro

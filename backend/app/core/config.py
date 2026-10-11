@@ -111,6 +111,7 @@ class Settings(BaseSettings):
     HDFS_DEFAULT_REPLICATION: int = 1  # single-datanode local dev default
 
     # ── ChaosLab Reliability Engine (Phase 7) ──────────────────────────────────
+    compose_project_name: str = "resilient-big-data-platform"
     COMPOSE_PROJECT_NAME: str = "resilient-big-data-platform"
     PROJECT_CONTAINER_PREFIX: str = "resilient-big-data-platform"
     """
@@ -122,7 +123,7 @@ class Settings(BaseSettings):
     Override with the value of COMPOSE_PROJECT_NAME if set.
     """
 
-    @field_validator("PROJECT_CONTAINER_PREFIX", mode="before")
+    @field_validator("compose_project_name", "COMPOSE_PROJECT_NAME", "PROJECT_CONTAINER_PREFIX", mode="before")
     @classmethod
     def set_project_container_prefix(cls, v: object, info: ValidationInfo) -> str:
         import os

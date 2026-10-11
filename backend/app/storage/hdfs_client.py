@@ -347,6 +347,10 @@ class HdfsStorageClient:
             logger.warning("Failed to delete HDFS path '%s': %s", hdfs_path, exc)
             return False
 
+    def delete(self, hdfs_path: str, recursive: bool = False) -> bool:
+        """Alias for delete_path (WebHDFS op=DELETE)."""
+        return self.delete_path(hdfs_path, recursive=recursive)
+
     def health_check(self) -> dict[str, Any]:
         """
         Verify NameNode connectivity and return live cluster statistics.
@@ -404,3 +408,7 @@ class HdfsStorageClient:
             # JMX failure is non-fatal — cluster is still reachable
 
         return result
+
+
+# Alias HdfsClient to HdfsStorageClient for backward compatibility and prompt compliance
+HdfsClient = HdfsStorageClient

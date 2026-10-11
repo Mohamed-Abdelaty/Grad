@@ -138,6 +138,7 @@ async def list_pipeline_runs(
                 "finished_at": run.finished_at.isoformat() if run.finished_at else None,
                 "error_message": run.error_message,
                 "output_path": run.output_path,
+                "actual_output_path": run.output_path,
             }
             for run in runs
         ]
@@ -168,6 +169,7 @@ async def get_pipeline_run(
             "finished_at": run.finished_at.isoformat() if run.finished_at else None,
             "error_message": run.error_message,
             "output_path": run.output_path,
+            "actual_output_path": run.output_path,
         }
     )
 

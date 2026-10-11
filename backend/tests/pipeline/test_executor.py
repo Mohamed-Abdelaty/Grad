@@ -557,6 +557,45 @@ class TestSparkBranchWithMockedSubmitter:
         assert deleted_path.startswith("/tmp/spark-input-")
         assert deleted_path.endswith(".csv")
 
+    def test_spark_job_cleans_up_hdfs_tmp_input_on_cancel(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """When the spark job is cancelled, the tmp file must still be deleted."""
+        from unittest.mock import AsyncMock, patch
+        from app.plugins.sources.api_source import ApiSource
+        from app.spark.exceptions import SparkJobFailedError
+
+        source_step = ExecutionStep(
+            name="source:api",
+            step_type="source",
+            plugin_type="api",
+            plugin=ApiSource(),
+            config={"endpoint": "http://example.com/data"},
+        )
+        plan = self._make_plan_with_spark(tmp_path)
+        plan.steps[0] = source_step
+
+        with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+             patch("app.pipeline.executor._upload_df_to_hdfs") as mock_upload, \
+             patch("app.pipeline.executor._delete_hdfs_path") as mock_delete, \
+             patch.object(ApiSource, "read", return_value=pd.DataFrame({"a": [1]})):
+
+            instance = MockSubmitter.return_value
+            # Cancellation surfaces as a SparkJobFailedError or abort
+            instance.submit_batch_job = AsyncMock(
+                side_effect=SparkJobFailedError("Job was cancelled by user signal", "", "")
+            )
+            mock_upload.return_value = "hdfs:///tmp/spark-input-cancel.csv"
+
+            with pytest.raises(PipelineExecutionError):
+                executor.execute(plan)
+
+        mock_upload.assert_called_once()
+        mock_delete.assert_called_once()
+        deleted_path = mock_delete.call_args[0][0]
+        assert deleted_path.startswith("/tmp/spark-input-")
+        assert deleted_path.endswith(".csv")
+
     def test_pandas_path_used_when_no_engine_set(
         self, tmp_path: Path, executor: PipelineExecutor
     ) -> None:
