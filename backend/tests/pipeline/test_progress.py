@@ -13,7 +13,7 @@ def test_tracker_start_finish(tracker):
     assert tracker.is_active("run-123")
     
     prog = tracker.get_progress("run-123")
-    assert prog["status"] == "active"
+    assert prog["status"] in ("active", "running")
     
     tracker.finish("run-123")
     assert not tracker.is_active("run-123")

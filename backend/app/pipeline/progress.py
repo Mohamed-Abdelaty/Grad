@@ -107,7 +107,7 @@ class RunProgressTracker:
             self._runs[run_id] = {
                 "run_id": run_id,
                 "pipeline_name": pipeline_name,
-                "status": "active",
+                "status": "running",
                 "stages": {
                     "source": {"key": "source", "state": "pending", "startedAt": None, "finishedAt": None, "error": None},
                     "kafka": {"key": "kafka", "state": "pending", "startedAt": None, "finishedAt": None, "error": None},
@@ -214,7 +214,7 @@ class RunProgressTracker:
             st["finishedAt"] = _utc_now()
             state["storage_metrics"] = payload.get("rows")
         elif event_type == "run_success":
-            state["status"] = "success"
+            state["status"] = "succeeded"
             state["finished_at"] = payload.get("finished_at")
             for st in stages.values():
                 if st["state"] in ("pending", "active"):
@@ -316,7 +316,7 @@ class RunProgressTracker:
     def is_active(self, run_id: str) -> bool:
         with self._lock:
             state = self._runs.get(run_id)
-            return state is not None and state["status"] == "active"
+            return state is not None and state["status"] in ("active", "running")
 
     # ── SSE subscriptions ──────────────────────────────────────────────────────
 
@@ -368,7 +368,7 @@ class RunProgressTracker:
         """
         with self._lock:
             state = self._runs.get(run_id)
-            if state is None or state["status"] != "active":
+            if state is None or state["status"] not in ("active", "running"):
                 return False
             self._cancel_requested.add(run_id)
             pid = self._proc_pids.get(run_id)
