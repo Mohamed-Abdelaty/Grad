@@ -490,7 +490,7 @@ async def cancel_pipeline_run(
             {"accepted": False, "detail": "Run not found."},
             status_code=404,
         )
-    if run.status != "active":
+    if run.status not in ("running", "active"):
         return JSONResponse(
             {
                 "accepted": False,

@@ -374,15 +374,44 @@ class RunProgressTracker:
             pid = self._proc_pids.get(run_id)
 
         if pid is not None:
-            try:
-                os.killpg(os.getpgid(pid), signal.SIGTERM)
-                logger.info(
-                    "Sent SIGTERM to spark-submit process group %d for run %s", pid, run_id
-                )
-            except ProcessLookupError:
-                logger.debug("PID %d already gone when cancel requested.", pid)
-            except Exception as e:
-                logger.warning("Failed to kill process group for PID %d: %s", pid, e)
+            def _kill_process_group(target_pid: int, target_run: str) -> None:
+                import time as _time
+                try:
+                    pgid = os.getpgid(target_pid)
+                    # Safety guard: never kill the platform backend process group itself
+                    if pgid == os.getpgrp():
+                        logger.warning(
+                            "Target PGID %d matches backend process group; refusing to kill self.",
+                            pgid,
+                        )
+                        return
+                    os.killpg(pgid, signal.SIGTERM)
+                    logger.info(
+                        "Sent SIGTERM to spark-submit process group %d for run %s",
+                        target_pid,
+                        target_run,
+                    )
+                    _time.sleep(2.0)
+                    try:
+                        # Follow up with SIGKILL if still running
+                        os.killpg(pgid, signal.SIGKILL)
+                        logger.info(
+                            "Sent SIGKILL to spark-submit process group %d for run %s",
+                            target_pid,
+                            target_run,
+                        )
+                    except ProcessLookupError:
+                        pass
+                except ProcessLookupError:
+                    logger.debug("PID %d already gone when cancel requested.", target_pid)
+                except Exception as e:
+                    logger.warning("Failed to terminate process group for PID %d: %s", target_pid, e)
+
+            threading.Thread(
+                target=_kill_process_group,
+                args=(pid, run_id),
+                daemon=True,
+            ).start()
         else:
             logger.info(
                 "Cancel requested for run %s — no Spark PID registered; "

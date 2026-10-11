@@ -64,8 +64,7 @@ async def async_client():
 def _ps_spark_in_backend() -> str:
     """Return ps aux output filtered for spark-submit / java in the backend container."""
     result = subprocess.run(
-        ["docker", "exec", "platform-backend", "sh", "-c",
-         "ps aux | grep -E 'spark-submit|java' | grep -v grep || true"],
+        ["sh", "-c", "ps aux | grep -E 'spark-submit|java' | grep -v grep || true"],
         capture_output=True, text=True, timeout=15,
     )
     return result.stdout.strip()
@@ -74,15 +73,11 @@ def _ps_spark_in_backend() -> str:
 def _hdfs_tmp_listing() -> list[str]:
     """Return list of filenames under HDFS /tmp/."""
     try:
-        result = subprocess.run(
-            ["docker", "exec", "platform-backend", "python3", "-c",
-             "import urllib.request, json; "
-             "d=json.load(urllib.request.urlopen('http://namenode:9870/webhdfs/v1/tmp?op=LISTSTATUS')); "
-             "print([f['pathSuffix'] for f in d.get('FileStatuses',{}).get('FileStatus',[])])"],
-            capture_output=True, text=True, timeout=30,
-        )
-        import ast
-        return ast.literal_eval(result.stdout.strip()) if result.stdout.strip() else []
+        import json
+        import urllib.request
+        with urllib.request.urlopen("http://namenode:9870/webhdfs/v1/tmp?op=LISTSTATUS", timeout=10) as resp:
+            d = json.loads(resp.read().decode())
+            return [f["pathSuffix"] for f in d.get("FileStatuses", {}).get("FileStatus", [])]
     except Exception:
         return []
 

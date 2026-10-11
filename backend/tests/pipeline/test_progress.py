@@ -56,3 +56,56 @@ def test_tracker_cancel_request(tracker):
     tracker.finish("run-cancel")
     accepted2 = tracker.request_cancel("run-cancel")
     assert accepted2 is False
+
+
+def test_tracker_cancel_sends_sigterm_and_sigkill(tracker):
+    """Verify request_cancel sends SIGTERM then SIGKILL to the process group."""
+    import signal
+    import threading
+    from unittest.mock import patch
+
+    tracker.start("run-term-kill", "Test Term Kill")
+    tracker.register_proc_pid("run-term-kill", 9999)
+
+    killed_signals = []
+    kill_done_event = threading.Event()
+
+    def mock_killpg(pgid, sig):
+        killed_signals.append((pgid, sig))
+        if sig == signal.SIGKILL:
+            kill_done_event.set()
+
+    with patch("os.getpgid", return_value=8888), \
+         patch("os.getpgrp", return_value=1111), \
+         patch("os.killpg", side_effect=mock_killpg), \
+         patch("time.sleep", return_value=None):
+        accepted = tracker.request_cancel("run-term-kill")
+        assert accepted is True
+
+        assert kill_done_event.wait(timeout=2.0) is True
+
+    assert (8888, signal.SIGTERM) in killed_signals
+    assert (8888, signal.SIGKILL) in killed_signals
+
+
+def test_tracker_cancel_does_not_terminate_backend_process(tracker):
+    """Verify request_cancel will NEVER kill the backend's own process group."""
+    from unittest.mock import patch
+
+    tracker.start("run-safe", "Test Safe")
+    tracker.register_proc_pid("run-safe", 1234)
+
+    killed = []
+
+    with patch("os.getpgid", return_value=5555), \
+         patch("os.getpgrp", return_value=5555), \
+         patch("os.killpg", side_effect=lambda pgid, sig: killed.append(sig)), \
+         patch("time.sleep", return_value=None):
+        accepted = tracker.request_cancel("run-safe")
+        assert accepted is True
+
+        import time
+        time.sleep(0.05)
+
+    # Process group was identical to backend's own process group, so killpg must not be called
+    assert len(killed) == 0, f"Backend process group was targeted: {killed}"
