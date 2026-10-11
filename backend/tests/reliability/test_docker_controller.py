@@ -100,8 +100,10 @@ class TestDockerControllerIntegration:
         container = _make_test_container(client)
         self._container = container
         self._service_name = container.labels["com.docker.compose.service"]
-        yield container
-        _cleanup_container(container)
+        try:
+            yield container
+        finally:
+            _cleanup_container(container)
 
     def _make_controller(self):
         """Build a DockerController wired to a SafetyValidator that finds our test container."""
