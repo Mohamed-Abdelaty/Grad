@@ -518,7 +518,7 @@ class TestSparkBranchWithMockedSubmitter:
         mock_upload.assert_called_once()
         mock_delete.assert_called_once()
         deleted_path = mock_delete.call_args[0][0]
-        assert deleted_path.startswith("/tmp/spark-input-")
+        assert deleted_path.startswith("hdfs:///tmp/spark-input-")
         assert deleted_path.endswith(".csv")
 
     def test_spark_job_cleans_up_hdfs_tmp_input_on_failure(
@@ -554,7 +554,7 @@ class TestSparkBranchWithMockedSubmitter:
         mock_upload.assert_called_once()
         mock_delete.assert_called_once()
         deleted_path = mock_delete.call_args[0][0]
-        assert deleted_path.startswith("/tmp/spark-input-")
+        assert deleted_path.startswith("hdfs:///tmp/spark-input-")
         assert deleted_path.endswith(".csv")
 
     def test_spark_job_cleans_up_hdfs_tmp_input_on_cancel(
@@ -593,8 +593,33 @@ class TestSparkBranchWithMockedSubmitter:
         mock_upload.assert_called_once()
         mock_delete.assert_called_once()
         deleted_path = mock_delete.call_args[0][0]
-        assert deleted_path.startswith("/tmp/spark-input-")
+        assert deleted_path.startswith("hdfs:///tmp/spark-input-")
         assert deleted_path.endswith(".csv")
+
+    def test_spark_job_cleans_up_fallback_output_on_failure(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """When using fallback output path and the job fails, fallback directory is deleted."""
+        from unittest.mock import AsyncMock, patch
+        from app.spark.exceptions import SparkJobFailedError
+
+        plan = self._make_plan_with_spark(tmp_path)
+        # Remove storage step so it uses fallback output path
+        plan.steps = [s for s in plan.steps if s.step_type != "storage"]
+
+        with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+             patch("app.pipeline.executor._delete_hdfs_path") as mock_delete:
+            
+            instance = MockSubmitter.return_value
+            instance.submit_batch_job = AsyncMock(side_effect=SparkJobFailedError("failed", "", ""))
+
+            with pytest.raises(PipelineExecutionError):
+                executor.execute(plan)
+
+        mock_delete.assert_called_once()
+        deleted_path, kwargs = mock_delete.call_args[0][0], mock_delete.call_args[1]
+        assert "/tmp/spark-output-" in deleted_path
+        assert kwargs.get("recursive") is True
 
     def test_pandas_path_used_when_no_engine_set(
         self, tmp_path: Path, executor: PipelineExecutor

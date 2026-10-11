@@ -100,6 +100,11 @@ def _upload_df_to_hdfs(df: pd.DataFrame, hdfs_path: str) -> None:
     import requests as _requests
     from app.core.config import get_settings
 
+    if hdfs_path.startswith("hdfs://"):
+        without_scheme = hdfs_path.split("://", 1)[1]
+        slash = without_scheme.find("/")
+        hdfs_path = without_scheme[slash:] if slash >= 0 else "/"
+
     settings = get_settings()
     namenode_url = settings.HDFS_NAMENODE_URL   # http://namenode:9870
     user = settings.HDFS_USER                   # root
@@ -546,6 +551,7 @@ class PipelineExecutor:
         t0 = time.perf_counter()
 
         hdfs_tmp_input: str | None = None   # HDFS path created for non-file sources
+        output_path: str | None = None
         try:
             source_step = next(s for s in plan.steps if s.step_type == "source")
             input_source: str | None = source_step.config.get("path")
@@ -555,9 +561,12 @@ class PipelineExecutor:
                 # The executor has already read data into *df* via the source plugin.
                 # We must stage *df* to HDFS so that Spark workers can read it —
                 # the backend's local /tmp/ is invisible to spark-worker containers.
-                hdfs_tmp_input = f"/tmp/spark-input-{uuid.uuid4().hex[:8]}.csv"
+                hdfs_tmp_input = f"hdfs:///tmp/spark-input-{uuid.uuid4().hex[:8]}.csv"
                 _upload_df_to_hdfs(df, hdfs_tmp_input)
-                input_source = f"hdfs://namenode:9000{hdfs_tmp_input}"
+                raw_input_path = hdfs_tmp_input.replace("hdfs://", "")
+                if not raw_input_path.startswith("/"):
+                    raw_input_path = f"/{raw_input_path}"
+                input_source = f"hdfs://namenode:9000{raw_input_path}"
                 ctx.log_info(
                     "spark_job",
                     f"Staged non-file source DataFrame ({len(df)} rows) "
@@ -679,12 +688,12 @@ class PipelineExecutor:
             if hdfs_tmp_input is not None:
                 _delete_hdfs_path(hdfs_tmp_input)
             
-            # Step 3a: Delete fallback output on fail/cancel
+            # Step 7: Delete fallback output on fail/cancel
             if ctx.status != "success":
-                fallback_out = f"hdfs://namenode:9000/tmp/spark-output-{ctx.run_id}"
-                # If output_path is defined in locals and matches the fallback, delete it.
-                if locals().get("output_path") == fallback_out:
-                    _delete_hdfs_path(fallback_out, recursive=True)
+                fallback_path = f"/tmp/spark-output-{ctx.run_id}"
+                current_out = output_path or ""
+                if fallback_path in current_out:
+                    _delete_hdfs_path(current_out, recursive=True)
 
 
     # ── Error handling ─────────────────────────────────────────────────────────
