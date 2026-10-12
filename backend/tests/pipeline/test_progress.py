@@ -135,11 +135,11 @@ def test_progress_canonical_schema_all_keys_and_defaults(tracker):
     assert prog["throughput"] == {"recordsPerSecond": None, "samples": []}
     assert prog["source"] == {"type": None, "rowsTotal": None, "rowsRead": None}
     assert prog["kafka"] == {
-        "topic": None, "partitions": None, "published": None,
+        "topic": None, "partitions": None, "published": None, "failed": 0,
         "endOffsets": None, "consumerLag": None,
     }
     assert prog["spark"] == {
-        "appId": None, "tasksTotal": None, "tasksDone": None,
+        "appId": None, "tasksTotal": None, "tasksDone": None, "activeStage": None,
         "recordsIn": None, "recordsOut": None, "durationMs": None,
     }
     assert prog["hdfs"] == {
@@ -292,4 +292,61 @@ async def test_sse_heartbeat_interval_and_emission():
     assert "event: heartbeat" in heartbeat_frames[0]
 
     global_tracker.finish(run_id)
+
+
+def test_schema_additions_skipped_active_stage_kafka_failed(tracker):
+    """Step 2: Verify skipped stage state, spark.activeStage, and kafka.failed."""
+    from app.schemas.progress import RunProgress
+
+    tracker.start("run-schema-test", "Schema Test Pipeline")
+    
+    # 1. Check default values right after start
+    prog = tracker.get_progress("run-schema-test")
+    assert prog is not None
+    assert prog["kafka"]["failed"] == 0
+    assert prog["kafka"]["published"] is None
+    assert prog["spark"]["activeStage"] is None
+
+    # Validate against Pydantic schema
+    validated = RunProgress.model_validate(prog)
+    assert validated.kafka.failed == 0
+    assert validated.spark.activeStage is None
+
+    # 2. Update with activeStage, kafka failed, and skipped stage
+    tracker.set_stage_state("run-schema-test", "kafka", "skipped")
+    tracker.update_kafka("run-schema-test", published=100, failed=3, partitions=6, end_offsets=100)
+    tracker.update_spark(
+        "run-schema-test",
+        app_id="app-12345",
+        tasks_total=20,
+        tasks_done=10,
+        active_stage={"id": 1, "name": "count at job.py:45", "tasksTotal": 8, "tasksDone": 4},
+    )
+
+    prog2 = tracker.get_progress("run-schema-test")
+    assert prog2["kafka"]["failed"] == 3
+    assert prog2["kafka"]["published"] == 100
+    assert prog2["kafka"]["partitions"] == 6
+    assert prog2["kafka"]["endOffsets"] == 100
+    assert prog2["spark"]["appId"] == "app-12345"
+    assert prog2["spark"]["tasksTotal"] == 20
+    assert prog2["spark"]["tasksDone"] == 10
+    assert prog2["spark"]["activeStage"] == {
+        "id": 1,
+        "name": "count at job.py:45",
+        "tasksTotal": 8,
+        "tasksDone": 4,
+    }
+
+    # Verify stage state is 'skipped'
+    kafka_stage = next(s for s in prog2["stages"] if s["key"] == "kafka")
+    assert kafka_stage["state"] == "skipped"
+
+    # Validate full snapshot against Pydantic schema
+    val2 = RunProgress.model_validate(prog2)
+    assert val2.kafka.failed == 3
+    assert val2.spark.activeStage.name == "count at job.py:45"
+    assert any(s.key == "kafka" and s.state == "skipped" for s in val2.stages)
+
+    tracker.finish("run-schema-test")
 

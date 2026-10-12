@@ -390,6 +390,7 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
       - ./backend/app:/app/app:ro
+      - ./backend/tests:/app/tests:ro
       - ./backend/alembic:/app/alembic:ro
       - ./backend/alembic.ini:/app/alembic.ini:ro
       - ./spark-jobs:/app/spark-jobs:ro
