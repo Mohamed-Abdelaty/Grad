@@ -246,3 +246,50 @@ async def test_sse_generator_emits_progress_frames_and_done():
 
     global_tracker.finish(run_id)
 
+
+@pytest.mark.asyncio
+async def test_sse_heartbeat_interval_and_emission():
+    """Verify that HEARTBEAT_INTERVAL is 15.0 seconds and heartbeats are emitted."""
+    from app.api.routes.pipeline_runs import HEARTBEAT_INTERVAL, _sse_generator
+    from unittest.mock import AsyncMock, MagicMock, patch
+    import uuid
+
+    assert HEARTBEAT_INTERVAL == 15.0
+
+    mock_db = AsyncMock()
+    mock_run = MagicMock()
+    mock_run.status = "running"
+    mock_db.get.return_value = mock_run
+
+    run_id = str(uuid.uuid4())
+    from app.pipeline.progress import tracker as global_tracker
+    global_tracker.set_loop(asyncio.get_running_loop())
+    global_tracker.start(run_id, "Heartbeat Test")
+
+    frames = []
+    fake_time = [1000.0]
+
+    def get_fake_time():
+        # Advance by 16 seconds once initial frames are emitted
+        if len(frames) >= 1:
+            fake_time[0] += 16.0
+        return fake_time[0]
+
+    async def _consume():
+        with patch("time.time", side_effect=get_fake_time):
+            gen = _sse_generator(run_id, mock_db)
+            async for chunk in gen:
+                frames.append(chunk)
+                if any(": heartbeat" in f or "event: heartbeat" in f for f in frames):
+                    global_tracker.emit(run_id, "run_success", {})
+                    break
+
+    await asyncio.wait_for(_consume(), timeout=5.0)
+
+    heartbeat_frames = [f for f in frames if ": heartbeat" in f or "event: heartbeat" in f]
+    assert len(heartbeat_frames) >= 1, f"Expected heartbeat frame, got {frames}"
+    assert ": heartbeat" in heartbeat_frames[0]
+    assert "event: heartbeat" in heartbeat_frames[0]
+
+    global_tracker.finish(run_id)
+

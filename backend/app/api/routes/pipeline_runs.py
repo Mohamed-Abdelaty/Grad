@@ -55,6 +55,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/pipeline-runs", tags=["pipeline-runs"])
 
+HEARTBEAT_INTERVAL: float = 15.0  # seconds between SSE keep-alive heartbeat frames
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
