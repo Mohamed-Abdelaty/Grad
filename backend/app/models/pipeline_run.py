@@ -10,7 +10,7 @@ events back to the triggering run.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import JSON, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -77,6 +77,12 @@ class PipelineRun(Base):
             "Actual output path for the run's data (may differ from the "
             "configured path when the executor redirects a local path to HDFS)."
         ),
+    )
+
+    last_progress_snapshot: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Final RunProgress JSON snapshot persisted upon completion.",
     )
 
     # ── Relationships ──────────────────────────────────────────────────────────

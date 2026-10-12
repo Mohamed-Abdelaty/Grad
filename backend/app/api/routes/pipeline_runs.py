@@ -208,6 +208,9 @@ async def get_run_progress(
     # Fall back to DB for finished runs
     run = await _get_run_or_404(db, run_uuid)
 
+    if run.last_progress_snapshot is not None:
+        return JSONResponse(content=run.last_progress_snapshot)
+
     # Reconstruct stage data from persisted events
     events_result = await db.execute(
         select(PipelineRunEvent)
@@ -386,7 +389,7 @@ async def _sse_generator(
         return f"event: {name}\ndata: {json.dumps(ev)}\n\n"
 
     def _fmt_heartbeat() -> str:
-        return f": heartbeat\nevent: heartbeat\ndata: {json.dumps({'ts': datetime.now(tz=timezone.utc).isoformat()})}\n\n"
+        return f": keep-alive\n: heartbeat\nevent: heartbeat\ndata: {json.dumps({'ts': datetime.now(tz=timezone.utc).isoformat()})}\n\n"
 
     # If the run is already finished, stream events from DB and close immediately
     run = await db.get(PipelineRun, run_uuid)

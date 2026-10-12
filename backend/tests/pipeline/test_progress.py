@@ -405,3 +405,45 @@ def test_source_progress_transitions_success_failure_unknown_total(tracker):
     assert pu["source"]["rowsRead"] == 0
     tracker.finish(run_id_unknown)
 
+
+@pytest.mark.asyncio
+async def test_persisted_progress_snapshot_for_finished_run():
+    """Step 8: Verify GET /progress returns last_progress_snapshot from DB when tracker has ended."""
+    import uuid
+    from unittest.mock import AsyncMock, MagicMock
+    from app.api.routes.pipeline_runs import get_run_progress
+    from app.models.pipeline_run import PipelineRun
+
+    run_id = str(uuid.uuid4())
+    dummy_snapshot = {
+        "runId": run_id,
+        "status": "succeeded",
+        "mode": "batch",
+        "startedAt": "2026-10-12T10:00:00Z",
+        "updatedAt": "2026-10-12T10:01:00Z",
+        "completedAt": "2026-10-12T10:01:00Z",
+        "stages": [{"key": "source", "state": "done", "startedAt": None, "finishedAt": None, "error": None}],
+        "source": {"type": "csv", "rowsTotal": 1000, "rowsRead": 1000},
+        "kafka": {"topic": "sales", "partitions": 6, "published": 1000, "failed": 0, "endOffsets": 1000, "consumerLag": None},
+        "spark": {"appId": "app-1", "tasksTotal": 10, "tasksDone": 10, "activeStage": None, "recordsIn": 1000, "recordsOut": 950, "durationMs": 5000},
+        "hdfs": {"path": "/data/out", "filesWritten": 3, "bytesWritten": 40960, "rowsWritten": 950, "verified": True},
+        "throughput": {"recordsPerSecond": 200.0, "samples": []},
+        "etaSeconds": None,
+        "errors": [],
+        "fault": None,
+    }
+
+    mock_db = AsyncMock()
+    mock_run = MagicMock(spec=PipelineRun)
+    mock_run.id = uuid.UUID(run_id)
+    mock_run.status = "succeeded"
+    mock_run.last_progress_snapshot = dummy_snapshot
+    mock_db.get.return_value = mock_run
+    mock_db.execute.return_value.scalar_one_or_none.return_value = mock_run
+
+    resp = await get_run_progress(run_id, mock_db)
+    import json
+    data = json.loads(resp.body.decode("utf-8"))
+    assert data == dummy_snapshot
+
+

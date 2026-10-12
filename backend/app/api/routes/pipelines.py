@@ -127,7 +127,11 @@ async def _create_running_run(
 
 
 async def _finalize_run(
-    db: AsyncSession, run_id: str, result: dict[str, Any], is_cancelled: bool = False
+    db: AsyncSession,
+    run_id: str,
+    result: dict[str, Any],
+    is_cancelled: bool = False,
+    last_snapshot: dict[str, Any] | None = None,
 ) -> None:
     """Update the PipelineRun row and insert Metrics after execution completes."""
     from sqlalchemy import update as sa_update
@@ -168,16 +172,20 @@ async def _finalize_run(
 
     run_uuid = _uuid.UUID(run_id)
 
+    update_vals: dict[str, Any] = {
+        "status": db_status,
+        "finished_at": finished_at,
+        "error_message": error_msg,
+        "output_path": output_path,
+    }
+    if last_snapshot is not None:
+        update_vals["last_progress_snapshot"] = last_snapshot
+
     # Update run row
     await db.execute(
         sa_update(PipelineRun)
         .where(PipelineRun.id == run_uuid)
-        .values(
-            status=db_status,
-            finished_at=finished_at,
-            error_message=error_msg,
-            output_path=output_path,
-        )
+        .values(**update_vals)
     )
 
     # Insert metrics
@@ -290,13 +298,20 @@ async def _run_pipeline_background(run_id: str, yaml_content: str) -> None:
                 {"finished_at": finished_at, "error": error_msg},
             )
 
-        # Collect events before cleaning up tracker
+        # Collect events and final snapshot before cleaning up tracker
         events = tracker.get_events_after(run_id, 0)
+        final_snapshot = tracker.get_progress(run_id)
 
         # Persist events and update DB
         async with _get_session_factory()() as db:
             try:
-                await _finalize_run(db, run_id, result, is_cancelled=is_cancelled)
+                await _finalize_run(
+                    db,
+                    run_id,
+                    result,
+                    is_cancelled=is_cancelled,
+                    last_snapshot=final_snapshot,
+                )
                 await db.commit()
             except Exception as exc:  # noqa: BLE001
                 await db.rollback()
@@ -323,7 +338,14 @@ async def _record_pipeline_run(
     db: AsyncSession, run: PipelineRun, result: dict[str, Any]
 ) -> None:
     """Update a PipelineRun row and its Metrics after synchronous execution."""
-    await _finalize_run(db, str(run.id), result, is_cancelled=False)
+    final_snapshot = tracker.get_progress(str(run.id))
+    await _finalize_run(
+        db,
+        str(run.id),
+        result,
+        is_cancelled=False,
+        last_snapshot=final_snapshot,
+    )
 
 
 # ── POST /api/pipelines/validate ───────────────────────────────────────────────
