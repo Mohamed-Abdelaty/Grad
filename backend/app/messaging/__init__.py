@@ -21,12 +21,13 @@ from app.messaging.exceptions import (
 from app.messaging.kafka_admin import KafkaAdminClient
 from app.messaging.kafka_config import get_consumer_config, get_producer_config
 from app.messaging.kafka_consumer import KafkaConsumerClient
-from app.messaging.kafka_producer import KafkaProducerClient
+from app.messaging.kafka_producer import KafkaProducerClient, get_topic_end_offsets
 
 __all__ = [
     "KafkaAdminClient",
     "KafkaProducerClient",
     "KafkaConsumerClient",
+    "get_topic_end_offsets",
     "KafkaMessagingError",
     "KafkaConnectionError",
     "KafkaTopicError",

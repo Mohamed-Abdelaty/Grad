@@ -295,6 +295,9 @@ class PipelineExecutor:
         # ── Optional Kafka publish ─────────────────────────────────────────────
         if plan.messaging_config:
             self._publish_to_kafka(plan.messaging_config, df, ctx, tracker_run_id)
+        else:
+            if tracker_run_id:
+                _progress_tracker.set_stage_state(tracker_run_id, "kafka", "skipped")
 
         # ── Cancel check ───────────────────────────────────────────────────────
         if tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id):
@@ -461,17 +464,13 @@ class PipelineExecutor:
         partitions = messaging_config.get("partitions", 1)
         replication_factor = messaging_config.get("replication_factor", 1)
 
-        _progress_tracker.emit(tracker_run_id, "kafka_start", {"topic": topic})
-        ctx.log_info(
-            "kafka_publish", f"Publishing raw source records to Kafka topic '{topic}'."
-        )
         t0 = time.perf_counter()
 
         try:
             import json
 
             from app.messaging.kafka_admin import KafkaAdminClient
-            from app.messaging.kafka_producer import KafkaProducerClient
+            from app.messaging.kafka_producer import KafkaProducerClient, get_topic_end_offsets
 
             admin = KafkaAdminClient()
             admin.create_topic(
@@ -481,24 +480,71 @@ class PipelineExecutor:
             )
 
             producer = KafkaProducerClient()
-            records = json.loads(df.to_json(orient="records", date_format="iso"))
-            result = producer.produce_batch(topic, records)
+            actual_partitions = producer.get_topic_partitions(topic) or partitions
+            _progress_tracker.emit(
+                tracker_run_id,
+                "kafka_start",
+                {"topic": topic, "partitions": actual_partitions},
+            )
+            ctx.log_info(
+                "kafka_publish", f"Publishing raw source records to Kafka topic '{topic}'."
+            )
 
+            last_probe_time = 0.0
+            last_end_offsets = None
+
+            def _on_kafka_progress(published: int, failed: int) -> None:
+                nonlocal last_probe_time, last_end_offsets
+                now = time.monotonic()
+                if now - last_probe_time >= 1.0:
+                    last_end_offsets = get_topic_end_offsets(topic)
+                    last_probe_time = now
+                if tracker_run_id:
+                    _progress_tracker.update_kafka(
+                        tracker_run_id,
+                        published=published,
+                        failed=failed,
+                        end_offsets=last_end_offsets,
+                        partitions=actual_partitions,
+                        topic=topic,
+                    )
+
+            records = json.loads(df.to_json(orient="records", date_format="iso"))
+            result = producer.produce_batch(
+                topic,
+                records,
+                on_progress=_on_kafka_progress,
+            )
+
+            final_end_offsets = get_topic_end_offsets(topic)
             duration_ms = round((time.perf_counter() - t0) * 1000, 2)
             meta_with_timing = {**result, "duration_ms": duration_ms}
             ctx.record_stage("kafka_publish", meta_with_timing)
             published = result.get("produced", 0)
+            failed = result.get("failed", 0)
             ctx.log_info(
                 "kafka_publish",
-                f"Published {published} record(s) to topic "
+                f"Published {published} record(s), failed {failed} to topic "
                 f"'{topic}' in {duration_ms}ms.",
             )
             _progress_tracker.emit(
                 tracker_run_id,
                 "kafka_done",
-                {"count": published, "topic": topic, "duration_ms": duration_ms},
+                {
+                    "count": published,
+                    "published": published,
+                    "failed": failed,
+                    "end_offsets": final_end_offsets,
+                    "partitions": actual_partitions,
+                    "topic": topic,
+                    "duration_ms": duration_ms,
+                },
             )
         except Exception as exc:
+            if tracker_run_id:
+                _progress_tracker.set_stage_state(
+                    tracker_run_id, "kafka", "error", error=str(exc)
+                )
             publish_step = ExecutionStep(
                 name="kafka_publish",
                 step_type="messaging",
