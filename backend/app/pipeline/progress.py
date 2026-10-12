@@ -438,6 +438,12 @@ class RunProgressTracker:
             state["storage_metrics"] = payload.get("rows")
             state["hdfs_rows_written"] = payload.get("rows")
             state["hdfs_verified"] = payload.get("verified", True)
+            if "filesWritten" in payload:
+                state["hdfs_files_written"] = payload["filesWritten"]
+            if "bytesWritten" in payload:
+                state["hdfs_bytes_written"] = payload["bytesWritten"]
+            if "path" in payload:
+                state["hdfs_path"] = payload["path"]
         elif event_type == "throughput_update":
             if "recordsPerSecond" in payload:
                 state["throughput_rps"] = payload["recordsPerSecond"]

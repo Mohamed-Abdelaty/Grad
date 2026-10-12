@@ -31,6 +31,7 @@ import os
 import tempfile
 from typing import Any
 
+import httpx
 import pandas as pd
 
 from app.core.config import get_settings
@@ -262,6 +263,43 @@ class HdfsStorageClient:
             slash = without_scheme.find("/")
             return without_scheme[slash:] if slash >= 0 else "/"
         return hdfs_path
+
+    def content_summary(self, path: str) -> dict[str, int] | None:
+        """
+        Query WebHDFS GETCONTENTSUMMARY for *path*.
+
+        Parameters
+        ----------
+        path : str
+            HDFS path to query (can be an HDFS URI or absolute path).
+
+        Returns
+        -------
+        dict[str, int] | None
+            ``{"fileCount": int, "length": int, "directoryCount": int}``
+            or ``None`` if the path does not exist (HTTP 404) or on error.
+        """
+        try:
+            norm_path = self._normalize_hdfs_path(path)
+            if not norm_path.startswith("/"):
+                norm_path = f"/{norm_path}"
+            url = f"{self._namenode_url}/webhdfs/v1{norm_path}?op=GETCONTENTSUMMARY&user.name={self._user}"
+            resp = httpx.get(url, timeout=5.0)
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            data = resp.json()
+            cs = data.get("ContentSummary")
+            if not isinstance(cs, dict):
+                return None
+            return {
+                "fileCount": int(cs.get("fileCount", 0)),
+                "length": int(cs.get("length", 0)),
+                "directoryCount": int(cs.get("directoryCount", 0)),
+            }
+        except Exception as exc:
+            logger.debug("content_summary failed for '%s': %s", path, exc)
+            return None
 
     def path_exists(self, hdfs_path: str) -> bool:
         """

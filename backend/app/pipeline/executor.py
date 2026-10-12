@@ -37,6 +37,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 import time
 import uuid
 from typing import Any
@@ -46,6 +47,7 @@ import pandas as pd
 from app.pipeline.context import PipelineExecutionContext
 from app.pipeline.generator import ExecutionPlan, ExecutionStep
 from app.spark.spark_job_submitter import SparkJobSubmitter
+from app.storage.hdfs_client import HdfsStorageClient
 
 # Import the global progress tracker (populated during app startup by main.py).
 # The import is at module level so the singleton is shared across all callers.
@@ -668,7 +670,42 @@ class PipelineExecutor:
 
             processing_config = {"processing": {"operations": operations}}
 
-            # ── Submit job ─────────────────────────────────────────────────────
+            # ── Submit job & background HDFS poller ────────────────────────────
+            hdfs_client = HdfsStorageClient()
+            stop_hdfs_poller = threading.Event()
+            hdfs_poller_thread: threading.Thread | None = None
+            last_files_written = 0
+            last_bytes_written = 0
+
+            def _poll_hdfs_progress() -> None:
+                nonlocal last_files_written, last_bytes_written
+                while not stop_hdfs_poller.is_set():
+                    try:
+                        summary = hdfs_client.content_summary(output_path)
+                        if summary is not None:
+                            last_files_written = summary.get("fileCount", 0)
+                            last_bytes_written = summary.get("length", 0)
+                            if tracker_run_id:
+                                _progress_tracker.emit(
+                                    tracker_run_id,
+                                    "hdfs_progress",
+                                    {
+                                        "path": output_path,
+                                        "filesWritten": last_files_written,
+                                        "bytesWritten": last_bytes_written,
+                                    },
+                                )
+                    except Exception:
+                        pass
+                    stop_hdfs_poller.wait(1.0)
+
+            hdfs_poller_thread = threading.Thread(
+                target=_poll_hdfs_progress,
+                name=f"hdfs-poller-{ctx.run_id}",
+                daemon=True,
+            )
+            hdfs_poller_thread.start()
+
             submitter = SparkJobSubmitter()
 
             def _on_spark_progress(prog: dict[str, Any]) -> None:
@@ -684,7 +721,12 @@ class PipelineExecutor:
                     on_progress=_on_spark_progress,
                 )
 
-            result = asyncio.run(_submit())
+            try:
+                result = asyncio.run(_submit())
+            finally:
+                stop_hdfs_poller.set()
+                if hdfs_poller_thread is not None and hdfs_poller_thread.is_alive():
+                    hdfs_poller_thread.join(timeout=2.0)
 
             duration_ms = round((time.perf_counter() - t0) * 1000, 2)
             ctx.record_stage(
@@ -716,6 +758,53 @@ class PipelineExecutor:
                     "duration_ms": duration_ms,
                 },
             )
+
+            # ── Verify storage output ──────────────────────────────────────────
+            # Stage hdfs: active when verification starts, done after verification.
+            # Documented: counts during write include Spark _temporary files.
+            if tracker_run_id:
+                try:
+                    _progress_tracker.emit(
+                        tracker_run_id, "hdfs_start", {"path": output_path}
+                    )
+
+                    exists = hdfs_client.path_exists(output_path)
+                    if not exists:
+                        raise RuntimeError(f"HDFS output path does not exist: {output_path}")
+
+                    final_summary = hdfs_client.content_summary(output_path)
+                    final_files = (
+                        final_summary.get("fileCount", last_files_written)
+                        if final_summary is not None
+                        else last_files_written
+                    )
+                    final_bytes = (
+                        final_summary.get("length", last_bytes_written)
+                        if final_summary is not None
+                        else last_bytes_written
+                    )
+                    output_rows = result.get("output_rows")
+
+                    _progress_tracker.emit(
+                        tracker_run_id,
+                        "hdfs_done",
+                        {
+                            "path": output_path,
+                            "rows": output_rows,
+                            "filesWritten": final_files,
+                            "bytesWritten": final_bytes,
+                            "verified": True,
+                        },
+                    )
+                except Exception as verify_exc:
+                    logger.warning("Storage verification failed for %s: %s", output_path, verify_exc)
+                    _progress_tracker.update_hdfs(tracker_run_id, verified=False)
+                    _progress_tracker.set_stage_state(
+                        tracker_run_id,
+                        "hdfs",
+                        "error",
+                        error=f"Storage verification failed: {verify_exc}",
+                    )
 
         except (SparkJobFailedError, SparkJobTimeoutError) as exc:
             if tracker_run_id:
