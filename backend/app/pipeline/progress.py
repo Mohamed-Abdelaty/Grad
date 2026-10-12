@@ -31,9 +31,12 @@ import logging
 import os
 import signal
 import threading
+import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
+
+from app.pipeline.throughput import ThroughputEstimator
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +206,8 @@ class RunProgressTracker:
         self._proc_pids: dict[str, int] = {}
         # set of run_ids for which cancel was requested
         self._cancel_requested: set[str] = set()
+        # run_id → ThroughputEstimator instance
+        self._estimators: dict[str, ThroughputEstimator] = {}
         # Reference to the main event loop (set during app startup)
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -227,6 +232,7 @@ class RunProgressTracker:
         immediately by the thread are not silently dropped.
         """
         with self._lock:
+            self._estimators[run_id] = ThroughputEstimator()
             self._runs[run_id] = {
                 "run_id": run_id,
                 "pipeline_name": pipeline_name,
@@ -280,6 +286,7 @@ class RunProgressTracker:
             self._subscribers.pop(run_id, None)
             self._proc_pids.pop(run_id, None)
             self._cancel_requested.discard(run_id)
+            self._estimators.pop(run_id, None)
 
     # ── Emission ───────────────────────────────────────────────────────────────
 
@@ -353,7 +360,17 @@ class RunProgressTracker:
             state["kafka_failed"] = 0
         elif event_type == "kafka_progress":
             if "published" in payload:
-                state["kafka_published"] = payload["published"]
+                pub = payload["published"]
+                state["kafka_published"] = pub
+                run_id = state.get("run_id")
+                estimator = self._estimators.get(run_id) if run_id else None
+                if estimator is not None:
+                    estimator.update(pub, time.time())
+                    if estimator.records_per_second is not None:
+                        state["throughput_rps"] = estimator.records_per_second
+                        state["throughput_samples"] = estimator.samples
+                        tot = state.get("source_rows_total")
+                        state["eta_seconds"] = estimator.eta_seconds(tot, pub)
             if "failed" in payload:
                 state["kafka_failed"] = payload["failed"]
             if "end_offsets" in payload:
@@ -393,6 +410,9 @@ class RunProgressTracker:
             st["startedAt"] = _utc_now()
             if "appId" in payload:
                 state["spark_app_id"] = payload["appId"]
+            # While Spark is active: recordsPerSecond = null, etaSeconds = null
+            state["throughput_rps"] = None
+            state["eta_seconds"] = None
         elif event_type == "spark_progress":
             if "appId" in payload:
                 state["spark_app_id"] = payload["appId"]
@@ -453,11 +473,30 @@ class RunProgressTracker:
                 state["eta_seconds"] = payload["etaSeconds"]
         elif event_type == "run_success":
             state["status"] = "succeeded"
-            state["finished_at"] = payload.get("finished_at") or _utc_now()
+            fin = payload.get("finished_at") or _utc_now()
+            state["finished_at"] = fin
             for st in stages.values():
                 if st["state"] in ("pending", "active"):
                     st["state"] = "done"
-                    st["finishedAt"] = _utc_now()
+                    st["finishedAt"] = fin
+            state["eta_seconds"] = None
+            # On success: set recordsPerSecond = rowsTotal / total_elapsed_seconds
+            try:
+                start_str = state.get("started_at")
+                if start_str and fin:
+                    t_start = datetime.fromisoformat(start_str)
+                    t_fin = datetime.fromisoformat(fin)
+                    elapsed = max(0.001, (t_fin - t_start).total_seconds())
+                    rows_tot = (
+                        state.get("source_rows_total")
+                        or state.get("source_rows_read")
+                        or state.get("spark_records_out")
+                        or state.get("kafka_published")
+                    )
+                    if rows_tot is not None and elapsed > 0:
+                        state["throughput_rps"] = round(float(rows_tot) / elapsed, 2)
+            except Exception:
+                pass
         elif event_type == "run_failed":
             state["status"] = "failed"
             state["finished_at"] = payload.get("finished_at") or _utc_now()
