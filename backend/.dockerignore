@@ -3,7 +3,9 @@
 
 # Python cache
 __pycache__/
+**/__pycache__
 *.pyc
+**/*.pyc
 *.pyo
 *.pyd
 *.pdb
@@ -17,6 +19,7 @@ env/
 
 # Test artefacts
 .pytest_cache/
+**/.pytest_cache
 .coverage
 htmlcov/
 *.egg-info/

@@ -11,7 +11,9 @@ frontend/dist/
 
 # ── Python ─────────────────────────────────────────────────────────────────────
 __pycache__/
+**/__pycache__
 *.pyc
+**/*.pyc
 *.pyo
 *.pyd
 *.egg-info/
@@ -24,6 +26,7 @@ env/
 
 # ── Testing ─────────────────────────────────────────────────────────────────────
 .pytest_cache/
+**/.pytest_cache
 playwright-report/
 test-results/
 htmlcov/

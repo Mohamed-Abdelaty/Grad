@@ -46,6 +46,7 @@ COPY --from=spark-client /opt/bitnami/spark /opt/bitnami/spark
 ENV JAVA_HOME=/opt/bitnami/java
 ENV SPARK_HOME=/opt/bitnami/spark
 ENV PATH="${SPARK_HOME}/bin:${JAVA_HOME}/bin:${PATH}"
+ENV PYTHONDONTWRITEBYTECODE=1
 
 # ── Non-root user ──────────────────────────────────────────────────────────────
 # Running as root inside a container is a security anti-pattern.

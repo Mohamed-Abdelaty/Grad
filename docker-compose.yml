@@ -387,12 +387,14 @@ services:
       # safety.py reads PROJECT_CONTAINER_PREFIX from Settings.COMPOSE_PROJECT_NAME.
       COMPOSE_PROJECT_NAME: resilient-big-data-platform
       PROJECT_CONTAINER_PREFIX: resilient-big-data-platform
+      PYTHONDONTWRITEBYTECODE: "1"
     volumes:
       - ./backend/app:/app/app:ro
       - ./backend/alembic:/app/alembic:ro
       - ./backend/alembic.ini:/app/alembic.ini:ro
       - ./spark-jobs:/app/spark-jobs:ro
       - ./backend/sample-data:/app/sample-data:ro
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
       # ── Phase 7: Docker socket mount — SECURITY NOTE ─────────────────────────
       # The ChaosLab Reliability Engine requires Docker socket access so that
       # DockerController can stop/start/restart platform containers and exec
