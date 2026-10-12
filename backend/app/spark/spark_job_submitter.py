@@ -23,6 +23,8 @@ import asyncio
 import json
 import logging
 import os
+from collections import deque
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -34,6 +36,28 @@ logger = logging.getLogger(__name__)
 
 # Prefix that batch_processing_job.py prints to stdout
 _RESULT_PREFIX = "SPARK_JOB_RESULT:"
+_PROGRESS_PREFIX = "SPARK_JOB_PROGRESS:"
+
+
+def parse_progress_line(line: str) -> dict[str, Any] | None:
+    """
+    Parse a SPARK_JOB_PROGRESS line from stdout.
+
+    The line must start with SPARK_JOB_PROGRESS: (after optional whitespace).
+    Log noise before the prefix causes the line to be ignored (returns None).
+    Malformed JSON returns None and never raises.
+    """
+    stripped = line.strip()
+    if not stripped.startswith(_PROGRESS_PREFIX):
+        return None
+    json_part = stripped[len(_PROGRESS_PREFIX):].strip()
+    try:
+        data = json.loads(json_part)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return None
 
 
 class SparkJobSubmitter:
@@ -66,6 +90,7 @@ class SparkJobSubmitter:
         output_path: str,
         processing_config: dict[str, Any],
         run_id: str | None = None,
+        on_progress: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         """
         Submit ``batch_processing_job.py`` to the Spark cluster.
@@ -117,7 +142,9 @@ class SparkJobSubmitter:
             run_id,
         )
 
-        stdout, stderr = await self._run_subprocess(cmd, run_id=run_id)
+        stdout, stderr = await self._run_subprocess(
+            cmd, run_id=run_id, on_progress=on_progress
+        )
         return self._parse_result(stdout, stderr)
 
     async def health_check(self) -> dict[str, Any]:
@@ -166,7 +193,10 @@ class SparkJobSubmitter:
     # ── Private helpers ────────────────────────────────────────────────────────
 
     async def _run_subprocess(
-        self, cmd: list[str], run_id: str | None = None
+        self,
+        cmd: list[str],
+        run_id: str | None = None,
+        on_progress: Callable[[dict[str, Any]], None] | None = None,
     ) -> tuple[str, str]:
         """
         Execute *cmd* asynchronously, enforcing the configured timeout.
@@ -179,6 +209,9 @@ class SparkJobSubmitter:
             If provided, the subprocess PID is registered with the global
             :data:`~app.pipeline.progress.tracker` so the cancel endpoint
             can send SIGTERM while the job is running.
+        on_progress : Callable[[dict], None] | None
+            Optional callback invoked whenever a valid SPARK_JOB_PROGRESS
+            line is received on stdout while the job is running.
 
         Returns
         -------
@@ -207,25 +240,65 @@ class SparkJobSubmitter:
         if run_id is not None:
             tracker.register_proc_pid(run_id, proc.pid)
 
+        stdout_deque: deque[str] = deque(maxlen=2000)
+        stderr_deque: deque[str] = deque(maxlen=2000)
+
+        async def _read_stream(
+            stream: asyncio.StreamReader,
+            target_deque: deque[str],
+            is_stdout: bool,
+        ) -> None:
+            buffer = ""
+            while True:
+                chunk = await stream.read(65536)
+                if not chunk:
+                    break
+                text = chunk.decode("utf-8", errors="replace")
+                buffer += text
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    target_deque.append(line)
+                    if is_stdout and on_progress is not None:
+                        prog = parse_progress_line(line)
+                        if prog is not None:
+                            try:
+                                on_progress(prog)
+                            except Exception:
+                                pass
+            if buffer:
+                target_deque.append(buffer)
+                if is_stdout and on_progress is not None:
+                    prog = parse_progress_line(buffer)
+                    if prog is not None:
+                        try:
+                            on_progress(prog)
+                        except Exception:
+                            pass
+
         try:
-            raw_stdout, raw_stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=float(timeout)
+            await asyncio.wait_for(
+                asyncio.gather(
+                    _read_stream(proc.stdout, stdout_deque, True),
+                    _read_stream(proc.stderr, stderr_deque, False),
+                    proc.wait(),
+                ),
+                timeout=float(timeout),
             )
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
             raise SparkJobTimeoutError(
                 f"spark-submit timed out after {timeout}s",
-                stdout="",
-                stderr="",
+                stdout="\n".join(stdout_deque),
+                stderr="\n".join(stderr_deque),
             )
         finally:
             # Always deregister — whether the job succeeded, failed, or was killed.
             if run_id is not None:
                 tracker.deregister_proc_pid(run_id)
 
-        stdout = raw_stdout.decode("utf-8", errors="replace")
-        stderr = raw_stderr.decode("utf-8", errors="replace")
+        stdout = "\n".join(stdout_deque)
+        stderr = "\n".join(stderr_deque)
 
         if proc.returncode != 0:
             diagnostic_lines = (stderr + "\n" + stdout).splitlines()

@@ -671,12 +671,17 @@ class PipelineExecutor:
             # ── Submit job ─────────────────────────────────────────────────────
             submitter = SparkJobSubmitter()
 
+            def _on_spark_progress(prog: dict[str, Any]) -> None:
+                if tracker_run_id:
+                    _progress_tracker.emit(tracker_run_id, "spark_progress", prog)
+
             async def _submit() -> dict[str, Any]:
                 return await submitter.submit_batch_job(
                     input_source=input_source,
                     output_path=output_path,
                     processing_config=processing_config,
                     run_id=tracker_run_id,   # register PID for cancel
+                    on_progress=_on_spark_progress,
                 )
 
             result = asyncio.run(_submit())
@@ -707,11 +712,16 @@ class PipelineExecutor:
                     "output_rows": result.get("output_rows"),
                     "output_path": output_path,
                     "actual_output_path": output_path,
+                    "duration_seconds": result.get("duration_seconds"),
                     "duration_ms": duration_ms,
                 },
             )
 
         except (SparkJobFailedError, SparkJobTimeoutError) as exc:
+            if tracker_run_id:
+                _progress_tracker.set_stage_state(
+                    tracker_run_id, "spark", "error", error=str(exc)
+                )
             spark_step = ExecutionStep(
                 name="spark_job",
                 step_type="spark",
@@ -725,6 +735,10 @@ class PipelineExecutor:
                 )
             self._handle_failure(spark_step, ctx, exc)
         except Exception as exc:
+            if tracker_run_id:
+                _progress_tracker.set_stage_state(
+                    tracker_run_id, "spark", "error", error=str(exc)
+                )
             spark_step = ExecutionStep(
                 name="spark_job",
                 step_type="spark",

@@ -22,6 +22,8 @@ Submitted via::
 
 from __future__ import annotations
 
+import json
+import threading
 import time
 
 from pyspark.sql import DataFrame
@@ -57,6 +59,49 @@ class BatchProcessingJob(BaseSparkJob):
             self.args.output_path,
         )
 
+        stop_event = threading.Event()
+
+        def _monitor_progress() -> None:
+            stages: dict[int, tuple[int, int, str]] = {}
+            while not stop_event.is_set():
+                try:
+                    sc = self.spark.sparkContext
+                    tracker = sc.statusTracker()
+                    active_ids = tracker.getActiveStageIds()
+                    latest_active_stage = None
+
+                    for sid in active_ids:
+                        info = tracker.getStageInfo(sid)
+                        if info is not None:
+                            num_tasks = info.numTasks()
+                            completed_tasks = info.numCompletedTasks()
+                            name = info.name()
+                            stages[sid] = (num_tasks, completed_tasks, name)
+                            latest_active_stage = {
+                                "id": sid,
+                                "name": name,
+                                "tasksTotal": num_tasks,
+                                "tasksDone": completed_tasks,
+                            }
+
+                    tasks_total = sum(s[0] for s in stages.values())
+                    tasks_done = sum(s[1] for s in stages.values())
+
+                    progress_payload = {
+                        "appId": sc.applicationId,
+                        "tasksTotal": tasks_total,
+                        "tasksDone": tasks_done,
+                        "activeStage": latest_active_stage,
+                        "ts": time.time(),
+                    }
+                    print(f"SPARK_JOB_PROGRESS:{json.dumps(progress_payload)}", flush=True)
+                except Exception:
+                    pass
+                stop_event.wait(1.0)
+
+        monitor_thread = threading.Thread(target=_monitor_progress, daemon=True)
+        monitor_thread.start()
+
         # ── Read source ────────────────────────────────────────────────────────
         df = self._read_source(self.args.input_source)
         input_rows = df.count()
@@ -71,6 +116,9 @@ class BatchProcessingJob(BaseSparkJob):
         output_rows = df.count()
         df.write.mode("overwrite").parquet(self.args.output_path)
         self.logger.info("Wrote %d rows to %s", output_rows, self.args.output_path)
+
+        stop_event.set()
+        monitor_thread.join(timeout=2.0)
 
         duration = round(time.perf_counter() - start, 3)
         self._emit_result(
