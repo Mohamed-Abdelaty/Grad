@@ -59,34 +59,69 @@ class BatchProcessingJob(BaseSparkJob):
             self.args.output_path,
         )
 
+        stages: dict[int, tuple[int, int, str]] = {}
         stop_event = threading.Event()
 
-        def _monitor_progress() -> None:
-            stages: dict[int, tuple[int, int, str]] = {}
-            while not stop_event.is_set():
-                try:
-                    sc = self.spark.sparkContext
-                    tracker = sc.statusTracker()
-                    active_ids = tracker.getActiveStageIds()
-                    latest_active_stage = None
+        def _scan_stages(stages_dict: dict[int, tuple[int, int, str]]) -> tuple[int, int, dict | None]:
+            sc = self.spark.sparkContext
+            tracker = sc.statusTracker()
+            active_ids = tracker.getActiveStageIds()
+            latest_active_stage = None
 
-                    for sid in active_ids:
-                        info = tracker.getStageInfo(sid)
-                        if info is not None:
-                            num_tasks = info.numTasks()
-                            completed_tasks = info.numCompletedTasks()
-                            name = info.name()
-                            stages[sid] = (num_tasks, completed_tasks, name)
+            all_stage_ids = set(active_ids)
+            try:
+                for jid in tracker.getActiveJobsIds():
+                    jinfo = tracker.getJobInfo(jid)
+                    if jinfo and jinfo.stageIds:
+                        all_stage_ids.update(jinfo.stageIds)
+            except Exception:
+                pass
+
+            try:
+                for jid in tracker.getJobIdsForGroup(None) or []:
+                    jinfo = tracker.getJobInfo(jid)
+                    if jinfo and jinfo.stageIds:
+                        all_stage_ids.update(jinfo.stageIds)
+            except Exception:
+                pass
+
+            max_known = max(all_stage_ids | set(stages_dict.keys()), default=-1)
+            for sid in range(max(0, max_known + 10)):
+                all_stage_ids.add(sid)
+
+            for sid in sorted(all_stage_ids):
+                try:
+                    info = tracker.getStageInfo(sid)
+                    if info is not None:
+                        num_tasks = getattr(info, "numTasks", None)
+                        if callable(num_tasks):
+                            num_tasks = num_tasks()
+                        completed_tasks = getattr(info, "numCompletedTasks", None)
+                        if callable(completed_tasks):
+                            completed_tasks = completed_tasks()
+                        name = getattr(info, "name", None)
+                        if callable(name):
+                            name = name()
+                        stages_dict[sid] = (num_tasks or 0, completed_tasks or 0, str(name or ""))
+                        if sid in active_ids:
                             latest_active_stage = {
                                 "id": sid,
-                                "name": name,
-                                "tasksTotal": num_tasks,
-                                "tasksDone": completed_tasks,
+                                "name": str(name or ""),
+                                "tasksTotal": num_tasks or 0,
+                                "tasksDone": completed_tasks or 0,
                             }
+                except Exception:
+                    pass
 
-                    tasks_total = sum(s[0] for s in stages.values())
-                    tasks_done = sum(s[1] for s in stages.values())
+            tasks_total = sum(s[0] for s in stages_dict.values())
+            tasks_done = sum(s[1] for s in stages_dict.values())
+            return tasks_total, tasks_done, latest_active_stage
 
+        def _monitor_progress() -> None:
+            while not stop_event.is_set():
+                try:
+                    tasks_total, tasks_done, latest_active_stage = _scan_stages(stages)
+                    sc = self.spark.sparkContext
                     progress_payload = {
                         "appId": sc.applicationId,
                         "tasksTotal": tasks_total,
@@ -97,7 +132,7 @@ class BatchProcessingJob(BaseSparkJob):
                     print(f"SPARK_JOB_PROGRESS:{json.dumps(progress_payload)}", flush=True)
                 except Exception:
                     pass
-                stop_event.wait(1.0)
+                stop_event.wait(0.5)
 
         monitor_thread = threading.Thread(target=_monitor_progress, daemon=True)
         monitor_thread.start()
@@ -119,6 +154,21 @@ class BatchProcessingJob(BaseSparkJob):
 
         stop_event.set()
         monitor_thread.join(timeout=2.0)
+
+        # Emit final progress snapshot with complete task counts
+        try:
+            tasks_total, tasks_done, _ = _scan_stages(stages)
+            sc = self.spark.sparkContext
+            progress_payload = {
+                "appId": sc.applicationId,
+                "tasksTotal": tasks_total,
+                "tasksDone": tasks_done,
+                "activeStage": None,
+                "ts": time.time(),
+            }
+            print(f"SPARK_JOB_PROGRESS:{json.dumps(progress_payload)}", flush=True)
+        except Exception:
+            pass
 
         duration = round(time.perf_counter() - start, 3)
         self._emit_result(

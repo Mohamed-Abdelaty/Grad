@@ -318,7 +318,8 @@ class HdfsStorageClient:
         bool
         """
         try:
-            status = self._hdfs_client.status(hdfs_path, strict=False)
+            norm_path = self._normalize_hdfs_path(hdfs_path)
+            status = self._hdfs_client.status(norm_path, strict=False)
             return status is not None
         except Exception as exc:
             logger.warning("path_exists check failed for '%s': %s", hdfs_path, exc)
@@ -346,7 +347,8 @@ class HdfsStorageClient:
             If the listing fails for any other reason.
         """
         try:
-            entries = self._hdfs_client.list(hdfs_path)
+            norm_path = self._normalize_hdfs_path(hdfs_path)
+            entries = self._hdfs_client.list(norm_path)
             return list(entries)
         except Exception as exc:
             msg = str(exc)

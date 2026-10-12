@@ -68,6 +68,9 @@ stream.log
 
 # ── Large data files ───────────────────────────────────────────────────────────
 sample-data/sales_large.csv
+backend/sample-data/sales_large.csv
+backend/sample-data/sales_300k.csv
+sample-data/sales_300k.csv
 
 # ── Clean-up & Artifacts ───────────────────────────────────────────────────────
 token.txt
