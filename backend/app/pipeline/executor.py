@@ -350,6 +350,11 @@ class PipelineExecutor:
         try:
             df = step.plugin.read(step.config)
         except Exception as exc:
+            _progress_tracker.emit(
+                tracker_run_id,
+                "source_failed",
+                {"error": str(exc)},
+            )
             self._handle_failure(step, ctx, exc)
 
         duration_ms = round((time.perf_counter() - t0) * 1000, 2)

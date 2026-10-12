@@ -350,3 +350,58 @@ def test_schema_additions_skipped_active_stage_kafka_failed(tracker):
 
     tracker.finish("run-schema-test")
 
+
+def test_source_progress_transitions_success_failure_unknown_total(tracker):
+    """Step 3: Unit-test source stage tracker transitions for success, failure, and unknown total."""
+    # Case 1: Success
+    run_id_success = "run-src-success"
+    tracker.start(run_id_success, "Success Source Pipeline")
+
+    p0 = tracker.get_progress(run_id_success)
+    src_stage0 = next(s for s in p0["stages"] if s["key"] == "source")
+    assert src_stage0["state"] == "pending"
+    assert p0["source"]["rowsTotal"] is None
+    assert p0["source"]["rowsRead"] is None
+
+    tracker.emit(run_id_success, "source_start", {"plugin": "csv"})
+    p1 = tracker.get_progress(run_id_success)
+    src_stage1 = next(s for s in p1["stages"] if s["key"] == "source")
+    assert src_stage1["state"] == "active"
+    assert p1["source"]["type"] == "csv"
+    assert p1["source"]["rowsTotal"] is None
+    assert p1["source"]["rowsRead"] == 0
+
+    tracker.emit(run_id_success, "source_done", {"rows": 1250, "duration_ms": 45.2})
+    p2 = tracker.get_progress(run_id_success)
+    src_stage2 = next(s for s in p2["stages"] if s["key"] == "source")
+    assert src_stage2["state"] == "done"
+    assert p2["source"]["rowsTotal"] == 1250
+    assert p2["source"]["rowsRead"] == 1250
+    tracker.finish(run_id_success)
+
+    # Case 2: Failure
+    run_id_fail = "run-src-fail"
+    tracker.start(run_id_fail, "Fail Source Pipeline")
+    tracker.emit(run_id_fail, "source_start", {"plugin": "csv"})
+    tracker.emit(run_id_fail, "source_failed", {"error": "FileNotFoundError: /app/missing.csv"})
+
+    pf = tracker.get_progress(run_id_fail)
+    src_stage_f = next(s for s in pf["stages"] if s["key"] == "source")
+    assert src_stage_f["state"] == "error"
+    assert "FileNotFoundError" in src_stage_f["error"]
+    assert pf["source"]["rowsTotal"] is None
+    tracker.finish(run_id_fail)
+
+    # Case 3: Unknown total (streaming or generator source where count is unknown)
+    run_id_unknown = "run-src-unknown"
+    tracker.start(run_id_unknown, "Unknown Total Source Pipeline")
+    tracker.emit(run_id_unknown, "source_start", {"plugin": "stream"})
+    tracker.emit(run_id_unknown, "source_done", {"rows": None})
+
+    pu = tracker.get_progress(run_id_unknown)
+    src_stage_u = next(s for s in pu["stages"] if s["key"] == "source")
+    assert src_stage_u["state"] == "done"
+    assert pu["source"]["rowsTotal"] is None
+    assert pu["source"]["rowsRead"] == 0
+    tracker.finish(run_id_unknown)
+

@@ -328,6 +328,7 @@ class RunProgressTracker:
             st["startedAt"] = _utc_now()
             state["source_type"] = payload.get("plugin")
             state["source_rows_read"] = 0
+            state["source_rows_total"] = None
         elif event_type == "source_done":
             st = stages["source"]
             st["state"] = "done"
@@ -335,7 +336,12 @@ class RunProgressTracker:
             rows = payload.get("rows")
             state["source_metrics"] = rows
             state["source_rows_total"] = rows
-            state["source_rows_read"] = rows
+            state["source_rows_read"] = rows if rows is not None else 0
+        elif event_type == "source_failed":
+            st = stages["source"]
+            st["state"] = "error"
+            st["error"] = payload.get("error", "Source failed")
+            st["finishedAt"] = _utc_now()
         elif event_type == "kafka_start":
             st = stages["kafka"]
             st["state"] = "active"
