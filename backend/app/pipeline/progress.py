@@ -153,8 +153,16 @@ def build_progress_dict(
         },
         "hdfs": {
             "path": hdfs_path or spark_m.get("output_path"),
-            "filesWritten": hdfs_files_written,
-            "bytesWritten": hdfs_bytes_written,
+            "filesWritten": (
+                hdfs_files_written
+                if stage_map.get("hdfs", {}).get("state") != "pending"
+                else None
+            ),
+            "bytesWritten": (
+                hdfs_bytes_written
+                if stage_map.get("hdfs", {}).get("state") != "pending"
+                else None
+            ),
             "rowsWritten": hdfs_rows_written if hdfs_rows_written is not None else storage_metrics,
             "verified": hdfs_verified,
         },
@@ -442,15 +450,22 @@ class RunProgressTracker:
         elif event_type == "hdfs_progress":
             if "path" in payload:
                 state["hdfs_path"] = payload["path"]
-            if "filesWritten" in payload:
-                state["hdfs_files_written"] = payload["filesWritten"]
-            if "bytesWritten" in payload:
-                state["hdfs_bytes_written"] = payload["bytesWritten"]
-            # Active the first time fileCount > 0
-            if state["hdfs_files_written"] and state["hdfs_files_written"] > 0:
-                if stages["hdfs"]["state"] == "pending":
+            # If Spark is currently active, do not record HDFS metrics or activate HDFS stage
+            if stages.get("spark", {}).get("state") == "active":
+                pass
+            elif stages["hdfs"]["state"] == "pending":
+                # For standalone poller/tests where Spark is not active, activate if fileCount > 0
+                if stages.get("spark", {}).get("state") != "active" and payload.get("filesWritten", 0) > 0:
                     stages["hdfs"]["state"] = "active"
                     stages["hdfs"]["startedAt"] = _utc_now()
+                    state["hdfs_files_written"] = payload["filesWritten"]
+                    if "bytesWritten" in payload:
+                        state["hdfs_bytes_written"] = payload["bytesWritten"]
+            else:
+                if "filesWritten" in payload:
+                    state["hdfs_files_written"] = payload["filesWritten"]
+                if "bytesWritten" in payload:
+                    state["hdfs_bytes_written"] = payload["bytesWritten"]
         elif event_type == "hdfs_done":
             st = stages["hdfs"]
             st["state"] = "done"
@@ -624,17 +639,30 @@ class RunProgressTracker:
             if path is not None:
                 state["hdfs_path"] = path
             if files_written is not None:
-                state["hdfs_files_written"] = files_written
-                if files_written > 0 and state["stages"]["hdfs"]["state"] == "pending":
+                if state["stages"].get("spark", {}).get("state") == "active":
+                    pass
+                elif state["stages"]["hdfs"]["state"] != "pending":
+                    state["hdfs_files_written"] = files_written
+                elif files_written > 0:
                     state["stages"]["hdfs"]["state"] = "active"
                     state["stages"]["hdfs"]["startedAt"] = _utc_now()
+                    state["hdfs_files_written"] = files_written
             if bytes_written is not None:
-                state["hdfs_bytes_written"] = bytes_written
+                if state["stages"].get("spark", {}).get("state") != "active" and state["stages"]["hdfs"]["state"] != "pending":
+                    state["hdfs_bytes_written"] = bytes_written
             if rows_written is not None:
                 state["hdfs_rows_written"] = rows_written
                 state["storage_metrics"] = rows_written
             if verified is not None:
                 state["hdfs_verified"] = verified
+
+    def get_stage_state(self, run_id: str, stage_key: str) -> str | None:
+        """Return the current state of a pipeline stage (pending, active, done, etc.)."""
+        with self._lock:
+            state = self._runs.get(run_id)
+            if state is None:
+                return None
+            return state.get("stages", {}).get(stage_key, {}).get("state")
 
     def update_throughput(
         self,

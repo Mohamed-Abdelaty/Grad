@@ -447,3 +447,59 @@ async def test_persisted_progress_snapshot_for_finished_run():
     assert data == dummy_snapshot
 
 
+def test_update_kafka_feeds_throughput_estimator(tracker):
+    """Verify that update_kafka updates ThroughputEstimator, emitting rps, samples, and eta."""
+    import time
+
+    run_id = "test-kafka-estimator"
+    tracker.start(run_id, "test-pipeline")
+
+    tracker.update_source(run_id, rows_total=100000, rows_read=100000)
+    tracker.update_kafka(run_id, published=25000)
+    time.sleep(0.55)
+    tracker.update_kafka(run_id, published=50000)
+
+    prog = tracker.get_progress(run_id)
+    assert prog is not None
+    assert prog["kafka"]["published"] == 50000
+    assert len(prog["throughput"]["samples"]) >= 1
+    assert prog["throughput"]["recordsPerSecond"] is not None
+    assert prog["throughput"]["recordsPerSecond"] > 0
+    tracker.finish(run_id)
+
+
+def test_hdfs_files_written_stay_null_until_hdfs_stage_starts(tracker):
+    """Verify that hdfs.filesWritten and bytesWritten stay null while Spark is active / HDFS is pending."""
+    run_id = "test-hdfs-null-until-start"
+    tracker.start(run_id, "test-pipeline")
+
+    # Spark is running
+    tracker.emit(run_id, "spark_start", {})
+    prog_spark = tracker.get_progress(run_id)
+    spark_stage = next(s for s in prog_spark["stages"] if s["key"] == "spark")
+    assert spark_stage["state"] == "active"
+    hdfs_stage = next(s for s in prog_spark["stages"] if s["key"] == "hdfs")
+    assert hdfs_stage["state"] == "pending"
+
+    # Suppose stale HDFS poll arrives with files from previous run
+    tracker.emit(run_id, "hdfs_progress", {"path": "/data/out", "filesWritten": 3, "bytesWritten": 25000000})
+    prog_mid = tracker.get_progress(run_id)
+    assert prog_mid["hdfs"]["filesWritten"] is None
+    assert prog_mid["hdfs"]["bytesWritten"] is None
+    hdfs_stage_mid = next(s for s in prog_mid["stages"] if s["key"] == "hdfs")
+    assert hdfs_stage_mid["state"] == "pending"
+
+    # Now Spark finishes and HDFS stage starts
+    tracker.emit(run_id, "spark_done", {"recordsIn": 1000, "recordsOut": 950})
+    tracker.emit(run_id, "hdfs_start", {"path": "/data/out"})
+    tracker.emit(run_id, "hdfs_progress", {"path": "/data/out", "filesWritten": 3, "bytesWritten": 25000000})
+
+    prog_started = tracker.get_progress(run_id)
+    assert prog_started["hdfs"]["filesWritten"] == 3
+    assert prog_started["hdfs"]["bytesWritten"] == 25000000
+    hdfs_stage_started = next(s for s in prog_started["stages"] if s["key"] == "hdfs")
+    assert hdfs_stage_started["state"] == "active"
+    tracker.finish(run_id)
+
+
+

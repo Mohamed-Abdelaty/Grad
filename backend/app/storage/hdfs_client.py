@@ -379,9 +379,10 @@ class HdfsStorageClient:
             ``True`` if the path was deleted, ``False`` if it did not exist.
         """
         try:
-            result = self._hdfs_client.delete(hdfs_path, recursive=recursive)
+            norm_path = self._normalize_hdfs_path(hdfs_path)
+            result = self._hdfs_client.delete(norm_path, recursive=recursive)
             if result:
-                logger.info("Deleted HDFS path '%s' (recursive=%s).", hdfs_path, recursive)
+                logger.info("Deleted HDFS path '%s' (recursive=%s).", norm_path, recursive)
             return bool(result)
         except Exception as exc:
             logger.warning("Failed to delete HDFS path '%s': %s", hdfs_path, exc)

@@ -114,6 +114,15 @@ test.describe('UI-5 Live Run Details Page E2E', () => {
     // Restore desktop viewport
     await page.setViewportSize({ width: 1440, height: 900 });
 
+    // Run axe accessibility analysis on running state
+    const runningAxe = await new AxeBuilder({ page })
+      .disableRules(['color-contrast'])
+      .analyze();
+    const runningViolations = runningAxe.violations.filter(
+      (v) => v.impact === 'critical' || v.impact === 'serious'
+    );
+    expect(runningViolations, `Axe accessibility violations while running: ${JSON.stringify(runningViolations)}`).toHaveLength(0);
+
     // Monitor stages sequence and assert Spark and Kafka show active
     const sparkStage = page.getByTestId('stage-spark');
     let sparkWasActive = false;
@@ -413,22 +422,35 @@ storage:
     await expect(page.getByTestId('counter-rows-total')).not.toHaveText('—');
   });
 
-  // 7. Accessibility: axe analysis on finished and logs pages
-  test('7. Accessibility: axe reports zero serious or critical violations on finished run page and tabs', async ({
+  // 7. Accessibility: axe analysis on running, finished and logs pages
+  test('7. Accessibility: axe reports zero serious or critical violations on running and finished run pages', async ({
     page,
   }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
 
     await doLogin(page);
     await clickNav(page, 'Pipelines');
     await expect(page).toHaveURL(/pipelines/, { timeout: 10_000 });
 
-    const completedRow = page.locator('table tbody tr', { hasText: 'succeeded' }).first();
-    await expect(completedRow).toBeVisible({ timeout: 10_000 });
-    const openBtn = completedRow.getByRole('button', { name: 'Open' });
-    await expect(openBtn).toBeVisible({ timeout: 10_000 });
-    await openBtn.click();
-    await expect(page).toHaveURL(/\/pipelines\/[a-f0-9-]+/, { timeout: 10_000 });
+    // Pick template and run to test RUNNING state
+    await page.getByTestId('btn-templates').click();
+    await page.getByTestId('template-sales-csv').click();
+    await page.getByTestId('btn-validate').click();
+    await expect(page.getByTestId('validation-state')).toHaveText('Valid', { timeout: 15_000 });
+    await page.getByTestId('btn-run').click();
+    await expect(page).toHaveURL(/\/pipelines\/[a-f0-9-]+/, { timeout: 15_000 });
+
+    // Axe on running page
+    const runningAxe = await new AxeBuilder({ page })
+      .disableRules(['color-contrast'])
+      .analyze();
+    const runningViolations = runningAxe.violations.filter(
+      (v) => v.impact === 'critical' || v.impact === 'serious'
+    );
+    expect(runningViolations, `Axe violations on running page: ${JSON.stringify(runningViolations)}`).toHaveLength(0);
+
+    // Wait for run to finish
+    await expect(page.getByTestId('run-header')).toContainText('succeeded', { timeout: 120_000 });
 
     // Axe on finished page overview
     const overviewAxe = await new AxeBuilder({ page })

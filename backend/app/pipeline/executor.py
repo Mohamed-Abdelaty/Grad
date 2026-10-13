@@ -683,6 +683,12 @@ class PipelineExecutor:
 
             # ── Submit job & background HDFS poller ────────────────────────────
             hdfs_client = HdfsStorageClient()
+            if output_path and output_path.startswith("hdfs://"):
+                try:
+                    hdfs_client.delete(output_path, recursive=True)
+                except Exception:
+                    pass
+
             stop_hdfs_poller = threading.Event()
             hdfs_poller_thread: threading.Thread | None = None
             last_files_written = 0
@@ -692,11 +698,12 @@ class PipelineExecutor:
                 nonlocal last_files_written, last_bytes_written
                 while not stop_hdfs_poller.is_set():
                     try:
-                        summary = hdfs_client.content_summary(output_path)
-                        if summary is not None:
-                            last_files_written = summary.get("fileCount", 0)
-                            last_bytes_written = summary.get("length", 0)
-                            if tracker_run_id:
+                        # Only poll & emit progress if HDFS stage has started (is not pending)
+                        if tracker_run_id and _progress_tracker.get_stage_state(tracker_run_id, "hdfs") != "pending":
+                            summary = hdfs_client.content_summary(output_path)
+                            if summary is not None:
+                                last_files_written = summary.get("fileCount", 0)
+                                last_bytes_written = summary.get("length", 0)
                                 _progress_tracker.emit(
                                     tracker_run_id,
                                     "hdfs_progress",
