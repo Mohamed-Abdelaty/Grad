@@ -13,6 +13,7 @@ interface DataTableProps<T> {
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
   emptyMessage?: string;
+  rowTestId?: (row: T) => string;
 }
 
 export function DataTable<T>({
@@ -21,6 +22,7 @@ export function DataTable<T>({
   rowKey,
   onRowClick,
   emptyMessage = 'No records found.',
+  rowTestId,
 }: DataTableProps<T>) {
   return (
     <div className="overflow-x-auto rounded-lg border border-surface-border">
@@ -52,6 +54,7 @@ export function DataTable<T>({
             rows.map((row) => (
               <tr
                 key={rowKey(row)}
+                data-testid={rowTestId ? rowTestId(row) : undefined}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={[
                   'border-b border-surface-border last:border-0 transition-colors duration-fast',
