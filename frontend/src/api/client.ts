@@ -12,6 +12,8 @@ export const setApiToken = (token: string | null) => {
   currentToken = token;
 };
 
+export const getApiToken = (): string | null => currentToken;
+
 apiClient.interceptors.request.use((config) => {
   if (currentToken) {
     config.headers.Authorization = `Bearer ${currentToken}`;
