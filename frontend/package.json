@@ -12,18 +12,25 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@codemirror/lang-yaml": "^6.1.3",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.14",
     "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@tanstack/react-query": "^5.59.0",
+    "@uiw/react-codemirror": "^4.25.12",
     "axios": "^1.7.7",
     "lucide-react": "^1.51.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.2",
     "recharts": "^2.13.0",
-    "sonner": "^2.0.8"
+    "sonner": "^2.0.8",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^6.5.0",
     "@testing-library/react": "^16.0.1",
