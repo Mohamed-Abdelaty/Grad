@@ -41,7 +41,8 @@ export function isRunProgress(data: unknown): data is RunProgress {
   return true;
 }
 
-export function mapRawProgress(raw: Record<string, unknown>): RunProgress {
+export function mapRawProgress(rawInput: unknown): RunProgress {
+  const raw = (rawInput && typeof rawInput === 'object' ? rawInput : {}) as Record<string, unknown>;
   const runId = String(raw.runId || raw.run_id || '');
   const status = (raw.status as RunStatus) || 'pending';
   const mode = (raw.mode === 'streaming' ? 'streaming' : 'batch') as 'batch' | 'streaming';

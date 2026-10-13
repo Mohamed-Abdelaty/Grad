@@ -31,9 +31,9 @@ export function useRunLive(runId: string | undefined): UseRunLiveReturn {
 
   const failureCountRef = useRef(0);
   const abortCtrlRef = useRef<AbortController | null>(null);
-  const backoffTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const pollingTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const streamRetryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const backoffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streamRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isStoppedRef = useRef(false);
   const isConnectingRef = useRef(false);
 

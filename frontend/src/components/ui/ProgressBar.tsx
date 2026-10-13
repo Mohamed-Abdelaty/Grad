@@ -35,8 +35,9 @@ export function ProgressBar({
       <div
         role="progressbar"
         aria-valuenow={isIndeterminate ? undefined : pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
+        aria-valuemin={isIndeterminate ? undefined : 0}
+        aria-valuemax={isIndeterminate ? undefined : 100}
+        aria-busy={isIndeterminate ? true : undefined}
         aria-label={label}
         className="h-2 w-full rounded-full bg-surface-border overflow-hidden"
       >

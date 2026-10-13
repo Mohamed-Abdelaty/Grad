@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   CheckCircle2Icon,
@@ -61,6 +61,7 @@ interface CombinedIssue {
 
 export default function PipelineManagement() {
   const navigate = useNavigate();
+  const location = useLocation();
   const editorRef = useRef<YamlEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const templatesButtonRef = useRef<HTMLButtonElement>(null);
@@ -227,6 +228,16 @@ export default function PipelineManagement() {
     setHasUnsavedChanges(false);
     performValidation(content);
   };
+
+  // Consume router state if navigated from Re-run on PipelineDetails
+  useEffect(() => {
+    const state = location.state as { yaml?: string; fileName?: string } | null;
+    if (state?.yaml) {
+      applyContent(state.yaml, state.fileName || 'rerun.yaml');
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const requestLoadContent = (content: string, name: string) => {
     if (hasUnsavedChanges && yamlContent.trim().length > 0) {

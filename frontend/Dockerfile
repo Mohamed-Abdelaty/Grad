@@ -6,6 +6,8 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
+ARG VITE_SPARK_UI_URL=http://localhost:8080
+ENV VITE_SPARK_UI_URL=$VITE_SPARK_UI_URL
 RUN npm run build
 
 FROM nginx:alpine

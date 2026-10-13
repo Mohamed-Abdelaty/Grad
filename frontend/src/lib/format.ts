@@ -247,3 +247,5 @@ export function activeStageSummary(progress: RunProgress | null | undefined): Ac
       return { label: 'Processing', ratio: null, indeterminate: true };
   }
 }
+
+export { safeFileName } from './yaml';

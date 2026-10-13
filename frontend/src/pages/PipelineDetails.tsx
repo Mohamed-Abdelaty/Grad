@@ -1,118 +1,275 @@
-import React from 'react';
-import { Link, useParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftIcon } from 'lucide-react';
 import { getPipelineRun } from '../api/pipelines';
-import { StatusPill } from '../components/ui/StatusPill';
-import { Card, CardHeader, CardTitle } from '../components/ui/Card';
+import { useRunLive } from '../hooks/useRunLive';
+import { useRunEvents } from '../hooks/useRunEvents';
+import { elapsedMs, stageLabel } from '../lib/format';
+import { Tabs, TabList, Tab, TabPanel } from '../components/ui/Tabs';
 import { ErrorState } from '../components/ui/ErrorState';
 import { Skeleton } from '../components/ui/Skeleton';
+import { RunHeader } from '../components/pipelines/details/RunHeader';
+import { StageStepper } from '../components/pipelines/details/StageStepper';
+import { ActiveProgress } from '../components/pipelines/details/ActiveProgress';
+import { CountersGrid } from '../components/pipelines/details/CountersGrid';
+import { ThroughputChart } from '../components/pipelines/details/ThroughputChart';
+import { VizSlot } from '../components/pipelines/details/VizSlot';
+import { ServicesPanel } from '../components/pipelines/details/ServicesPanel';
+import { FailurePanel } from '../components/pipelines/details/FailurePanel';
+import { SuccessSummary } from '../components/pipelines/details/SuccessSummary';
+import { LogsTab } from '../components/pipelines/details/LogsTab';
+import { ConfigTab } from '../components/pipelines/details/ConfigTab';
+import { OutputTab } from '../components/pipelines/details/OutputTab';
+
+const VALID_TABS = ['overview', 'logs', 'configuration', 'output'] as const;
+type TabType = (typeof VALID_TABS)[number];
 
 export default function PipelineDetails() {
   const { runId } = useParams<{ runId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
-  const { data: run, isLoading, isError, refetch } = useQuery({
+  // Tab synchronization with URL query param ?tab=
+  const tabParam = searchParams.get('tab') as TabType;
+  const activeTab: TabType = VALID_TABS.includes(tabParam) ? tabParam : 'overview';
+
+  const handleTabChange = (tabId: string) => {
+    if (VALID_TABS.includes(tabId as TabType)) {
+      setSearchParams({ tab: tabId }, { replace: true });
+    }
+  };
+
+  // Fetch initial run record (metadata, name, yamlContent, etc.)
+  const {
+    data: run,
+    isLoading: isLoadingRun,
+    isError: isRunError,
+    refetch: refetchRun,
+  } = useQuery({
     queryKey: ['pipelineRun', runId],
     queryFn: () => getPipelineRun(runId!),
     enabled: Boolean(runId),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === 'running' ? 2000 : false;
-    },
   });
 
-  if (isLoading) {
+  // Live real-time stream hook
+  const { progress, connection, lastUpdatedAt, error: streamError } = useRunLive(runId);
+
+  // Status computation
+  const status = progress?.status || run?.status || 'pending';
+  const isRunning = status === 'running';
+
+  // Live ticker for elapsed time
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!isRunning) return;
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isRunning]);
+
+  const currentElapsedMs = useMemo(() => {
+    const started = progress?.startedAt || run?.startedAt;
+    const completed = progress?.completedAt || run?.finishedAt;
+    return elapsedMs(started, completed, now);
+  }, [progress?.startedAt, progress?.completedAt, run?.startedAt, run?.finishedAt, now]);
+
+  // Hook for events (needed for failure panel details as well)
+  const { events } = useRunEvents(runId, isRunning);
+
+  // Accessibility: aria-live="polite" region
+  // Announces ONLY stage transitions and terminal states, throttled to once per 2 seconds
+  const [announcement, setAnnouncement] = useState('');
+  const lastAnnounceTimeRef = useRef(0);
+  const prevActiveStageRef = useRef<string | null>(null);
+  const prevStatusRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!progress) return;
+    const currentActive = progress.stages.find((s) => s.state === 'active')?.key || null;
+    const currentStatus = progress.status;
+
+    let nextText = '';
+
+    if (currentActive && currentActive !== prevActiveStageRef.current) {
+      nextText = `${stageLabel(currentActive)} processing started`;
+      prevActiveStageRef.current = currentActive;
+    } else if (currentStatus !== prevStatusRef.current) {
+      if (currentStatus === 'succeeded') {
+        nextText = 'Run succeeded';
+      } else if (currentStatus === 'failed') {
+        nextText = 'Run failed';
+      } else if (currentStatus === 'cancelled') {
+        nextText = 'Run cancelled';
+      }
+      prevStatusRef.current = currentStatus;
+    }
+
+    if (nextText) {
+      const currentTime = Date.now();
+      if (currentTime - lastAnnounceTimeRef.current >= 2000) {
+        setAnnouncement(nextText);
+        lastAnnounceTimeRef.current = currentTime;
+      }
+    }
+  }, [progress]);
+
+  // Loading skeleton state
+  if (isLoadingRun && !progress) {
     return (
-      <div className="max-w-4xl space-y-6">
-        <Skeleton className="h-8 w-48 rounded" />
-        <Skeleton className="h-64 w-full rounded" />
+      <div className="max-w-7xl mx-auto space-y-6 animate-pulse">
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <Skeleton className="h-10 w-64 rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-xl" />
       </div>
     );
   }
 
-  if (isError || !run) {
+  // 404 / Error State
+  if ((isRunError && !progress) || streamError === 'Run not found') {
     return (
-      <div className="max-w-4xl space-y-6">
-        <Link
-          to="/pipelines"
-          className="inline-flex items-center gap-1.5 text-sm text-brand-light hover:underline"
-        >
-          <ArrowLeftIcon className="h-4 w-4" />
-          Back to Pipelines
-        </Link>
+      <div className="max-w-4xl mx-auto space-y-6">
         <ErrorState
           title="Run not found"
-          description="The requested pipeline run could not be found or failed to load."
-          onRetry={() => refetch()}
+          description={streamError || 'The requested pipeline run could not be found or failed to load.'}
+          onRetry={() => {
+            refetchRun();
+          }}
         />
       </div>
     );
   }
 
-  const outputPath = run.actualOutputPath || run.outputPath;
+  const failingStageKey = progress?.stages.find((s) => s.state === 'error')?.key || null;
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <div className="flex items-center justify-between">
-        <Link
-          to="/pipelines"
-          className="inline-flex items-center gap-1.5 text-sm text-brand-light hover:underline"
-        >
-          <ArrowLeftIcon className="h-4 w-4" />
-          Back to Pipelines
-        </Link>
-        <StatusPill status={run.status} label={run.status} dot={run.status === 'running'} />
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Visually hidden polite announcement region */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+        data-testid="a11y-announcement"
+      >
+        {announcement}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pipeline Run: {run.name}</CardTitle>
-        </CardHeader>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-slate-400 block">Run ID:</span>
-            <span className="font-mono text-slate-200 text-xs break-all">{run.id}</span>
-          </div>
-
-          <div>
-            <span className="text-slate-400 block">Status:</span>
-            <span className="capitalize font-medium text-slate-200">{run.status}</span>
-          </div>
-
-          <div>
-            <span className="text-slate-400 block">Started at:</span>
-            <span className="text-slate-200">
-              {run.startedAt ? new Date(run.startedAt).toLocaleString() : '-'}
-            </span>
-          </div>
-
-          <div>
-            <span className="text-slate-400 block">Finished at:</span>
-            <span className="text-slate-200">
-              {run.finishedAt ? new Date(run.finishedAt).toLocaleString() : '-'}
-            </span>
-          </div>
-
-          <div className="md:col-span-2">
-            <span className="text-slate-400 block">Output Path:</span>
-            <span className="font-mono text-slate-200 text-xs break-all">
-              {outputPath || '-'}
-            </span>
-          </div>
+      {/* Cancelled Banner if cancelled */}
+      {status === 'cancelled' && (
+        <div
+          data-testid="cancelled-banner"
+          className="p-3.5 bg-slate-800 border border-slate-700 text-slate-300 rounded-xl flex items-center justify-between text-sm"
+        >
+          <span>
+            Run cancelled at{' '}
+            <strong className="text-white">
+              {progress?.completedAt
+                ? new Date(progress.completedAt).toLocaleString()
+                : progress?.updatedAt
+                ? new Date(progress.updatedAt).toLocaleString()
+                : 'unknown time'}
+            </strong>
+          </span>
         </div>
+      )}
 
-        {run.errorMessage && (
-          <div className="mt-6 p-4 rounded-lg bg-status-error/10 border border-status-error/30">
-            <h4 className="text-xs font-semibold text-rose-300 uppercase tracking-wider mb-1">
-              Error Details
-            </h4>
-            <pre className="text-xs text-rose-200 font-mono whitespace-pre-wrap break-words">
-              {run.errorMessage}
-            </pre>
+      {/* Run Header */}
+      <RunHeader
+        run={run || null}
+        progress={progress}
+        connection={connection}
+        lastUpdatedAt={lastUpdatedAt}
+        elapsedMs={currentElapsedMs}
+        onRefreshRun={refetchRun}
+      />
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onChange={handleTabChange}>
+        <TabList>
+          <Tab id="overview" label="Overview" />
+          <Tab id="logs" label="Logs" />
+          <Tab id="configuration" label="Configuration" />
+          <Tab id="output" label="Output" />
+        </TabList>
+
+        {/* Tab 1: Overview */}
+        <TabPanel id="overview">
+          <div className="space-y-6">
+            {/* 1. Visualization Slot (UI-7 reserved) */}
+            <VizSlot />
+
+            {/* 2. Stage Stepper */}
+            <StageStepper
+              stages={progress?.stages || []}
+              hdfsVerified={progress?.hdfs?.verified ?? null}
+              failingStageKey={failingStageKey}
+            />
+
+            {/* 3. Failure Panel if failed */}
+            {status === 'failed' && (
+              <FailurePanel
+                progress={progress}
+                errorMessage={run?.errorMessage}
+                events={events}
+                onRerun={() => {
+                  if (run?.yamlContent) {
+                    navigate('/pipelines', { state: { yaml: run.yamlContent } });
+                  }
+                }}
+                canRerun={Boolean(run?.yamlContent)}
+              />
+            )}
+
+            {/* 4. Success Summary if succeeded */}
+            {status === 'succeeded' && (
+              <SuccessSummary
+                progress={progress}
+                outputPath={run?.actualOutputPath || run?.outputPath}
+                elapsedMs={currentElapsedMs}
+                onViewOutput={() => handleTabChange('output')}
+              />
+            )}
+
+            {/* 5. Active Stage Progress (hidden if terminated and not streaming) */}
+            {status !== 'succeeded' && status !== 'failed' && status !== 'cancelled' && (
+              <ActiveProgress progress={progress} />
+            )}
+
+            {/* 6. Counters Grid */}
+            <CountersGrid progress={progress} elapsedMs={currentElapsedMs} />
+
+            {/* 7. Throughput Chart */}
+            <ThroughputChart samples={progress?.throughput?.samples || []} />
+
+            {/* 8. Infrastructure Services Panel */}
+            <ServicesPanel progress={progress} />
           </div>
-        )}
-      </Card>
+        </TabPanel>
+
+        {/* Tab 2: Logs */}
+        <TabPanel id="logs">
+          <LogsTab
+            runId={runId || ''}
+            pipelineName={run?.name}
+            isRunning={isRunning}
+            startedAt={progress?.startedAt || run?.startedAt}
+          />
+        </TabPanel>
+
+        {/* Tab 3: Configuration */}
+        <TabPanel id="configuration">
+          <ConfigTab yamlContent={run?.yamlContent} />
+        </TabPanel>
+
+        {/* Tab 4: Output */}
+        <TabPanel id="output">
+          <OutputTab
+            progress={progress}
+            actualOutputPath={run?.actualOutputPath}
+            fallbackOutputPath={run?.outputPath}
+          />
+        </TabPanel>
+      </Tabs>
     </div>
   );
 }

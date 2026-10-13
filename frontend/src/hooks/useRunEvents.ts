@@ -78,7 +78,7 @@ export function useRunEvents(
       });
     }
 
-    let timer: NodeJS.Timeout | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     if (running) {
       timer = setInterval(() => {
         fetchEvents(runId);
