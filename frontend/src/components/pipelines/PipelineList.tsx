@@ -42,8 +42,10 @@ export default function PipelineList({ runs }: Props) {
                   {run.status}
                 </span>
               </td>
-              <td className="px-4 py-3">{run.recordsProcessed}</td>
-              <td className="px-4 py-3">{new Date(run.startedAt).toLocaleString()}</td>
+              <td className="px-4 py-3">{run.recordsProcessed ?? '-'}</td>
+              <td className="px-4 py-3">
+                {run.startedAt ? new Date(run.startedAt).toLocaleString() : '-'}
+              </td>
             </tr>
           ))}
           {runs.length === 0 && (

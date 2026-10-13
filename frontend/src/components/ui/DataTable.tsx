@@ -2,7 +2,7 @@ import React from 'react';
 
 export interface Column<T> {
   key: string;
-  header: string;
+  header: React.ReactNode;
   cell: (row: T) => React.ReactNode;
   width?: string;
 }

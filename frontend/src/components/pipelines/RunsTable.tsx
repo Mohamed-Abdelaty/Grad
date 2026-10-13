@@ -235,7 +235,7 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
     setSearchInput('');
     setDebouncedQ('');
     setSearchParams(
-      (prev) => {
+      () => {
         const next = new URLSearchParams();
         next.set('page', '1');
         next.set('limit', String(pageSize));
@@ -300,7 +300,7 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
           Started
           <ArrowUpDownIcon className="h-3.5 w-3.5" />
         </button>
-      ) as any,
+      ),
       cell: (run) => (
         <span
           title={run.startedAt ? new Date(run.startedAt).toLocaleString() : '-'}
@@ -336,9 +336,8 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
               {out}
             </span>
             <IconButton
-              aria-label="Copy output path"
+              label="Copy output path"
               size="sm"
-              variant="ghost"
               onClick={() => handleCopyPath(out)}
             >
               <CopyIcon className="h-3 w-3" />
@@ -354,9 +353,8 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
         <div className="flex items-center gap-1">
           <Tooltip content="Open run details">
             <IconButton
-              aria-label="Open"
+              label="Open"
               size="sm"
-              variant="ghost"
               onClick={() => navigate(`/pipelines/${run.id}`)}
             >
               <ExternalLinkIcon className="h-3.5 w-3.5" />
@@ -366,9 +364,8 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
           {run.yamlContent ? (
             <Tooltip content="Re-run with this configuration">
               <IconButton
-                aria-label="Re-run"
+                label="Re-run"
                 size="sm"
-                variant="ghost"
                 onClick={() => onRerun?.(run.yamlContent!)}
               >
                 <RotateCcwIcon className="h-3.5 w-3.5 text-brand-light" />
@@ -378,9 +375,8 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
             <Tooltip content="YAML content not recorded for this run">
               <span>
                 <IconButton
-                  aria-label="Re-run"
+                  label="Re-run"
                   size="sm"
-                  variant="ghost"
                   disabled
                 >
                   <RotateCcwIcon className="h-3.5 w-3.5 text-slate-600" />
@@ -392,9 +388,8 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
           {run.yamlContent && (
             <Tooltip content="Download YAML configuration">
               <IconButton
-                aria-label="Download YAML"
+                label="Download YAML"
                 size="sm"
-                variant="ghost"
                 onClick={() => handleDownloadYaml(run)}
               >
                 <DownloadIcon className="h-3.5 w-3.5 text-slate-400" />
@@ -405,9 +400,9 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
           {run.status === 'running' && (
             <Tooltip content="Stop running pipeline">
               <IconButton
-                aria-label="Stop"
+                label="Stop"
                 size="sm"
-                variant="danger"
+                className="text-status-error hover:bg-status-error/15"
                 onClick={() => setStopRunTarget(run)}
               >
                 <SquareIcon className="h-3.5 w-3.5 fill-current" />
@@ -537,6 +532,7 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
             <div className="flex items-center gap-2">
               <span>Rows per page:</span>
               <select
+                aria-label="Rows per page"
                 value={pageSize}
                 onChange={(e) => handlePageSizeChange(parseInt(e.target.value, 10))}
                 className="bg-surface-raised border border-surface-border text-slate-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-brand"

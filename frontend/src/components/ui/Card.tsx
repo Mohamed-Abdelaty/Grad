@@ -1,9 +1,9 @@
 import React from 'react';
 
-interface CardProps {
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
-  as?: keyof React.JSX.IntrinsicElements;
+  as?: 'div' | 'section' | 'article';
   padding?: 'none' | 'sm' | 'md' | 'lg';
 }
 
@@ -19,6 +19,7 @@ export function Card({
   className = '',
   as: Tag = 'div',
   padding = 'md',
+  ...props
 }: CardProps) {
   return (
     <Tag
@@ -27,6 +28,7 @@ export function Card({
         paddingClasses[padding],
         className,
       ].join(' ')}
+      {...props}
     >
       {children}
     </Tag>

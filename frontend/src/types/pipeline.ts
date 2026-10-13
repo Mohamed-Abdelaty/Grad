@@ -31,6 +31,7 @@ export interface PipelineRunListItem {
   outputPath: string | null;
   actualOutputPath: string | null;
   yamlContent: string | null;
+  recordsProcessed?: number | null;
 }
 
 export type PipelineRun = PipelineRunListItem;

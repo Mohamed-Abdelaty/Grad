@@ -56,10 +56,8 @@ export async function runPipeline(yamlContent: string, wait: boolean = false): P
     yaml_content: yamlContent,
   });
   return {
-    pipelineRunId: res.data.pipeline_run_id,
-    pipeline_run_id: res.data.pipeline_run_id,
-    status: res.data.status,
     ...res.data,
+    pipelineRunId: res.data.pipeline_run_id,
   };
 }
 

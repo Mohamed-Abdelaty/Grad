@@ -22,17 +22,21 @@ const sizeClasses: Record<Size, string> = {
   lg: 'px-6 py-2.5 text-base rounded-lg',
 };
 
-export function Button({
-  variant = 'primary',
-  size = 'md',
-  loading = false,
-  disabled,
-  children,
-  className = '',
-  ...props
-}: ButtonProps) {
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    variant = 'primary',
+    size = 'md',
+    loading = false,
+    disabled,
+    children,
+    className = '',
+    ...props
+  }: ButtonProps,
+  ref
+) {
   return (
     <button
+      ref={ref}
       disabled={disabled || loading}
       className={[
         'inline-flex items-center justify-center gap-2 font-medium transition-colors duration-fast',
@@ -49,4 +53,4 @@ export function Button({
       {children}
     </button>
   );
-}
+});

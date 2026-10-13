@@ -29,8 +29,8 @@ describe('parseFieldPath', () => {
 
   it('handles empty string and non-string inputs', () => {
     expect(parseFieldPath('')).toEqual([]);
-    expect(parseFieldPath(null as any)).toEqual([]);
-    expect(parseFieldPath(undefined as any)).toEqual([]);
+    expect(parseFieldPath(null as unknown as string)).toEqual([]);
+    expect(parseFieldPath(undefined as unknown as string)).toEqual([]);
   });
 
   it('handles odd inputs with consecutive dots and brackets', () => {

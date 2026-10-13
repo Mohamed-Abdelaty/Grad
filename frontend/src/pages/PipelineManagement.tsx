@@ -15,10 +15,8 @@ import {
   FileCodeIcon,
   FolderOpenIcon,
   PlayIcon,
-  RotateCcwIcon,
   SquareIcon,
   UploadIcon,
-  XCircleIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -34,7 +32,6 @@ import {
   ValidationResult,
 } from '../types/pipeline';
 import {
-  parseFieldPath,
   resolveYamlLine,
   yamlSyntaxIssues,
   summarizePipeline,
@@ -45,7 +42,6 @@ import { YamlEditorHandle, EditorDiagnostic } from '../components/pipelines/Yaml
 import RunsTable from '../components/pipelines/RunsTable';
 import { Card, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { IconButton } from '../components/ui/IconButton';
 import { StatusPill } from '../components/ui/StatusPill';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -325,9 +321,12 @@ export default function PipelineManagement() {
         setHasUnsavedChanges(false);
         navigate(`/pipelines/${runId}`);
       }
-    } catch (err: any) {
-      if (err.response?.status === 422 && err.response?.data?.errors) {
-        const issues = (err.response.data.errors as ValidationIssue[]).map((e) => {
+    } catch (err: unknown) {
+      const axiosErr = err as {
+        response?: { status?: number; data?: { errors?: ValidationIssue[] } };
+      };
+      if (axiosErr.response?.status === 422 && axiosErr.response?.data?.errors) {
+        const issues = axiosErr.response.data.errors.map((e) => {
           const loc = resolveYamlLine(yamlContent, e.field);
           return {
             field: e.field,

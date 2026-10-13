@@ -1,4 +1,4 @@
-import { LineCounter, parseDocument, isNode } from 'yaml';
+import { LineCounter, parseDocument } from 'yaml';
 
 export interface FieldLocation {
   line: number;
@@ -29,6 +29,15 @@ export interface PipelineSummary {
 
 export type UploadValidationResult = { ok: true } | { ok: false; reason: string };
 
+type RangeTuple = [number, number, number] | [number, number];
+
+interface AstItem {
+  range?: RangeTuple;
+  items?: AstItem[];
+  key?: { value?: string | number; range?: RangeTuple };
+  value?: AstItem;
+}
+
 /**
  * Converts backend field paths such as storage.path, processing.operations[2].condition,
  * schema.0.name into tokens (dot segments, [n] and numeric segments become numbers).
@@ -58,25 +67,25 @@ export function resolveYamlLine(text: string, field: string): FieldLocation | nu
     const doc = parseDocument(text, { lineCounter });
     const tokens = parseFieldPath(field);
 
-    let current: any = doc.contents;
-    let bestRange: [number, number, number] | [number, number] | null = current ? current.range : null;
+    let current: AstItem | null = (doc.contents as unknown as AstItem) || null;
+    let bestRange: RangeTuple | null = current?.range ?? null;
 
     for (const token of tokens) {
       if (!current) break;
 
       if (Array.isArray(current.items)) {
         if (typeof token === 'number') {
-          const item = current.items[token];
+          const item: AstItem | undefined = current.items[token];
           if (!item) break;
           bestRange = item.range || bestRange;
           current = item;
         } else {
-          const pair = current.items.find(
-            (p: any) => p && p.key && (p.key.value === token || String(p.key) === token)
+          const pair: AstItem | undefined = current.items.find(
+            (p: AstItem | undefined) => p && p.key && (p.key.value === token || String(p.key) === token)
           );
           if (!pair) break;
           bestRange = pair.key && pair.key.range ? pair.key.range : pair.range || bestRange;
-          current = pair.value;
+          current = pair.value || null;
         }
       } else {
         break;
@@ -165,9 +174,9 @@ export function summarizePipeline(text: string): PipelineSummary | null {
 
     if (json.processing && typeof json.processing === 'object') {
       if (Array.isArray(json.processing.operations)) {
-        summary.operations = json.processing.operations
-          .map((op: any) => (op && typeof op === 'object' ? op.type : null))
-          .filter(Boolean);
+        summary.operations = (json.processing.operations as Array<Record<string, unknown>>)
+          .map((op) => (op && typeof op === 'object' && typeof op.type === 'string' ? op.type : null))
+          .filter((t): t is string => Boolean(t));
       }
     }
 
@@ -208,8 +217,9 @@ export function summarizePipeline(text: string): PipelineSummary | null {
  * Helper to read text from File or Blob in any environment (including jsdom).
  */
 export async function readFileText(file: File): Promise<string> {
-  if (typeof (file as any).text === 'function') {
-    return await (file as any).text();
+  const fileWithText = file as unknown as { text?: () => Promise<string> };
+  if (typeof fileWithText.text === 'function') {
+    return await fileWithText.text();
   }
   return new Promise<string>((resolve, reject) => {
     if (typeof FileReader === 'undefined') {
@@ -262,7 +272,7 @@ export function validateUpload(
   })();
 
   Object.assign(promise, syncRes);
-  return promise as any;
+  return promise as unknown as Promise<UploadValidationResult> & UploadValidationResult;
 }
 
 /**
