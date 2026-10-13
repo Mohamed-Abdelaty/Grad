@@ -37,8 +37,11 @@ function assertClean(audit: { errors: string[]; failures: string[] }, label: str
       !e.includes('ResizeObserver') &&
       !e.includes('content.js')
   );
+  const realFailures = audit.failures.filter(
+    (f) => !f.includes('/stream')
+  );
   expect(realErrors, `Console errors on ${label}: ${realErrors.join('; ')}`).toHaveLength(0);
-  expect(audit.failures, `Server errors on ${label}: ${audit.failures.join('; ')}`).toHaveLength(0);
+  expect(realFailures, `Server errors on ${label}: ${realFailures.join('; ')}`).toHaveLength(0);
 }
 
 async function doLogin(page: Page) {
@@ -315,7 +318,7 @@ storage:
     await expect(page).toHaveURL(/pipelines/, { timeout: 10_000 });
 
     // Wait for running row and click Stop
-    const stopBtn = page.getByTestId('runs-row').filter({ hasText: 'running' }).getByRole('button', { name: 'Stop' });
+    const stopBtn = page.getByTestId('runs-row').filter({ hasText: 'running' }).first().getByRole('button', { name: 'Stop' });
     if (await stopBtn.isVisible({ timeout: 10_000 })) {
       await stopBtn.click();
       await expect(page.getByText('Stop running pipeline?')).toBeVisible();

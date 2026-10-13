@@ -87,10 +87,11 @@ export function LogViewer({
       <div
         ref={containerRef}
         role="log"
+        tabIndex={0}
         aria-label={label}
         aria-live="polite"
         onScroll={handleScroll}
-        className="overflow-y-auto bg-slate-950 p-3 space-y-1 font-mono text-xs"
+        className="overflow-y-auto bg-slate-950 p-3 space-y-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-brand/40"
         style={{ maxHeight }}
       >
         {itemCount === 0 ? (
