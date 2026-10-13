@@ -10,7 +10,7 @@ events back to the triggering run.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -83,6 +83,12 @@ class PipelineRun(Base):
         JSON,
         nullable=True,
         comment="Final RunProgress JSON snapshot persisted upon completion.",
+    )
+
+    config_yaml: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Original submitted YAML configuration.",
     )
 
     # ── Relationships ──────────────────────────────────────────────────────────

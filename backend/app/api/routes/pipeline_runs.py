@@ -108,6 +108,10 @@ async def _verify_sse_token(token: str | None) -> str:
         )
 
 
+VALID_STATUSES = {"pending", "running", "succeeded", "failed", "cancelled"}
+VALID_SORTS = {"started_at_desc", "started_at_asc"}
+
+
 # ── GET /api/pipeline-runs ─────────────────────────────────────────────────────
 
 
@@ -118,21 +122,64 @@ async def _verify_sse_token(token: str | None) -> str:
 )
 async def list_pipeline_runs(
     db: AsyncSession = Depends(get_db),
-    limit: int = Query(default=50, ge=1, le=500),
+    status: list[str] | None = Query(default=None),
+    q: str | None = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    sort: str = Query(default="started_at_desc"),
 ) -> JSONResponse:
-    """Return a paginated list of pipeline runs ordered by start time descending."""
-    result = await db.execute(
-        select(PipelineRun)
-        .order_by(PipelineRun.started_at.desc().nullslast())
-        .limit(limit)
-        .offset(offset)
-    )
+    """Return a filtered, paginated list of pipeline runs."""
+    if sort not in VALID_SORTS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid sort '{sort}'. Allowed values: {sorted(VALID_SORTS)}",
+        )
+
+    parsed_statuses: list[str] = []
+    if status is not None:
+        for item in status:
+            for s in item.split(","):
+                s_clean = s.strip()
+                if s_clean:
+                    if s_clean not in VALID_STATUSES:
+                        raise HTTPException(
+                            status_code=422,
+                            detail=f"Invalid status '{s_clean}'. Allowed values: {sorted(VALID_STATUSES)}",
+                        )
+                    parsed_statuses.append(s_clean)
+
+    from sqlalchemy import func
+    from sqlalchemy.orm import joinedload
+    from app.models.pipeline import Pipeline
+
+    base_query = select(PipelineRun).outerjoin(Pipeline, PipelineRun.pipeline_id == Pipeline.id)
+    count_query = select(func.count(PipelineRun.id)).outerjoin(Pipeline, PipelineRun.pipeline_id == Pipeline.id)
+
+    if parsed_statuses:
+        base_query = base_query.where(PipelineRun.status.in_(parsed_statuses))
+        count_query = count_query.where(PipelineRun.status.in_(parsed_statuses))
+
+    if q:
+        base_query = base_query.where(Pipeline.name.ilike(f"%{q}%"))
+        count_query = count_query.where(Pipeline.name.ilike(f"%{q}%"))
+
+    total_count = (await db.execute(count_query)).scalar_one()
+
+    if sort == "started_at_desc":
+        base_query = base_query.order_by(PipelineRun.started_at.desc().nullslast())
+    else:
+        base_query = base_query.order_by(PipelineRun.started_at.asc().nullsfirst())
+
+    base_query = base_query.options(joinedload(PipelineRun.pipeline)).limit(limit).offset(offset)
+
+    result = await db.execute(base_query)
     runs = result.scalars().all()
+
     return JSONResponse(
         content=[
             {
                 "id": str(run.id),
+                "name": run.pipeline.name if run.pipeline else str(run.pipeline_id),
                 "pipeline_id": str(run.pipeline_id),
                 "pipeline_version_id": str(run.pipeline_version_id),
                 "status": run.status,
@@ -141,9 +188,14 @@ async def list_pipeline_runs(
                 "error_message": run.error_message,
                 "output_path": run.output_path,
                 "actual_output_path": run.output_path,
+                "yaml_content": run.config_yaml,
             }
             for run in runs
-        ]
+        ],
+        headers={
+            "X-Total-Count": str(total_count),
+            "Access-Control-Expose-Headers": "X-Total-Count",
+        },
     )
 
 
@@ -159,11 +211,22 @@ async def get_pipeline_run(
     run_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
+    from sqlalchemy.orm import joinedload
+
     run_uuid = _parse_run_id(run_id)
-    run = await _get_run_or_404(db, run_uuid)
+    result = await db.execute(
+        select(PipelineRun)
+        .options(joinedload(PipelineRun.pipeline))
+        .where(PipelineRun.id == run_uuid)
+    )
+    run = result.scalars().first()
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Pipeline run {run_uuid} not found.")
+
     return JSONResponse(
         content={
             "id": str(run.id),
+            "name": run.pipeline.name if run.pipeline else str(run.pipeline_id),
             "pipeline_id": str(run.pipeline_id),
             "pipeline_version_id": str(run.pipeline_version_id),
             "status": run.status,
@@ -172,6 +235,7 @@ async def get_pipeline_run(
             "error_message": run.error_message,
             "output_path": run.output_path,
             "actual_output_path": run.output_path,
+            "yaml_content": run.config_yaml,
         }
     )
 

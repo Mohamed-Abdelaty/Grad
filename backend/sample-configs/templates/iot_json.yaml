@@ -1,0 +1,29 @@
+pipeline:
+  name: template-iot-json
+  version: "1.0"
+source:
+  type: json
+  path: /app/sample-data/iot_sample.json
+schema:
+  - { name: device_id, type: string }
+  - { name: temperature, type: double }
+  - { name: humidity, type: double }
+  - { name: pressure, type: double }
+  - { name: recorded_at, type: timestamp }
+processing:
+  operations:
+    - { type: remove_nulls }
+    - { type: remove_duplicates }
+    - { type: filter, condition: "temperature > 0 and temperature < 60" }
+streaming:
+  enabled: false
+messaging:
+  broker: kafka
+  topic: template-iot-json
+processing_engine:
+  type: spark
+storage:
+  type: hdfs
+  path: /data/processed/template_iot_json
+monitoring:
+  enabled: true

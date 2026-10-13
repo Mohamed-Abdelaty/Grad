@@ -395,6 +395,7 @@ services:
       - ./backend/alembic.ini:/app/alembic.ini:ro
       - ./spark-jobs:/app/spark-jobs:ro
       - ./backend/sample-data:/app/sample-data:ro
+      - ./backend/sample-configs:/app/sample-configs:ro
       # ── Phase 7: Docker socket mount — SECURITY NOTE ─────────────────────────
       # The ChaosLab Reliability Engine requires Docker socket access so that
       # DockerController can stop/start/restart platform containers and exec

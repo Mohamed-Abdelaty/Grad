@@ -1,0 +1,32 @@
+pipeline:
+  name: template-network-logs
+  version: "1.0"
+source:
+  type: csv
+  path: /app/sample-data/network_logs_sample.csv
+schema:
+  - { name: timestamp, type: string }
+  - { name: src_ip, type: string }
+  - { name: dst_ip, type: string }
+  - { name: src_port, type: integer }
+  - { name: dst_port, type: integer }
+  - { name: protocol, type: string }
+  - { name: bytes, type: integer }
+  - { name: status, type: string }
+processing:
+  operations:
+    - { type: remove_nulls }
+    - { type: remove_duplicates }
+    - { type: filter, condition: "bytes > 0" }
+streaming:
+  enabled: false
+messaging:
+  broker: kafka
+  topic: template-network-logs
+processing_engine:
+  type: spark
+storage:
+  type: hdfs
+  path: /data/processed/template_network_logs
+monitoring:
+  enabled: true

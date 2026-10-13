@@ -112,7 +112,10 @@ async def _get_or_create_pipeline_and_version(
 
 
 async def _create_running_run(
-    db: AsyncSession, pipeline: Pipeline, version: PipelineVersion
+    db: AsyncSession,
+    pipeline: Pipeline,
+    version: PipelineVersion,
+    yaml_content: str | None = None,
 ) -> PipelineRun:
     """Insert a PipelineRun row with status='running' and commit it."""
     run = PipelineRun(
@@ -120,6 +123,7 @@ async def _create_running_run(
         pipeline_version_id=version.id,
         status="running",
         started_at=datetime.now(tz=timezone.utc),
+        config_yaml=yaml_content,
     )
     db.add(run)
     await db.flush()
@@ -455,7 +459,7 @@ async def run_pipeline(
 
     # ── Create Pipeline / PipelineVersion / PipelineRun rows ─────────────────
     pipeline, version = await _get_or_create_pipeline_and_version(db, request.yaml_content)
-    run = await _create_running_run(db, pipeline, version)
+    run = await _create_running_run(db, pipeline, version, yaml_content=request.yaml_content)
     await db.commit()                      # commit before background task starts
     pipeline_run_id = str(run.id)
 

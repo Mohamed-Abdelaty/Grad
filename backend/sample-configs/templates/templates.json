@@ -1,0 +1,20 @@
+[
+  {
+    "id": "sales-csv",
+    "name": "Sales Transactions (CSV)",
+    "description": "Batch CSV sales transactions processed through Kafka and Spark into HDFS.",
+    "file": "sales_csv.yaml"
+  },
+  {
+    "id": "iot-json",
+    "name": "IoT Sensors Telemetry (JSON)",
+    "description": "JSON sensor telemetry filtered and aggregated through Kafka and Spark into HDFS.",
+    "file": "iot_json.yaml"
+  },
+  {
+    "id": "network-logs",
+    "name": "Network Access Logs (CSV)",
+    "description": "Network traffic logs filtered and aggregated through Kafka and Spark into HDFS.",
+    "file": "network_logs.yaml"
+  }
+]

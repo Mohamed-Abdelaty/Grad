@@ -1,0 +1,29 @@
+pipeline:
+  name: template-sales-csv
+  version: "1.0"
+source:
+  type: csv
+  path: /app/sample-data/sales_sample.csv
+schema:
+  - { name: transaction_id, type: string }
+  - { name: amount, type: double }
+  - { name: customer_id, type: string }
+  - { name: product_id, type: string }
+  - { name: sale_date, type: string }
+processing:
+  operations:
+    - { type: remove_nulls }
+    - { type: remove_duplicates }
+    - { type: filter, condition: "amount > 0" }
+streaming:
+  enabled: false
+messaging:
+  broker: kafka
+  topic: template-sales-csv
+processing_engine:
+  type: spark
+storage:
+  type: hdfs
+  path: /data/processed/template_sales_csv
+monitoring:
+  enabled: true

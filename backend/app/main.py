@@ -188,8 +188,10 @@ def create_app() -> FastAPI:
 
     from app.api.routes.auth import router as auth_router
     from app.api.routes.pipeline_runs import router as pipeline_runs_router
+    from app.api.routes.pipeline_templates import router as pipeline_templates_router
     app.include_router(auth_router)
     app.include_router(pipeline_runs_router)
+    app.include_router(pipeline_templates_router)
 
     # ── Prometheus Metrics ─────────────────────────────────────────────────────
     from prometheus_client import make_asgi_app
