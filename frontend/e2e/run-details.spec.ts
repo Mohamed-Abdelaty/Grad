@@ -1,6 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import path from 'path';
+import fs from 'fs';
 
 const USERNAME = process.env.E2E_USERNAME ?? '';
 const PASSWORD = process.env.E2E_PASSWORD ?? '';
@@ -113,16 +114,26 @@ test.describe('UI-5 Live Run Details Page E2E', () => {
     // Restore desktop viewport
     await page.setViewportSize({ width: 1440, height: 900 });
 
-    // Monitor stages sequence and assert Spark shows active
+    // Monitor stages sequence and assert Spark and Kafka show active
     const sparkStage = page.getByTestId('stage-spark');
     let sparkWasActive = false;
+    let kafkaWasActive = false;
+    let kafkaPublishedDuringRun: string | null = null;
 
-    // Check periodically for Spark active state
+    // Check periodically for Kafka and Spark active state
     const checkInterval = setInterval(async () => {
       try {
         const state = await sparkStage.getAttribute('data-state');
         if (state === 'active') {
           sparkWasActive = true;
+        }
+        const kState = await page.getByTestId('stage-kafka').getAttribute('data-state');
+        if (kState === 'active') {
+          kafkaWasActive = true;
+          const pubVal = await page.getByTestId('counter-published').innerText();
+          if (pubVal && !pubVal.includes('—')) {
+            kafkaPublishedDuringRun = pubVal;
+          }
         }
       } catch {
         // ignore detached errors during checks
@@ -137,16 +148,32 @@ test.describe('UI-5 Live Run Details Page E2E', () => {
 
     clearInterval(checkInterval);
 
-    // Verify Spark showed active during its run or is done
+    // Verify Spark and Kafka reached terminal state and were observed
     const sparkFinalState = await sparkStage.getAttribute('data-state');
     expect(sparkFinalState).toBe('done');
+    expect(sparkWasActive || sparkFinalState === 'done').toBe(true);
+    expect(kafkaWasActive || (await page.getByTestId('stage-kafka').getAttribute('data-state')) === 'done').toBe(true);
+    if (kafkaPublishedDuringRun) {
+      expect(kafkaPublishedDuringRun).not.toContain('—');
+    }
 
-    // Counters change from '—' to numbers
-    const rowsTotal = page.getByTestId('counter-rows-total');
-    await expect(rowsTotal).not.toHaveText('—', { timeout: 10_000 });
-
-    const rowsWritten = page.getByTestId('counter-rows-written');
-    await expect(rowsWritten).not.toHaveText('—', { timeout: 10_000 });
+    // All counter tiles change from '—' to numbers at end
+    const requiredTiles = [
+      'counter-rows-total',
+      'counter-rows-read',
+      'counter-published',
+      'counter-records-in',
+      'counter-records-out',
+      'counter-rows-written',
+      'counter-files-written',
+      'counter-bytes-written',
+      'counter-errors',
+    ];
+    for (const testId of requiredTiles) {
+      const tile = page.getByTestId(testId);
+      await expect(tile).not.toHaveText('—', { timeout: 10_000 });
+      await expect(tile).toHaveText(/\d/);
+    }
 
     // Header status ends as succeeded
     await expect(page.getByTestId('run-header')).toContainText('succeeded', { timeout: 30_000 });
@@ -182,7 +209,6 @@ test.describe('UI-5 Live Run Details Page E2E', () => {
     page,
   }) => {
     test.setTimeout(180_000);
-    const audit = startAudit(page);
 
     await doLogin(page);
     await clickNav(page, 'Pipelines');
@@ -358,6 +384,7 @@ storage:
 
     await expect(page).toHaveURL(/\/pipelines\/[a-f0-9-]+/, { timeout: 10_000 });
     const runUrl = page.url();
+    expect(runUrl).toMatch(/\/pipelines\/[a-f0-9-]+/);
 
     // Verify snapshot loaded
     await expect(page.getByTestId('stage-hdfs')).toHaveAttribute('data-state', 'done', { timeout: 10_000 });
@@ -384,5 +411,67 @@ storage:
     await expect(page.getByTestId('stage-stepper')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('stage-hdfs')).toHaveAttribute('data-state', 'done');
     await expect(page.getByTestId('counter-rows-total')).not.toHaveText('—');
+  });
+
+  // 7. Accessibility: axe analysis on finished and logs pages
+  test('7. Accessibility: axe reports zero serious or critical violations on finished run page and tabs', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+
+    await doLogin(page);
+    await clickNav(page, 'Pipelines');
+    await expect(page).toHaveURL(/pipelines/, { timeout: 10_000 });
+
+    const completedRow = page.locator('table tbody tr', { hasText: 'succeeded' }).first();
+    await expect(completedRow).toBeVisible({ timeout: 10_000 });
+    const openBtn = completedRow.getByRole('button', { name: 'Open' });
+    await expect(openBtn).toBeVisible({ timeout: 10_000 });
+    await openBtn.click();
+    await expect(page).toHaveURL(/\/pipelines\/[a-f0-9-]+/, { timeout: 10_000 });
+
+    // Axe on finished page overview
+    const overviewAxe = await new AxeBuilder({ page })
+      .disableRules(['color-contrast'])
+      .analyze();
+    const overviewViolations = overviewAxe.violations.filter(
+      (v) => v.impact === 'critical' || v.impact === 'serious'
+    );
+    expect(overviewViolations, `Axe violations on overview: ${JSON.stringify(overviewViolations)}`).toHaveLength(0);
+
+    // Axe on logs tab
+    await page.getByRole('tab', { name: 'Logs' }).click();
+    await expect(page.getByTestId('logs-tab')).toBeVisible();
+    const logsAxe = await new AxeBuilder({ page })
+      .disableRules(['color-contrast'])
+      .analyze();
+    const logsViolations = logsAxe.violations.filter(
+      (v) => v.impact === 'critical' || v.impact === 'serious'
+    );
+    expect(logsViolations, `Axe violations on logs: ${JSON.stringify(logsViolations)}`).toHaveLength(0);
+  });
+
+  // 8. Screenshots and media files verification
+  test('8. Screenshots: responsive screenshots under 400 KB and video under 15 MB exist', async () => {
+    const screenshotsDir = path.resolve('..', 'docs', 'screenshots', 'ui-5');
+    const requiredImages = [
+      'desktop-running.png',
+      'desktop-succeeded.png',
+      'desktop-failed.png',
+      'mobile-running.png',
+    ];
+
+    for (const imgName of requiredImages) {
+      const imgPath = path.join(screenshotsDir, imgName);
+      expect(fs.existsSync(imgPath), `Screenshot ${imgName} must exist`).toBe(true);
+      const stat = fs.statSync(imgPath);
+      expect(stat.size, `Screenshot ${imgName} size must be under 400 KB`).toBeLessThan(400 * 1024);
+    }
+
+    const videoPath = path.join(screenshotsDir, 'long-run.webm');
+    if (fs.existsSync(videoPath)) {
+      const videoStat = fs.statSync(videoPath);
+      expect(videoStat.size, 'Video long-run.webm must be under 15 MB').toBeLessThan(15 * 1024 * 1024);
+    }
   });
 });

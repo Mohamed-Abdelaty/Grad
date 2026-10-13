@@ -510,6 +510,17 @@ class PipelineExecutor:
                         partitions=actual_partitions,
                         topic=topic,
                     )
+                    _progress_tracker.emit(
+                        tracker_run_id,
+                        "kafka_progress",
+                        {
+                            "published": published,
+                            "failed": failed,
+                            "end_offsets": last_end_offsets,
+                            "partitions": actual_partitions,
+                            "topic": topic,
+                        },
+                    )
 
             records = json.loads(df.to_json(orient="records", date_format="iso"))
             result = producer.produce_batch(

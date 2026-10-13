@@ -301,6 +301,43 @@ describe('PipelineDetails Live Operations View', () => {
     expect(screen.getByTestId('counter-rate')).toHaveTextContent('12,500 rec/s');
   });
 
+  it('renders all counter tiles with populated numbers on succeeded run and none show em dash', async () => {
+    vi.spyOn(runLiveHook, 'useRunLive').mockReturnValue({
+      progress: mockSucceededProgress,
+      connection: 'closed',
+      lastUpdatedAt: Date.now(),
+      error: null,
+    });
+
+    renderPage();
+
+    expect(screen.getByTestId('counter-rows-total')).toHaveTextContent('1,000,000');
+    expect(screen.getByTestId('counter-rows-read')).toHaveTextContent('1,000,000');
+    expect(screen.getByTestId('counter-published')).toHaveTextContent('1,000,000');
+    expect(screen.getByTestId('counter-records-in')).toHaveTextContent('1,000,000');
+    expect(screen.getByTestId('counter-records-out')).toHaveTextContent('950,000');
+    expect(screen.getByTestId('counter-rows-written')).toHaveTextContent('950,000');
+    expect(screen.getByTestId('counter-files-written')).toHaveTextContent('4');
+    expect(screen.getByTestId('counter-bytes-written')).toHaveTextContent('10 MB');
+    expect(screen.getByTestId('counter-errors')).toHaveTextContent('0');
+
+    // Prove that none of these populated tiles show '—'
+    const tileIds = [
+      'counter-rows-total',
+      'counter-rows-read',
+      'counter-published',
+      'counter-records-in',
+      'counter-records-out',
+      'counter-rows-written',
+      'counter-files-written',
+      'counter-bytes-written',
+      'counter-errors',
+    ];
+    for (const id of tileIds) {
+      expect(screen.getByTestId(id)).not.toHaveTextContent('—');
+    }
+  });
+
   it('renders active stage progress with determinate progress bar, tasks and ETA', async () => {
     renderPage();
 

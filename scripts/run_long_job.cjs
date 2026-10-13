@@ -82,22 +82,24 @@ async function main() {
     const counters = {};
     const ids = [
       'rows-total',
-      'rows-written',
-      'rows-dropped',
       'rows-read',
-      'source-rate',
-      'spark-records-read',
-      'spark-records-written',
-      'spark-rate',
-      'hdfs-file-count',
-      'hdfs-bytes',
-      'hdfs-duration',
+      'published',
+      'records-in',
+      'records-out',
+      'rows-written',
+      'files-written',
+      'bytes-written',
+      'errors',
+      'rate',
+      'elapsed',
     ];
     for (const id of ids) {
       try {
         const el = page.getByTestId(`counter-${id}`);
         if (await el.isVisible()) {
-          counters[id] = (await el.innerText()).trim();
+          const rawText = (await el.innerText()).trim();
+          const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
+          counters[id] = lines.length > 1 ? lines[1] : (lines[0] || '—');
         } else {
           counters[id] = '—';
         }
@@ -112,7 +114,7 @@ async function main() {
   snapshots['0s'] = await getCounters();
   console.log('Recorded snapshot at 0s:', JSON.stringify(snapshots['0s']));
 
-  const targetTimes = [15, 30, 45];
+  const targetTimes = [15, 30, 45, 60, 90, 120];
   const recordedTargets = new Set();
 
   while (!isFinished && Date.now() - startTime < 300_000) {

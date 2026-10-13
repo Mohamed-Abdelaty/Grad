@@ -69,3 +69,84 @@ describe('mapToReport', () => {
     expect(r.dataLossPercentage).toBeNull();
   });
 });
+
+describe('mapRawProgress', () => {
+  it('maps errors array to count', async () => {
+    const { mapRawProgress } = await import('../api/runProgress');
+
+    // Case 1: Backend returns an array of strings -> map to array length
+    const res1 = mapRawProgress({
+      runId: 'r-1',
+      status: 'failed',
+      errors: ['First error', 'Second error'],
+      stages: [],
+    });
+    expect(res1.errors).toBe(2);
+
+    // Case 2: Backend returns empty array [] -> map to 0
+    const res2 = mapRawProgress({
+      runId: 'r-2',
+      status: 'succeeded',
+      errors: [],
+      stages: [],
+    });
+    expect(res2.errors).toBe(0);
+
+    // Case 3: Payload has a number -> preserve number
+    const res3 = mapRawProgress({
+      runId: 'r-3',
+      status: 'failed',
+      errors: 5,
+      stages: [],
+    });
+    expect(res3.errors).toBe(5);
+
+    // Case 4: Payload has null/undefined errors -> map to null
+    const res4 = mapRawProgress({
+      runId: 'r-4',
+      status: 'pending',
+      errors: null,
+      stages: [],
+    });
+    expect(res4.errors).toBeNull();
+  });
+
+  it('maps spark, hdfs, throughput samples and counters', async () => {
+    const { mapRawProgress, isRunProgress } = await import('../api/runProgress');
+
+    const raw = {
+      runId: 'run-full-1',
+      status: 'succeeded',
+      mode: 'batch',
+      stages: [{ key: 'source', state: 'done' }],
+      spark: {
+        recordsIn: 1000000,
+        recordsOut: 950000,
+        tasksTotal: 10,
+        tasksDone: 10,
+      },
+      hdfs: {
+        filesWritten: 3,
+        bytesWritten: 25000000,
+        rowsWritten: 950000,
+        verified: true,
+      },
+      throughput: {
+        recordsPerSecond: 5500,
+        samples: [{ t: 100, v: 5000 }, { t: 105, v: 6000 }],
+      },
+    };
+
+    expect(isRunProgress(raw)).toBe(true);
+
+    const mapped = mapRawProgress(raw);
+    expect(mapped.spark.recordsIn).toBe(1000000);
+    expect(mapped.spark.recordsOut).toBe(950000);
+    expect(mapped.hdfs.filesWritten).toBe(3);
+    expect(mapped.hdfs.bytesWritten).toBe(25000000);
+    expect(mapped.hdfs.rowsWritten).toBe(950000);
+    expect(mapped.hdfs.verified).toBe(true);
+    expect(mapped.throughput.recordsPerSecond).toBe(5500);
+    expect(mapped.throughput.samples).toHaveLength(2);
+  });
+});

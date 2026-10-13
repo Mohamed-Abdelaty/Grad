@@ -559,6 +559,14 @@ class RunProgressTracker:
             if published is not None:
                 state["kafka_published"] = published
                 state["kafka_metrics"] = published
+                estimator = self._estimators.get(run_id)
+                if estimator is not None:
+                    estimator.update(published, time.time())
+                    if estimator.records_per_second is not None:
+                        state["throughput_rps"] = estimator.records_per_second
+                        state["throughput_samples"] = estimator.samples
+                        tot = state.get("source_rows_total")
+                        state["eta_seconds"] = estimator.eta_seconds(tot, published)
             if failed is not None:
                 state["kafka_failed"] = failed
             if end_offsets is not None:
