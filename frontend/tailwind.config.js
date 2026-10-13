@@ -12,7 +12,7 @@ export default {
       },
       colors: {
         brand: {
-          light:   '#818cf8', // indigo-400
+          light:   '#a5b4fc', // indigo-300 (WCAG AA compliant on dark background)
           DEFAULT: '#6366f1', // indigo-500
           dark:    '#4f46e5', // indigo-600
           subtle:  'rgba(99, 102, 241, 0.12)',
@@ -26,7 +26,7 @@ export default {
         status: {
           success: '#34d399',
           warning: '#fbbf24',
-          error:   '#f87171',
+          error:   '#fca5a5', // rose-300 (WCAG AA compliant on dark background)
           info:    '#60a5fa',
           neutral: '#94a3b8',
         },

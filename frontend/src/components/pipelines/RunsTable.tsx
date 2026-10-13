@@ -90,6 +90,10 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
   const [debouncedQ, setDebouncedQ] = useState(rawQ);
 
   useEffect(() => {
+    const currentQ = (searchParams.get('q') || '').trim();
+    if (searchInput.trim() === currentQ) {
+      return;
+    }
     const timer = setTimeout(() => {
       setDebouncedQ(searchInput);
       setSearchParams(
@@ -107,7 +111,7 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
       );
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput, setSearchParams]);
+  }, [searchInput, searchParams, setSearchParams]);
 
   const rawSort = searchParams.get('sort');
   const sort = rawSort === 'started_at_asc' ? 'started_at_asc' : 'started_at_desc';

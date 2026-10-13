@@ -420,8 +420,9 @@ export default function PipelineManagement() {
                   </div>
                   {hasUnsavedChanges && (
                     <span
+                      role="status"
                       title="Unsaved changes"
-                      className="h-2 w-2 rounded-full bg-status-warning"
+                      className="h-2 w-2 rounded-full bg-status-warning inline-block"
                       aria-label="Unsaved changes"
                     />
                   )}
@@ -770,6 +771,7 @@ export default function PipelineManagement() {
                 return (
                   <div
                     key={tpl.id}
+                    data-testid={`template-${tpl.id}`}
                     onClick={() => handleSelectTemplate(tpl)}
                     className="p-4 rounded-lg bg-surface-base border border-surface-border hover:border-brand cursor-pointer transition-colors space-y-2 group"
                   >

@@ -11,6 +11,7 @@ import { yaml } from '@codemirror/lang-yaml';
 import { lintGutter, setDiagnostics, Diagnostic } from '@codemirror/lint';
 import { EditorView, keymap } from '@codemirror/view';
 import { indentUnit } from '@codemirror/language';
+import { oneDark } from '@codemirror/theme-one-dark';
 import { Prec } from '@codemirror/state';
 
 export interface EditorDiagnostic {
@@ -77,11 +78,14 @@ const customTheme = EditorView.theme(
     },
     '.cm-lintRange-error': {
       backgroundImage: 'none',
-      textDecoration: 'underline wavy var(--status-error, #f87171) 2px',
+      textDecoration: 'underline wavy var(--status-error, #fca5a5) 2px',
     },
     '.cm-lintRange-warning': {
       backgroundImage: 'none',
       textDecoration: 'underline wavy var(--status-warning, #fbbf24) 2px',
+    },
+    '.ͼq, &.cm-editor .ͼq': {
+      color: '#fca5a5 !important',
     },
   },
   { dark: true }
@@ -203,6 +207,10 @@ export const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(function
       lintGutter(),
       trapKeymap,
       updateListener,
+      EditorView.contentAttributes.of({
+        'aria-label': 'Pipeline YAML configuration editor',
+      }),
+      oneDark,
       customTheme,
     ];
   }, [onCursorChange]);

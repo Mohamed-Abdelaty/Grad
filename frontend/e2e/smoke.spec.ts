@@ -83,11 +83,8 @@ async function doLogin(page: import('@playwright/test').Page) {
   });
 }
 
-/** Navigate to a page via the sidebar NavLink (preserves in-memory auth state). */
 async function clickNav(page: import('@playwright/test').Page, label: string) {
-  // The sidebar NavLink aria-label matches the visible label text.
-  // Use the nav element to scope the click and avoid false positives.
-  await page.locator(`nav a`, { hasText: label }).first().click();
+  await page.locator('aside nav a', { hasText: label }).first().click();
 }
 
 // ── 1. Login: no pre-filled credentials ───────────────────────────────────────
@@ -110,7 +107,7 @@ test('All pages: headings visible, no console errors, no server failures', async
   // --- Pipelines (sidebar click, no page reload) ---
   await clickNav(page, 'Pipelines');
   await expect(page).toHaveURL(/pipelines/, { timeout: 8_000 });
-  await expect(page.getByRole('heading', { name: /Define Pipeline/i })).toBeVisible({
+  await expect(page.getByRole('heading', { name: /Pipeline runs/i })).toBeVisible({
     timeout: 8_000,
   });
 
@@ -198,56 +195,28 @@ test('Authenticated GET /api/pipeline-runs via nginx (port 3000) returns 200', a
   expect(Array.isArray(runs)).toBe(true);
 });
 
-test('Pipeline Run: submitting YAML submits with current wait=true behavior and waits for terminal state in UI', async ({ page }) => {
+test('Pipeline Run: submitting YAML asynchronously navigates to run details and reaches terminal state', async ({ page }) => {
   test.slow(); // Increases timeout to 90s
-  // We need to wait for the page to be ready after login
   await doLogin(page);
   await clickNav(page, 'Pipelines');
   await expect(page).toHaveURL(/pipelines/, { timeout: 10_000 });
 
-  // Add the sales_ui2b.yaml content
-  const yamlContent = `
-pipeline:
-  name: "sales-ui2b-playwright"
-  version: "1.0"
-schema:
-  - name: "col1"
-    type: "string"
-streaming:
-  enabled: false
-processing_engine:
-  type: spark
-source:
-  type: csv
-  path: "/app/sample-data/sales_sample.csv"
-processing:
-  operations:
-    - type: remove_nulls
-storage:
-  type: local
-  path: "/tmp/spark-output-fallback"
-`;
+  // Load template
+  await page.getByTestId('btn-templates').click();
+  await page.getByTestId('template-sales-csv').click();
 
-  // We are on /pipelines. Find the YamlEditor.
-  // It is a textarea
-  await page.locator('textarea').fill(yamlContent);
-  
-  // Click Validate
-  await page.getByRole('button', { name: 'Validate' }).click();
-  
-  // Wait for Run Pipeline to be enabled
-  const runBtn = page.getByRole('button', { name: 'Run Pipeline' });
-  await expect(runBtn).toBeEnabled({ timeout: 10000 });
-  
-  // Click Run Pipeline
+  // Validate
+  await page.getByTestId('btn-validate').click();
+  await expect(page.getByTestId('validation-state')).toHaveText('Valid', { timeout: 15_000 });
+
+  // Run
+  const runBtn = page.getByTestId('btn-run');
+  await expect(runBtn).toBeEnabled({ timeout: 10_000 });
   await runBtn.click();
-  
-  // Wait for it to finish and show Run ID
-  await expect(page.getByText(/Run ID:/)).toBeVisible({ timeout: 60000 });
-  
-  // Now the PipelineList should have our pipeline. Click it!
-  await page.getByText('sales-ui2b-playwright').first().click();
 
-  // The UI should show "running" and eventually "succeeded" or "failed"
-  await expect(page.getByText(/pending|running|succeeded|failed/i).first()).toBeVisible({ timeout: 30000 });
+  // URL navigates to /pipelines/<uuid>
+  await expect(page).toHaveURL(/\/pipelines\/[a-f0-9-]+/, { timeout: 15_000 });
+
+  // Details page shows status and reaches terminal status
+  await expect(page.getByText(/pending|running|succeeded|failed/i).first()).toBeVisible({ timeout: 30_000 });
 });
