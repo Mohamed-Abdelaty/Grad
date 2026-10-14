@@ -606,6 +606,7 @@ export default function ReportDetails() {
 
             <div className="flex items-center gap-2 no-print">
               <select
+                aria-label="Filter log level"
                 value={logLevel}
                 onChange={(e) => setLogLevel(e.target.value)}
                 className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none"

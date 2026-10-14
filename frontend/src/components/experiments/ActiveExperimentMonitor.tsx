@@ -519,6 +519,7 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
           <div className="flex items-center gap-2">
             {/* Level filter */}
             <select
+              aria-label="Filter log level"
               value={selectedLogLevel}
               onChange={(e) => setSelectedLogLevel(e.target.value)}
               className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none"

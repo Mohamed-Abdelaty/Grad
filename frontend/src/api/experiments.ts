@@ -219,4 +219,4 @@ export async function analyzeReliability(
   return res.data;
 }
 
-export { getReports, getReport, listReports } from './reports';
+export { getReports, getReport, listReports, mapToReport } from './reports';
