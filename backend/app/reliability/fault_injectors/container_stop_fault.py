@@ -30,6 +30,11 @@ class ContainerStopFault(BaseFaultInjector):
     """Stop the target container; start it back up on rollback."""
 
     fault_type = "container_stop"
+    label = "Container stop"
+    description = "Stops the target container to simulate total node or service crash."
+    blast_radius = "The service is unavailable for the whole duration."
+    params = []
+    icon = "square"
 
     def inject(self, target_service: str, params: dict) -> dict:
         """

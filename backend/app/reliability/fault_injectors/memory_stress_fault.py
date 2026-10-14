@@ -35,6 +35,11 @@ class MemoryStressFault(BaseFaultInjector):
     """Run stress-ng VM workers inside the target container."""
 
     fault_type = "memory_stress"
+    label = "Memory stress"
+    description = "Allocates memory using stress workloads to simulate memory leaks."
+    blast_radius = "Potential out-of-memory errors or severe GC pauses on the target."
+    params = [{"name": "memory_bytes", "type": "str", "default": "256M"}]
+    icon = "database"
 
     def inject(self, target_service: str, params: dict) -> dict:
         """

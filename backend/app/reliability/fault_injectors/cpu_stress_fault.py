@@ -43,6 +43,11 @@ class CpuStressFault(BaseFaultInjector):
     """Run stress-ng CPU stress inside the target container."""
 
     fault_type = "cpu_stress"
+    label = "CPU stress"
+    description = "Consumes CPU cores using stress workloads to simulate resource exhaustion."
+    blast_radius = "Increased latency and thread throttling on the target."
+    params = [{"name": "cores", "type": "int", "min": 1, "max": 4, "default": 2}]
+    icon = "cpu"
 
     def inject(self, target_service: str, params: dict) -> dict:
         """

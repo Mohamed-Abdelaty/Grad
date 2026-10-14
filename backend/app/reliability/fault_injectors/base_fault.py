@@ -82,6 +82,12 @@ class BaseFaultInjector(ABC):
     fault_type: ClassVar[str] = ""
     """Registry key — must match a value from the ``ALLOWED_FAULT_TYPES`` Literal."""
 
+    label: ClassVar[str] = ""
+    description: ClassVar[str] = ""
+    blast_radius: ClassVar[str] = ""
+    params: ClassVar[list[dict[str, Any]]] = []
+    icon: ClassVar[str] = "square"
+
     def __init__(self, docker_controller: Any) -> None:
         """Accept DockerController via dependency injection."""
         # ARCHITECTURAL RULE: injectors receive DockerController — they never

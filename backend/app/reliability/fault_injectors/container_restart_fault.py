@@ -25,6 +25,11 @@ class ContainerRestartFault(BaseFaultInjector):
     """Restart the target container immediately."""
 
     fault_type = "container_restart"
+    label = "Container restart"
+    description = "Restarts the target container to simulate transient unexpected reboot."
+    blast_radius = "Brief service interruption while the process restarts."
+    params = []
+    icon = "refresh-cw"
 
     def inject(self, target_service: str, params: dict) -> dict:
         """

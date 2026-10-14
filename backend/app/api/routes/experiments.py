@@ -43,6 +43,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["experiments"])
 
 
+from app.api.deps import get_current_user
+
 @router.get(
     "/api/experiments/allowed-targets",
     summary="List all allowed target services for chaos experiments",
@@ -52,6 +54,19 @@ async def get_allowed_targets() -> dict:
     from app.reliability.safety import ALLOWED_TARGET_SERVICES
 
     return {"allowed_services": sorted(ALLOWED_TARGET_SERVICES)}
+
+
+@router.get(
+    "/api/experiments/options",
+    summary="List available targets, faults, and limits for chaos experiments",
+)
+async def get_experiment_options_endpoint(
+    current_user: str = Depends(get_current_user),
+) -> dict:
+    """Return allow-listed non-critical targets, registered faults, and duration limits."""
+    from app.reliability.safety import get_experiment_options
+
+    return get_experiment_options()
 
 # ── In-memory cancellation registry ───────────────────────────────────────────
 # Maps experiment_run_id (str) → ExperimentRunner instance (if running).

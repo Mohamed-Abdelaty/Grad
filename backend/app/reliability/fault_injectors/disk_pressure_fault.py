@@ -44,6 +44,11 @@ class DiskPressureFault(BaseFaultInjector):
     """Write a bounded scratch file to consume disk space in the target container."""
 
     fault_type = "disk_pressure"
+    label = "Disk pressure"
+    description = "Fills temporary disk space to simulate disk quota exhaustion."
+    blast_radius = "Write operations to disk will fail due to lack of space."
+    params = [{"name": "disk_size_mb", "type": "int", "min": 10, "max": 500, "default": 100}]
+    icon = "hard-drive"
 
     def inject(self, target_service: str, params: dict) -> dict:
         """

@@ -35,6 +35,11 @@ class NetworkDisruptionFault(BaseFaultInjector):
     """Apply 100% packet loss via tc netem; remove it on rollback."""
 
     fault_type = "network_disruption"
+    label = "Network disruption"
+    description = "Drops network packets on the container interface via traffic control."
+    blast_radius = "Target cannot communicate with peer services during disruption."
+    params = []
+    icon = "wifi-off"
 
     def inject(self, target_service: str, params: dict) -> dict:
         """

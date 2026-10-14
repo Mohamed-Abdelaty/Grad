@@ -16,6 +16,11 @@ class ServiceDelayFault(BaseFaultInjector):
     """Add latency to a container's ``eth0`` using the controller's safe exec API."""
 
     fault_type = "service_delay"
+    label = "Service delay"
+    description = "Adds latency to service network interface using netem."
+    blast_radius = "Elevated response latency and caller timeouts."
+    params = [{"name": "delay_ms", "type": "int", "min": 10, "max": 5000, "default": 200}]
+    icon = "clock"
     default_delay_ms = 200
 
     def inject(self, target_service: str, params: dict[str, Any]) -> dict[str, Any]:

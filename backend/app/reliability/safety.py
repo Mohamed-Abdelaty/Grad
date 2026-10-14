@@ -85,6 +85,84 @@ TERMINAL_EXPERIMENT_STATUSES: frozenset[str] = frozenset(
     {"succeeded", "failed", "cancelled"}
 )
 
+CRITICAL_PLATFORM_SERVICES: frozenset[str] = frozenset({"postgres", "backend"})
+"""Platform-critical services that must never be offered as targetable in the UI options."""
+
+TARGET_METADATA: dict[str, dict[str, str]] = {
+    "kafka": {
+        "label": "Kafka broker",
+        "description": "Distributed message broker handling event streams and pipeline topics.",
+        "risk": "medium",
+    },
+    "spark-master": {
+        "label": "Spark master",
+        "description": "Cluster resource manager and driver coordinator for distributed processing.",
+        "risk": "high",
+    },
+    "spark-worker": {
+        "label": "Spark worker",
+        "description": "Distributed computing worker executing Spark data transformations.",
+        "risk": "medium",
+    },
+    "namenode": {
+        "label": "HDFS NameNode",
+        "description": "Master metadata repository for the distributed file system.",
+        "risk": "high",
+    },
+    "datanode": {
+        "label": "HDFS DataNode",
+        "description": "Block storage node hosting distributed file system partitions.",
+        "risk": "low",
+    },
+}
+
+
+def get_experiment_options() -> dict[str, Any]:
+    """
+    Build the single source of truth options for chaos experiments.
+
+    Dynamically inspects ALLOWED_TARGET_SERVICES and FAULT_INJECTOR_REGISTRY.
+    Filters out critical platform services (postgres, backend).
+    """
+    from app.reliability.fault_injectors.base_fault import FAULT_INJECTOR_REGISTRY
+
+    targets = []
+    for service_name in sorted(ALLOWED_TARGET_SERVICES):
+        if service_name in CRITICAL_PLATFORM_SERVICES:
+            continue
+        meta = TARGET_METADATA.get(service_name, {})
+        targets.append(
+            {
+                "id": service_name,
+                "label": meta.get("label", service_name.replace("-", " ").title()),
+                "description": meta.get("description", f"{service_name} service"),
+                "risk": meta.get("risk", "medium"),
+                "service": service_name,
+            }
+        )
+
+    faults = []
+    for fault_type, cls in sorted(FAULT_INJECTOR_REGISTRY.items()):
+        faults.append(
+            {
+                "id": fault_type,
+                "label": getattr(cls, "label", "") or fault_type.replace("_", " ").capitalize(),
+                "description": getattr(cls, "description", "") or f"Fault injector for {fault_type}",
+                "blastRadius": getattr(cls, "blast_radius", "") or "The service is unavailable for the duration.",
+                "params": getattr(cls, "params", []) or [],
+                "icon": getattr(cls, "icon", "square") or "square",
+            }
+        )
+
+    return {
+        "targets": targets,
+        "faults": faults,
+        "limits": {
+            "minDurationSeconds": 1,
+            "maxDurationSeconds": MAX_FAULT_DURATION_SECONDS,
+        },
+    }
+
 
 class SafetyValidator:
     """
