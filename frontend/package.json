@@ -28,9 +28,13 @@
     "react-router-dom": "^6.26.2",
     "recharts": "^2.13.0",
     "sonner": "^2.0.8",
+    "three": "0.169.0",
+    "@react-three/drei": "9.114.0",
+    "@react-three/fiber": "8.17.10",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@types/three": "0.169.0",
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^6.5.0",

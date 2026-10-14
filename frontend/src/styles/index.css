@@ -21,6 +21,12 @@
     --brand-hover:        #a5b4fc; /* indigo-300 */
     --brand-subtle:       rgba(99, 102, 241, 0.12);
 
+    /* Stage colors */
+    --stage-source:       #38bdf8; /* sky-400 */
+    --stage-kafka:        #fb923c; /* orange-400 */
+    --stage-spark:        #a855f7; /* purple-500 */
+    --stage-hdfs:         #34d399; /* emerald-400 */
+
     /* Status */
     --status-success:     #34d399; /* emerald-400 */
     --status-success-bg:  rgba(52, 211, 153, 0.12);
