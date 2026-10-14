@@ -277,3 +277,53 @@ export function resourceSeries(
     bytes: s.bytes,
   }));
 }
+
+/**
+ * Maps ExperimentDetail to a truthful RunProgress snapshot for compact pipeline visualization.
+ */
+export function experimentToProgress(detail: ExperimentDetail): any {
+  if (!detail) return null;
+
+  const faultObj =
+    detail.faultPhase && detail.faultPhase !== 'not_injected'
+      ? {
+          experimentId: detail.id,
+          target: detail.targetService,
+          type: detail.faultType,
+          phase: detail.faultPhase as 'injected' | 'recovering' | 'recovered',
+          injectedAt: detail.faultInjectedAt || detail.runStartedAt || new Date().toISOString(),
+          durationSeconds: detail.durationSeconds,
+          recoverySeconds: detail.results?.recoveryTimeSeconds ?? null,
+        }
+      : null;
+
+  return {
+    runId: detail.pipelineRunId || detail.id,
+    status:
+      detail.status === 'succeeded'
+        ? 'succeeded'
+        : detail.status === 'failed'
+        ? 'failed'
+        : detail.status === 'cancelled'
+        ? 'cancelled'
+        : 'running',
+    mode: 'batch',
+    startedAt: detail.runStartedAt || detail.createdAt || new Date().toISOString(),
+    updatedAt: detail.serverTime || new Date().toISOString(),
+    completedAt: detail.runFinishedAt || null,
+    stages: [
+      { key: 'source', state: 'pending', startedAt: null, finishedAt: null, error: null },
+      { key: 'kafka', state: 'pending', startedAt: null, finishedAt: null, error: null },
+      { key: 'spark', state: 'pending', startedAt: null, finishedAt: null, error: null },
+      { key: 'hdfs', state: 'pending', startedAt: null, finishedAt: null, error: null },
+    ],
+    source: { type: 'csv', rowsTotal: null, rowsRead: null },
+    kafka: { topic: null, partitions: null, published: null, failed: 0, endOffsets: null, consumerLag: null },
+    spark: { appId: null, tasksTotal: null, tasksDone: null, recordsIn: null, recordsOut: null, durationMs: null, activeStage: null },
+    hdfs: { path: null, filesWritten: null, bytesWritten: null, rowsWritten: null, verified: null },
+    throughput: { recordsPerSecond: null, samples: [] },
+    etaSeconds: null,
+    errors: null,
+    fault: faultObj,
+  };
+}
