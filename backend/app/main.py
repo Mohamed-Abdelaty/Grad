@@ -15,6 +15,7 @@ Phase 2 additions
 import json
 import logging
 import logging.config
+import re
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from typing import AsyncGenerator
@@ -87,14 +88,49 @@ class _JsonFormatter(logging.Formatter):
         return json.dumps(payload)
 
 
+class SanitizeSensitiveFilter(logging.Filter):
+    """Ensure sensitive tokens like download tokens are never logged in any logger."""
+
+    _PATTERN = re.compile(r"token=[^\s\"'\\&]+", re.IGNORECASE)
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = self._PATTERN.sub("auth=[REDACTED]", record.msg)
+        if record.args:
+            if isinstance(record.args, dict):
+                record.args = {
+                    k: (self._PATTERN.sub("auth=[REDACTED]", v) if isinstance(v, str) else v)
+                    for k, v in record.args.items()
+                }
+            elif isinstance(record.args, tuple) or isinstance(record.args, list):
+                new_args = []
+                for arg in record.args:
+                    if isinstance(arg, str):
+                        new_args.append(self._PATTERN.sub("auth=[REDACTED]", arg))
+                    else:
+                        new_args.append(arg)
+                record.args = tuple(new_args)
+        return True
+
+
 def _configure_logging(log_level: str) -> None:
-    """Apply the JSON formatter to the root logger."""
+    """Apply the JSON formatter and security sanitizer to the root and uvicorn loggers."""
     handler = logging.StreamHandler()
     handler.setFormatter(_JsonFormatter())
+    sanitizer = SanitizeSensitiveFilter()
+    handler.addFilter(sanitizer)
+
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)
+    root.addFilter(sanitizer)
     root.setLevel(log_level.upper())
+
+    for uvicorn_logger_name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+        u_log = logging.getLogger(uvicorn_logger_name)
+        u_log.addFilter(sanitizer)
+        for h in u_log.handlers:
+            h.addFilter(sanitizer)
 
 
 # ── Application lifespan ───────────────────────────────────────────────────────

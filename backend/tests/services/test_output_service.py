@@ -584,3 +584,129 @@ def test_preview_output_bounded_batches():
     assert len(preview["rows"]) == 50
     assert preview["truncated"] is True
     assert preview["rowCount"] == rows_total
+    assert preview["totalRows"] == rows_total
+    assert preview["limit"] == 50
+
+
+# ── 10. Exhaustive Status Codes (400, 401, 404, 409, 413, 422, 503) ────────────
+
+
+@pytest.mark.asyncio
+async def test_output_status_codes_all_cases():
+    """Verify all required status codes: 400, 401, 404, 409, 413, 422, 503."""
+    db = AsyncMock()
+
+    # 400: Invalid output path
+    bad_path_run = PipelineRun(
+        id=uuid.uuid4(), status="succeeded", output_path="/data/../etc/passwd"
+    )
+    db.get.return_value = bad_path_run
+    with pytest.raises(HTTPException) as exc_400:
+        await get_run_output_metadata(str(bad_path_run.id), db=db)
+    assert exc_400.value.status_code == 400
+    assert exc_400.value.detail == "Output path is not allowed"
+
+    # 401: Invalid or expired download token
+    with pytest.raises(HTTPException) as exc_401:
+        await download_run_output(str(uuid.uuid4()), token="invalid.token.signature", db=db)
+    assert exc_401.value.status_code == 401
+    assert "Invalid or expired" in exc_401.value.detail
+
+    # 404: Unknown run ID
+    db.get.return_value = None
+    with pytest.raises(HTTPException) as exc_404:
+        await get_run_output_metadata(str(uuid.uuid4()), db=db)
+    assert exc_404.value.status_code == 404
+
+    # 404: Missing output directory or files
+    ok_run = PipelineRun(id=uuid.uuid4(), status="succeeded", output_path="/data/test")
+    db.get.return_value = ok_run
+    with patch("app.api.routes.pipeline_runs.describe_output", side_effect=OutputNotFoundError("No output files found")):
+        with pytest.raises(HTTPException) as exc_404_files:
+            await get_run_output_metadata(str(ok_run.id), db=db)
+        assert exc_404_files.value.status_code == 404
+
+    # 409: Run running or failed (not succeeded)
+    for bad_status in ("running", "failed", "cancelled", "pending"):
+        unready_run = PipelineRun(id=uuid.uuid4(), status=bad_status, output_path="/data/test")
+        db.get.return_value = unready_run
+        with pytest.raises(HTTPException) as exc_409:
+            await get_run_output_metadata(str(unready_run.id), db=db)
+        assert exc_409.value.status_code == 409
+        assert exc_409.value.detail == "Run has no completed output"
+
+    # 413: Output too large for download link request
+    db.get.return_value = ok_run
+    with patch("app.api.routes.pipeline_runs.describe_output", return_value={"totalSizeBytes": 600 * 1024 * 1024}):
+        with pytest.raises(HTTPException) as exc_413:
+            await create_output_download_link(
+                str(ok_run.id),
+                body=DownloadLinkRequest(format="csv"),
+                current_user="admin",
+                db=db,
+            )
+        assert exc_413.value.status_code == 413
+        assert "maximum downloadable size" in exc_413.value.detail
+
+    # 422: Malformed UUID format in path
+    with pytest.raises(HTTPException) as exc_422:
+        await get_run_output_metadata("not-a-valid-uuid-12345", db=db)
+    assert exc_422.value.status_code == 422
+
+    # 503: Storage/HDFS unavailable
+    with patch("app.api.routes.pipeline_runs.describe_output", side_effect=StorageUnavailableError("Storage is unavailable")):
+        with pytest.raises(HTTPException) as exc_503:
+            await get_run_output_metadata(str(ok_run.id), db=db)
+        assert exc_503.value.status_code == 503
+        assert exc_503.value.detail == "Storage is unavailable"
+
+
+# ── 11. Temp File Cleanup Proof ────────────────────────────────────────────────
+
+
+def test_build_parquet_file_temp_cleanup_after_download():
+    """Verify build_parquet_file creates temp file and cleanup() removes it completely."""
+    run_id = uuid.uuid4()
+    p = Pipeline(name="test-temp-cleanup")
+    run = PipelineRun(id=run_id, output_path="/data/temp_test", pipeline=p, status="succeeded")
+
+    schema = pa.schema([("id", pa.int64())])
+    table = pa.Table.from_arrays([pa.array([1, 2, 3])], schema=schema)
+    buf = io.BytesIO()
+    pq.write_table(table, buf)
+    data = buf.getvalue()
+
+    mock_client = MagicMock()
+    mock_client.path_exists.return_value = True
+    mock_client._normalize_hdfs_path.side_effect = lambda p: p.replace("hdfs://namenode:9000", "")
+    mock_client._hdfs_client.list.return_value = [("part-0.parquet", {"length": len(data)})]
+    mock_client._hdfs_client.read.side_effect = [
+        MockHdfsStream(data),  # describe
+        MockHdfsStream(data),  # build
+    ]
+
+    temp_path, cleanup = build_parquet_file(run, client=mock_client)
+    assert os.path.exists(temp_path), "Temp parquet file must exist during stream"
+
+    cleanup()
+    assert not os.path.exists(temp_path), "Temp parquet file must be removed after cleanup()"
+
+
+# ── 12. Security Proof: Download Token is Never Logged ────────────────────────
+
+
+def test_download_token_never_logged(caplog):
+    """Verify that creating, verifying, and requesting tokens never writes raw token to logs."""
+    import logging
+    caplog.set_level(logging.DEBUG)
+
+    run_id = uuid.uuid4()
+    p = Pipeline(name="test-token-log")
+    run = PipelineRun(id=run_id, output_path="/data/token_log", pipeline=p, status="succeeded")
+
+    raw_token = create_download_token(run, "csv", "admin")
+    verify_download_token(raw_token, str(run_id), "csv")
+
+    for record in caplog.records:
+        assert raw_token not in record.message
+        assert raw_token not in str(record.args)

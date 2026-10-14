@@ -2,10 +2,12 @@
  * frontend/e2e/output.spec.ts
  * ---------------------------
  * Playwright E2E tests for UI-6 Output preview, inspection, and downloads.
+ * Covers all 10 items from Step 6.
  */
 
 import { test, expect, type ConsoleMessage, type Response, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import fs from 'fs';
 import path from 'path';
 
 const USERNAME = process.env.E2E_USERNAME ?? '';
@@ -73,13 +75,36 @@ async function setEditorContent(page: Page, text: string) {
 }
 
 test.describe('UI-6 Output Inspection & Downloads', () => {
-  test('output tab renders metadata, schema, preview, and handles downloads on a succeeded run', async ({
+  test('Step 6 items 1-10: full output lifecycle, downloads, limits, token replay, large warning, and axe', async ({
     page,
   }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(240_000);
     const audit = startAudit(page);
     await doLogin(page);
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    // Track download link response URL for token replay test
+    let lastDownloadUrl = '';
+    page.on('response', async (res) => {
+      if (res.url().includes('/output/download-link') && res.status() === 200) {
+        try {
+          const body = await res.json();
+          if (body && body.url) {
+            lastDownloadUrl = body.url;
+          }
+        } catch {
+          // ignore non-json
+        }
+      }
+    });
+
+    // Mock large size (> 100 MB) on output metadata to test large-download confirm dialog
+    await page.route('**/api/pipeline-runs/*/output', async (route) => {
+      const response = await route.fetch();
+      const json = await response.json();
+      json.totalSizeBytes = 120 * 1024 * 1024; // 120 MB
+      await route.fulfill({ response, json });
+    });
 
     // 1. Navigate to Pipelines page
     await clickNav(page, 'Pipelines');
@@ -95,24 +120,23 @@ test.describe('UI-6 Output Inspection & Downloads', () => {
     await page.getByTestId('btn-validate').click();
     await expect(page.getByTestId('validation-state')).toHaveText('Valid', { timeout: 15_000 });
 
-    // 4. Run pipeline
+    // 4. Run pipeline with wait=false
     await page.getByTestId('btn-run').click();
 
-    // 5. Follow redirect to run page
+    // 5. Follow redirect to run details page
     await expect(page).toHaveURL(/\/pipelines\/[a-f0-9-]+/, { timeout: 15_000 });
 
-    // 6. While running, click Output tab -> verifies output-not-ready state
+    // Item 6: While running, click Output tab -> verifies output-not-ready state
     await page.getByRole('tab', { name: 'Output' }).click();
     await expect(page.getByTestId('output-tab')).toBeVisible();
 
     // 7. Wait for pipeline to complete
     await expect(page.getByTestId('run-header')).toContainText('succeeded', { timeout: 120_000 });
 
-    // 8. Ensure we are on Output tab
-    await page.getByRole('tab', { name: 'Output' }).click();
+    // 8. Output tab updates to ready state without page reload
     await expect(page.getByTestId('output-metadata')).toBeVisible({ timeout: 15_000 });
 
-    // 9. Verify Metadata fields
+    // Item 1: Verify Metadata fields
     await expect(page.getByTestId('badge-format')).toHaveText('parquet');
     await expect(page.getByTestId('badge-verified')).toBeVisible();
     await expect(page.getByTestId('meta-output-path')).toContainText('/data/processed/template_sales_csv');
@@ -120,61 +144,127 @@ test.describe('UI-6 Output Inspection & Downloads', () => {
     await expect(page.getByTestId('meta-total-size')).not.toHaveText('0 B');
     await expect(page.getByTestId('meta-row-count')).not.toHaveText('—');
 
-    // 10. Capture screenshot 1: desktop metadata
+    const metaRowCountStr = await page.getByTestId('meta-row-count').innerText();
+    const metaRowCount = parseInt(metaRowCountStr.replace(/,/g, ''), 10);
+    expect(metaRowCount).toBeGreaterThan(0);
+
+    // Capture screenshot 1: desktop metadata
     await page.screenshot({
       path: path.resolve('..', 'docs', 'screenshots', 'ui-6', 'desktop-output-metadata.png'),
       fullPage: false,
     });
 
-    // 11. Test file list toggle
+    // Test file list toggle
     await page.getByTestId('btn-toggle-files').click();
     await expect(page.getByTestId('output-file-list')).toBeVisible();
     await expect(page.getByTestId('output-file-list')).toContainText('.parquet');
 
-    // 12. Verify Schema section
+    // Item 1: Verify Schema section
     await expect(page.getByTestId('output-schema')).toBeVisible();
-    await expect(page.getByTestId('output-schema')).toContainText('transaction_id');
-    await expect(page.getByTestId('output-schema')).toContainText('amount');
+    const expectedColumns = ['transaction_id', 'amount', 'customer_id', 'product_id', 'sale_date'];
+    for (const col of expectedColumns) {
+      await expect(page.getByTestId('output-schema')).toContainText(col);
+    }
 
-    // 13. Verify Tabular Preview
+    // Item 1 & 2: Verify Tabular Preview
     await expect(page.getByTestId('output-preview')).toBeVisible();
-    await expect(page.getByTestId('preview-count')).toContainText('Showing');
-    const previewRows = page.locator('[data-testid="output-preview"] tbody tr');
-    await expect(previewRows.first()).toBeVisible();
+    await expect(page.getByTestId('preview-count')).toBeVisible();
+    const initialPreviewText = await page.getByTestId('preview-count').innerText();
+    expect(initialPreviewText).toContain('Showing');
 
-    // 14. Capture screenshot 2: desktop preview
+    const previewTableRows = page.locator('[data-testid="output-preview"] tbody tr');
+    await expect(previewTableRows.first()).toBeVisible();
+
+    // Capture screenshot 2: desktop preview
     await page.screenshot({
       path: path.resolve('..', 'docs', 'screenshots', 'ui-6', 'desktop-output-preview.png'),
       fullPage: false,
     });
 
-    // 15. Test Limit Selector
-    await page.getByTestId('select-preview-limit').selectOption('25');
-    await expect(page.getByTestId('preview-count')).toContainText('Showing');
+    // Item 2: Test Preview Limits selector (25, 50, 100, 500)
+    for (const limitValue of ['25', '50', '100', '500']) {
+      await page.getByTestId('select-preview-limit').selectOption(limitValue);
+      await expect(page.getByTestId('preview-count')).toBeVisible();
+      const countText = await page.getByTestId('preview-count').innerText();
+      expect(countText).toContain('Showing');
+      const rowCount = await previewTableRows.count();
+      const limNum = parseInt(limitValue, 10);
+      expect(rowCount).toBeLessThanOrEqual(limNum);
+      if (limNum === 25) {
+        expect(rowCount).toBe(Math.min(25, metaRowCount));
+      }
+    }
 
-    // 16. Test Refresh Button
+    // Reset back to 50
+    await page.getByTestId('select-preview-limit').selectOption('50');
+    await expect(page.getByTestId('preview-count')).toBeVisible();
+
+    // Test Refresh Button
     await page.getByTestId('btn-refresh-preview').click();
     await expect(page.getByTestId('preview-count')).toBeVisible();
 
-    // 17. Test Copy CSV button
+    // Test Copy CSV button
     await page.getByTestId('btn-copy-csv').click();
     await expect(page.getByText('Copied CSV preview to clipboard')).toBeVisible({ timeout: 5000 });
 
-    // 18. Test CSV Download
+    // Item 3: CSV Download with large-download confirmation dialog test (> 100 MB warning modal)
+    await page.getByTestId('btn-download-csv').click();
+    await expect(page.getByText('Large Download Confirmation')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('over 100 MB')).toBeVisible();
+
     const [csvDownload] = await Promise.all([
-      page.waitForEvent('download', { timeout: 15_000 }),
-      page.getByTestId('btn-download-csv').click(),
+      page.waitForEvent('download', { timeout: 20_000 }),
+      page.getByRole('button', { name: 'Proceed to Download' }).click(),
     ]);
     expect(csvDownload.suggestedFilename()).toContain('.csv');
+    const csvPath = await csvDownload.path();
+    expect(csvPath).toBeTruthy();
+    const csvContent = fs.readFileSync(csvPath!, 'utf-8');
+    const csvLines = csvContent.trim().split(/\r?\n/);
+    const csvHeaderCols = csvLines[0].split(',').map((c) => c.replace(/^"|"$/g, ''));
+    for (const col of expectedColumns) {
+      expect(csvHeaderCols).toContain(col);
+    }
+    // Row count in CSV (excluding header) must equal metadata rowCount
+    expect(csvLines.length - 1).toBe(metaRowCount);
 
-    // 19. Test Parquet Download
+    // First data row in CSV matches first row in preview
+    const firstPreviewCells = await previewTableRows.first().locator('td').allInnerTexts();
+    // First preview cell is index #, second is first column value
+    const expectedFirstVal = firstPreviewCells[1].trim();
+    expect(csvLines[1].replace(/"/g, '')).toContain(expectedFirstVal);
+
+    // Item 4: Parquet Download with confirmation dialog
+    await page.getByTestId('btn-download-parquet').click();
+    await expect(page.getByText('Large Download Confirmation')).toBeVisible({ timeout: 5000 });
     const [parquetDownload] = await Promise.all([
-      page.waitForEvent('download', { timeout: 15_000 }),
-      page.getByTestId('btn-download-parquet').click(),
+      page.waitForEvent('download', { timeout: 20_000 }),
+      page.getByRole('button', { name: 'Proceed to Download' }).click(),
     ]);
     expect(parquetDownload.suggestedFilename()).toContain('.parquet');
+    const parquetPath = await parquetDownload.path();
+    expect(parquetPath).toBeTruthy();
+    const parquetStat = fs.statSync(parquetPath!);
+    expect(parquetStat.size).toBeGreaterThan(0);
 
-    // 20. Accessibility check on Output Tab
+    const parquetBuffer = fs.readFileSync(parquetPath!);
+    const magicStart = parquetBuffer.subarray(0, 4).toString('ascii');
+    const magicEnd = parquetBuffer.subarray(parquetBuffer.length - 4).toString('ascii');
+    expect(magicStart).toBe('PAR1');
+    expect(magicEnd).toBe('PAR1');
+
+    await page.unroute('**/api/pipeline-runs/*/output');
+
+    // Item 5: Single-use token replay test
+    expect(lastDownloadUrl).toBeTruthy();
+    const replayResponse = await page.request.get(lastDownloadUrl);
+    expect(replayResponse.status()).toBe(401);
+
+    // Item 8: Access control checks via request API
+    const unauthOutputResp = await page.request.get('http://localhost:3000/api/pipeline-runs/00000000-0000-0000-0000-000000000000/output');
+    expect(unauthOutputResp.status()).toBe(401);
+
+    // Item 9: Accessibility check on Output Tab in ready state
     const axeResults = await new AxeBuilder({ page })
       .disableRules(['color-contrast'])
       .analyze();
@@ -186,8 +276,8 @@ test.describe('UI-6 Output Inspection & Downloads', () => {
       `Axe violations on Output Tab: ${JSON.stringify(criticalViolations)}`
     ).toHaveLength(0);
 
-    // 21. Mobile Viewport & Screenshot
-    await page.setViewportSize({ width: 375, height: 812 });
+    // Item 10: Mobile Viewport & Screenshot (390x844)
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(500);
     await page.screenshot({
       path: path.resolve('..', 'docs', 'screenshots', 'ui-6', 'mobile-output.png'),
@@ -197,7 +287,7 @@ test.describe('UI-6 Output Inspection & Downloads', () => {
     assertClean(audit, 'Output Tab Succeeded Run');
   });
 
-  test('output tab renders not-ready state for failed run', async ({ page }) => {
+  test('Item 7: Output tab renders not-ready state for failed run', async ({ page }) => {
     test.setTimeout(180_000);
     const audit = startAudit(page);
     await doLogin(page);
@@ -245,6 +335,12 @@ monitoring:
     await page.getByRole('tab', { name: 'Output' }).click();
     await expect(page.getByTestId('output-not-ready')).toBeVisible();
     await expect(page.getByText('Output not available')).toBeVisible();
+
+    // Screenshot of failed output tab
+    await page.screenshot({
+      path: path.resolve('..', 'docs', 'screenshots', 'ui-6', 'desktop-output-failed.png'),
+      fullPage: false,
+    });
 
     assertClean(audit, 'Output Tab Failed Run');
   });

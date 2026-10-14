@@ -177,3 +177,23 @@ def test_storage_verification_failure_sets_error_and_unverified() -> None:
     hdfs_stage = next(s for s in progress["stages"] if s["key"] == "hdfs")
     assert hdfs_stage["state"] == "error"
     assert progress["hdfs"]["verified"] is False
+
+
+def test_get_part_files_summary_filters_non_part_files() -> None:
+    """get_part_files_summary counts only .parquet data part files, ignoring _SUCCESS, _temporary, .crc, hidden files."""
+    client = HdfsStorageClient(namenode_url="http://mock-namenode:9870", user="testuser")
+    mock_insecure_client = MagicMock()
+    mock_insecure_client.list.return_value = [
+        ("_SUCCESS", {"length": 0, "type": "FILE"}),
+        ("_temporary", {"length": 0, "type": "DIRECTORY"}),
+        (".hidden_file.parquet", {"length": 100, "type": "FILE"}),
+        ("part-00000.parquet", {"length": 512, "type": "FILE"}),
+        ("part-00001.parquet", {"length": 1024, "type": "FILE"}),
+        ("checksum.crc", {"length": 12, "type": "FILE"}),
+    ]
+    with patch.object(client, "_build_client", return_value=mock_insecure_client):
+        result = client.get_part_files_summary("/data/output/sales")
+        assert result == {
+            "fileCount": 2,
+            "length": 1536,
+        }

@@ -430,6 +430,8 @@ def preview_output(
         "columns": meta["columns"],
         "rows": rows,
         "rowCount": meta["rowCount"],
+        "totalRows": meta["rowCount"],
+        "limit": limit,
         "truncated": truncated,
         "filesRead": files_read,
     }

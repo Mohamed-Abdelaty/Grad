@@ -301,6 +301,42 @@ class HdfsStorageClient:
             logger.debug("content_summary failed for '%s': %s", path, exc)
             return None
 
+    def get_part_files_summary(self, path: str) -> dict[str, int] | None:
+        """
+        Query HDFS directory entries and count only data part files
+        (excluding _SUCCESS, _temporary, .crc, hidden files), matching
+        the output preview file filter.
+
+        Parameters
+        ----------
+        path : str
+            HDFS path to query.
+
+        Returns
+        -------
+        dict[str, int] | None
+            ``{"fileCount": int, "length": int}`` or ``None`` if path does not exist.
+        """
+        try:
+            norm_path = self._normalize_hdfs_path(path)
+            if not norm_path.startswith("/"):
+                norm_path = f"/{norm_path}"
+            entries = self._hdfs_client.list(norm_path, status=True)
+            part_files = [
+                (name, stat)
+                for name, stat in entries
+                if not name.startswith("_")
+                and not name.startswith(".")
+                and name.endswith(".parquet")
+            ]
+            return {
+                "fileCount": len(part_files),
+                "length": sum(int(stat.get("length", 0)) for _, stat in part_files),
+            }
+        except Exception as exc:
+            logger.debug("get_part_files_summary failed for '%s': %s", path, exc)
+            return None
+
     def path_exists(self, hdfs_path: str) -> bool:
         """
         Return ``True`` if *hdfs_path* exists on HDFS, ``False`` otherwise.

@@ -709,8 +709,12 @@ class PipelineExecutor:
                     try:
                         # Only poll & emit progress if HDFS stage has started (is not pending)
                         if tracker_run_id and _progress_tracker.get_stage_state(tracker_run_id, "hdfs") != "pending":
-                            summary = hdfs_client.content_summary(output_path)
-                            if summary is not None:
+                            summary = None
+                            if hasattr(hdfs_client, "get_part_files_summary"):
+                                summary = hdfs_client.get_part_files_summary(output_path)
+                            if summary is None or not isinstance(summary, dict):
+                                summary = hdfs_client.content_summary(output_path)
+                            if summary is not None and isinstance(summary, dict):
                                 last_files_written = summary.get("fileCount", 0)
                                 last_bytes_written = summary.get("length", 0)
                                 _progress_tracker.emit(
@@ -799,15 +803,20 @@ class PipelineExecutor:
                     if not exists:
                         raise RuntimeError(f"HDFS output path does not exist: {output_path}")
 
-                    final_summary = hdfs_client.content_summary(output_path)
+                    final_summary = None
+                    if hasattr(hdfs_client, "get_part_files_summary"):
+                        final_summary = hdfs_client.get_part_files_summary(output_path)
+                    if final_summary is None or not isinstance(final_summary, dict):
+                        final_summary = hdfs_client.content_summary(output_path)
+
                     final_files = (
                         final_summary.get("fileCount", last_files_written)
-                        if final_summary is not None
+                        if final_summary is not None and isinstance(final_summary, dict)
                         else last_files_written
                     )
                     final_bytes = (
                         final_summary.get("length", last_bytes_written)
-                        if final_summary is not None
+                        if final_summary is not None and isinstance(final_summary, dict)
                         else last_bytes_written
                     )
                     output_rows = result.get("output_rows")

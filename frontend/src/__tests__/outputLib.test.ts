@@ -101,7 +101,7 @@ describe('toOutputError mapping', () => {
         data: { detail },
         statusText: 'Error',
         headers: {},
-        config: {} as any,
+        config: {} as unknown as axios.InternalAxiosRequestConfig,
       };
       return err;
     };

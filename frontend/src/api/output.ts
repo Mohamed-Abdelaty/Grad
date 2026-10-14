@@ -14,10 +14,37 @@ export async function getOutput(runId: string): Promise<OutputMetadata> {
 }
 
 export async function getPreview(runId: string, limit: number = 50): Promise<OutputPreview> {
-  const response = await apiClient.get<OutputPreview>(`/api/pipeline-runs/${runId}/output/preview`, {
+  const response = await apiClient.get<{
+    columns?: OutputPreview['columns'];
+    rows?: unknown[];
+    limit?: number;
+    totalRows?: number | null;
+    rowCount?: number | null;
+    truncated?: boolean;
+  }>(`/api/pipeline-runs/${runId}/output/preview`, {
     params: { limit },
   });
-  return response.data;
+  const data = response.data;
+  const columns = data.columns || [];
+  const rawRows = data.rows || [];
+  const rows: Record<string, unknown>[] = rawRows.map((row: unknown) => {
+    if (Array.isArray(row)) {
+      const obj: Record<string, unknown> = {};
+      columns.forEach((col: { name: string }, idx: number) => {
+        obj[col.name] = row[idx];
+      });
+      return obj;
+    }
+    return row as Record<string, unknown>;
+  });
+
+  return {
+    columns,
+    rows,
+    limit: data.limit ?? limit,
+    totalRows: data.totalRows !== undefined ? data.totalRows : (data.rowCount ?? null),
+    truncated: Boolean(data.truncated),
+  };
 }
 
 export async function requestDownloadLink(
