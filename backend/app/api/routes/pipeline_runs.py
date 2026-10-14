@@ -813,8 +813,8 @@ async def download_run_output(
 
     fmt = claims.get("format", "csv")
     pipeline_name = str(run.id)[:8]
-    if getattr(run, "pipeline", None) and getattr(run.pipeline, "name", None):
-        pipeline_name = run.pipeline.name
+    if "pipeline" in run.__dict__ and run.__dict__["pipeline"] and getattr(run.__dict__["pipeline"], "name", None):
+        pipeline_name = run.__dict__["pipeline"].name
     elif getattr(run, "pipeline_id", None):
         try:
             from app.models.pipeline import Pipeline

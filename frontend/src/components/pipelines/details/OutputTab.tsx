@@ -136,7 +136,8 @@ export const OutputTab = React.memo(function OutputTab({
       // Trigger download via hidden anchor element
       const anchor = document.createElement('a');
       anchor.href = link.url;
-      anchor.download = '';
+      const baseName = metadata?.path ? metadata.path.split('/').filter(Boolean).pop() : 'output';
+      anchor.download = `${baseName || 'pipeline-output'}.${format}`;
       anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();
