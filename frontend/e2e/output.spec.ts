@@ -79,7 +79,7 @@ test.describe('UI-6 Output Inspection & Downloads', () => {
   test('Step 6 items 1-10: full output lifecycle, downloads, limits, token replay, large warning, and axe', async ({
     page,
   }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(240_000);
     const audit = startAudit(page);
     await doLogin(page);
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -132,10 +132,10 @@ test.describe('UI-6 Output Inspection & Downloads', () => {
     await expect(page.getByTestId('output-tab')).toBeVisible();
 
     // 7. Wait for pipeline to complete
-    await expect(page.getByTestId('run-header')).toContainText('succeeded', { timeout: 240_000 });
+    await expect(page.getByTestId('run-header')).toContainText('succeeded', { timeout: 120_000 });
 
     // 8. Output tab updates to ready state without page reload
-    await expect(page.getByTestId('output-metadata')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('output-metadata')).toBeVisible({ timeout: 15_000 });
 
     // Item 1: Verify Metadata fields
     await expect(page.getByTestId('badge-format')).toHaveText('parquet');

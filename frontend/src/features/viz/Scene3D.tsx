@@ -30,8 +30,19 @@ const STAGE_COLORS: Record<StationModel['key'], string> = {
 function FpsTracker({ onFps, paused }: { onFps?: (avg: number) => void; paused: boolean }) {
   const frameCount = useRef(0);
   const lastTime = useRef(performance.now());
+  const { gl } = useThree();
+
+  useEffect(() => {
+    (window as unknown as { __THREE_GL__?: THREE.WebGLRenderer }).__THREE_GL__ = gl;
+    return () => {
+      delete (window as unknown as { __THREE_GL__?: THREE.WebGLRenderer }).__THREE_GL__;
+    };
+  }, [gl]);
 
   useFrame(() => {
+    if (typeof window !== 'undefined') {
+      (window as unknown as { __THREE_GL__?: THREE.WebGLRenderer }).__THREE_GL__ = gl;
+    }
     if (!onFps || paused) return;
     frameCount.current++;
     const now = performance.now();
@@ -79,7 +90,7 @@ function PipeParticles({
   fromPos: [number, number, number];
   toPos: [number, number, number];
 }) {
-  const count = quality === 'high' ? 60 : 20;
+  const count = quality === 'high' ? 30 : 8;
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const tempObject = useMemo(() => new THREE.Object3D(), []);
 
@@ -152,10 +163,12 @@ function Station3D({
   station,
   position,
   paused,
+  quality,
 }: {
   station: StationModel;
   position: [number, number, number];
   paused: boolean;
+  quality: 'high' | 'low';
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const liquidRef = useRef<THREE.Mesh>(null);
@@ -320,14 +333,22 @@ function Station3D({
       ) : (
         // Source & Kafka: Cylinder vessel
         <mesh>
-          <cylinderGeometry args={[0.8, 0.8, 2.2, 24, 1, true]} />
-          <meshPhysicalMaterial
-            color={vesselColor}
-            transparent
-            opacity={isPending ? 0.2 : 0.3}
-            roughness={0.3}
-            metalness={0.1}
-          />
+          <cylinderGeometry args={[0.8, 0.8, 2.2, quality === 'high' ? 24 : 12, 1, true]} />
+          {quality === 'high' ? (
+            <meshStandardMaterial
+              color={vesselColor}
+              transparent
+              opacity={isPending ? 0.2 : 0.3}
+              roughness={0.3}
+              metalness={0.1}
+            />
+          ) : (
+            <meshBasicMaterial
+              color={vesselColor}
+              transparent
+              opacity={isPending ? 0.15 : 0.25}
+            />
+          )}
         </mesh>
       )}
 
@@ -456,8 +477,7 @@ export const PipelineScene3D: React.FC<PipelineScene3DProps> = ({
     return () => document.removeEventListener('visibilitychange', handleVis);
   }, []);
 
-  const isAnyWorking = model.stations.some((s) => s.working);
-  const frameloop = !isVisible ? 'never' : paused ? 'demand' : isAnyWorking ? 'always' : 'demand';
+  const frameloop = !isVisible ? 'never' : paused ? 'demand' : 'always';
 
   const resetView = useCallback(() => {
     if (controlsRef) {
@@ -498,7 +518,7 @@ export const PipelineScene3D: React.FC<PipelineScene3DProps> = ({
 
         <ambientLight intensity={0.8} />
         <directionalLight position={[5, 8, 5]} intensity={1.2} />
-        <directionalLight position={[-5, 4, -3]} intensity={0.4} />
+        {quality === 'high' && <directionalLight position={[-5, 4, -3]} intensity={0.4} />}
 
         <OrbitControls
           ref={setControlsRef}
@@ -519,6 +539,7 @@ export const PipelineScene3D: React.FC<PipelineScene3DProps> = ({
             station={station}
             position={STATION_POSITIONS[station.key]}
             paused={paused}
+            quality={quality}
           />
         ))}
 

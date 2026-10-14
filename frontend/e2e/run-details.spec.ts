@@ -73,7 +73,7 @@ test.describe('UI-5 Live Run Details Page E2E', () => {
   test('1. Live run: sales-csv reaches terminal success through real stages with live progress', async ({
     page,
   }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(180_000);
     const audit = startAudit(page);
 
     await doLogin(page);
@@ -152,7 +152,7 @@ test.describe('UI-5 Live Run Details Page E2E', () => {
     // Assert in order that stages reach done
     await expect(page.getByTestId('stage-source')).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
     await expect(page.getByTestId('stage-kafka')).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
-    await expect(page.getByTestId('stage-spark')).toHaveAttribute('data-state', 'done', { timeout: 240_000 });
+    await expect(page.getByTestId('stage-spark')).toHaveAttribute('data-state', 'done', { timeout: 120_000 });
     await expect(page.getByTestId('stage-hdfs')).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
 
     clearInterval(checkInterval);
@@ -426,7 +426,7 @@ storage:
   test('7. Accessibility: axe reports zero serious or critical violations on running and finished run pages', async ({
     page,
   }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(180_000);
 
     await doLogin(page);
     await clickNav(page, 'Pipelines');
@@ -450,7 +450,7 @@ storage:
     expect(runningViolations, `Axe violations on running page: ${JSON.stringify(runningViolations)}`).toHaveLength(0);
 
     // Wait for run to finish
-    await expect(page.getByTestId('run-header')).toContainText('succeeded', { timeout: 240_000 });
+    await expect(page.getByTestId('run-header')).toContainText('succeeded', { timeout: 120_000 });
 
     // Axe on finished page overview
     const overviewAxe = await new AxeBuilder({ page })
@@ -501,7 +501,7 @@ storage:
   test('9. Full lifecycle: running stage transitions, metric updates, terminal success', async ({
     page,
   }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(180_000);
     await doLogin(page);
     await clickNav(page, 'Pipelines');
     await expect(page).toHaveURL(/pipelines/, { timeout: 10_000 });
@@ -517,7 +517,7 @@ storage:
 
     // Verify stage transitions and terminal success
     await expect(page.getByTestId('stage-source')).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
-    await expect(page.getByTestId('stage-spark')).toHaveAttribute('data-state', 'done', { timeout: 240_000 });
+    await expect(page.getByTestId('stage-spark')).toHaveAttribute('data-state', 'done', { timeout: 120_000 });
     await expect(page.getByTestId('run-header')).toContainText('succeeded', { timeout: 30_000 });
 
     // Metrics counter tiles update from '—'

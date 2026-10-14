@@ -131,7 +131,6 @@ test.describe('UI-7 Pipeline Visualization E2E', () => {
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(outDir, 'run-page-running-1440x900.png') });
     await page.screenshot({ path: path.join(outDir, 'run-running-1440x900.png') });
 
     // 3. Pause button while running: click viz-pause, verify aria-pressed toggles, test canvas frames
@@ -217,12 +216,10 @@ test.describe('UI-7 Pipeline Visualization E2E', () => {
     // 8. Capture succeeded screenshots (desktop 1440x900 and mobile 390x844)
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(outDir, 'run-page-succeeded-1440x900.png') });
     await page.screenshot({ path: path.join(outDir, 'run-succeeded-1440x900.png') });
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(outDir, 'run-page-mobile-390x844.png') });
     await page.screenshot({ path: path.join(outDir, 'run-mobile-390x844.png') });
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(400);

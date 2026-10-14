@@ -141,6 +141,12 @@ export function useVizMode(): UseVizModeReturn {
   // Auto downgrade based on FPS
   const reportFps = useCallback(
     (avg: number) => {
+      if (
+        typeof window !== 'undefined' &&
+        (window as unknown as { __DISABLE_AUTO_DOWNGRADE__?: boolean }).__DISABLE_AUTO_DOWNGRADE__
+      ) {
+        return;
+      }
       if (quality === 'high') {
         if (avg < 30) {
           if (!downgradeTimerRef.current) {
