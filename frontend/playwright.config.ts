@@ -10,6 +10,14 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
     // Record all console messages and network responses for assertions.
     trace: 'retain-on-failure',
+    launchOptions: {
+      args: [
+        '--use-gl=angle',
+        '--use-angle=swiftshader',
+        '--enable-unsafe-swiftshader',
+        '--enable-webgl',
+      ],
+    },
   },
   projects: [
     {

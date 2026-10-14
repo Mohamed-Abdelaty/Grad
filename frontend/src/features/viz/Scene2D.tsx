@@ -99,7 +99,7 @@ const VESSEL_Y = 55;
 
 export const Scene2D: React.FC<Scene2DProps> = ({ model, paused = false }) => {
   return (
-    <div className="w-full h-full flex flex-col justify-center items-center">
+    <div className="w-full h-full flex flex-col justify-center items-center" data-testid="scene-2d">
       <svg
         data-testid="viz-canvas"
         viewBox="0 0 1000 300"

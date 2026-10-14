@@ -78,6 +78,9 @@ export function useVizMode(): UseVizModeReturn {
   // Sync preference with localStorage
   const setQuality = useCallback((q: VizQuality) => {
     setQualityState(q);
+    if (q !== '2d') {
+      setContextLost(false);
+    }
     try {
       localStorage.setItem(STORAGE_KEY, q);
     } catch {

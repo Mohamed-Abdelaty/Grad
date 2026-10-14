@@ -3,7 +3,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm config set maxsockets 5 && npm ci
 
 COPY . .
 ARG VITE_SPARK_UI_URL=http://localhost:8080

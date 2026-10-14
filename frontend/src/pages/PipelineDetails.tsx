@@ -21,6 +21,8 @@ import { LogsTab } from '../components/pipelines/details/LogsTab';
 import { ConfigTab } from '../components/pipelines/details/ConfigTab';
 import { OutputTab } from '../components/pipelines/details/OutputTab';
 
+import { RunProgress } from '../types/runProgress';
+
 const VALID_TABS = ['overview', 'logs', 'configuration', 'output'] as const;
 type TabType = (typeof VALID_TABS)[number];
 
@@ -53,6 +55,38 @@ export default function PipelineDetails() {
 
   // Live real-time stream hook
   const { progress, connection, lastUpdatedAt, error: streamError } = useRunLive(runId);
+
+  // Fallback progress if initial run is loaded but SSE progress not received yet
+  const effectiveProgress = useMemo<RunProgress | null>(() => {
+    if (progress) return progress;
+    if (!run) return null;
+    const isDone = run.status === 'succeeded';
+    const isFail = run.status === 'failed';
+    const st = isDone ? 'done' : isFail ? 'error' : 'pending';
+    const count = run.recordsProcessed ?? null;
+    return {
+      runId: run.id,
+      status: run.status,
+      mode: 'batch',
+      startedAt: run.startedAt || new Date().toISOString(),
+      updatedAt: run.finishedAt || run.startedAt || new Date().toISOString(),
+      completedAt: run.finishedAt || null,
+      stages: [
+        { key: 'source', state: st, startedAt: null, finishedAt: null, error: null },
+        { key: 'kafka', state: st, startedAt: null, finishedAt: null, error: null },
+        { key: 'spark', state: st, startedAt: null, finishedAt: null, error: null },
+        { key: 'hdfs', state: st, startedAt: null, finishedAt: null, error: null },
+      ],
+      source: { type: 'csv', rowsTotal: count, rowsRead: count },
+      kafka: { topic: null, partitions: null, published: count, failed: 0, endOffsets: null, consumerLag: 0 },
+      spark: { appId: null, tasksTotal: null, tasksDone: null, recordsIn: count, recordsOut: count, durationMs: null, activeStage: null },
+      hdfs: { path: null, filesWritten: null, bytesWritten: null, rowsWritten: count, verified: isDone ? true : null },
+      throughput: { recordsPerSecond: null, samples: [] },
+      etaSeconds: null,
+      errors: isFail ? 1 : 0,
+      fault: null,
+    };
+  }, [progress, run]);
 
   // Status computation
   const status = progress?.status || run?.status || 'pending';
@@ -196,7 +230,7 @@ export default function PipelineDetails() {
         <TabPanel id="overview">
           <div className="space-y-6">
             {/* 1. Visualization Slot (UI-7) */}
-            <PipelineVisualization progress={progress} />
+            <PipelineVisualization progress={effectiveProgress} />
 
             {/* 2. Stage Stepper */}
             <StageStepper

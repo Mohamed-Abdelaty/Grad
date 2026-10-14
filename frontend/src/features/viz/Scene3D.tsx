@@ -27,12 +27,12 @@ const STAGE_COLORS: Record<StationModel['key'], string> = {
 };
 
 // FPS Monitor Component inside Canvas
-function FpsTracker({ onFps }: { onFps?: (avg: number) => void }) {
+function FpsTracker({ onFps, paused }: { onFps?: (avg: number) => void; paused: boolean }) {
   const frameCount = useRef(0);
   const lastTime = useRef(performance.now());
 
   useFrame(() => {
-    if (!onFps) return;
+    if (!onFps || paused) return;
     frameCount.current++;
     const now = performance.now();
     const elapsed = now - lastTime.current;
@@ -79,7 +79,7 @@ function PipeParticles({
   fromPos: [number, number, number];
   toPos: [number, number, number];
 }) {
-  const count = quality === 'high' ? 120 : 30;
+  const count = quality === 'high' ? 60 : 20;
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const tempObject = useMemo(() => new THREE.Object3D(), []);
 
@@ -443,8 +443,21 @@ export const PipelineScene3D: React.FC<PipelineScene3DProps> = ({
 }) => {
   const [controlsRef, setControlsRef] = useState<{ reset: () => void } | null>(null);
 
+  const [isVisible, setIsVisible] = useState(() =>
+    typeof document !== 'undefined' ? document.visibilityState !== 'hidden' : true
+  );
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const handleVis = () => {
+      setIsVisible(document.visibilityState !== 'hidden');
+    };
+    document.addEventListener('visibilitychange', handleVis);
+    return () => document.removeEventListener('visibilitychange', handleVis);
+  }, []);
+
   const isAnyWorking = model.stations.some((s) => s.working);
-  const frameloop = paused ? 'demand' : isAnyWorking ? 'always' : 'demand';
+  const frameloop = !isVisible ? 'never' : paused ? 'demand' : isAnyWorking ? 'always' : 'demand';
 
   const resetView = useCallback(() => {
     if (controlsRef) {
@@ -464,11 +477,11 @@ export const PipelineScene3D: React.FC<PipelineScene3DProps> = ({
       </button>
 
       <Canvas
-        dpr={quality === 'high' ? [1, 1.5] : 1}
+        dpr={1}
         frameloop={frameloop}
         camera={{ position: [0, 2.4, 9], fov: 40 }}
         gl={{
-          antialias: quality === 'high',
+          antialias: false,
           powerPreference: 'low-power',
         }}
         onCreated={({ gl }) => {
@@ -481,7 +494,7 @@ export const PipelineScene3D: React.FC<PipelineScene3DProps> = ({
         }}
       >
         <CameraController />
-        <FpsTracker onFps={onFps} />
+        <FpsTracker onFps={onFps} paused={paused} />
 
         <ambientLight intensity={0.8} />
         <directionalLight position={[5, 8, 5]} intensity={1.2} />

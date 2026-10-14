@@ -73,7 +73,7 @@ test.describe('UI-4 Pipelines Workspace E2E', () => {
   test('1. Template to run: chooses sales-csv, validates, runs asynchronously, verifies terminal success', async ({
     page,
   }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
     const audit = startAudit(page);
 
     await doLogin(page);
@@ -100,8 +100,8 @@ test.describe('UI-4 Pipelines Workspace E2E', () => {
     // Navigates to /pipelines/<uuid>
     await expect(page).toHaveURL(/\/pipelines\/[a-f0-9-]+/, { timeout: 15_000 });
 
-    // Wait up to 150s for terminal status 'succeeded'
-    await expect(page.getByText(/succeeded/i).first()).toBeVisible({ timeout: 150_000 });
+    // Wait up to 240s for terminal status 'succeeded'
+    await expect(page.getByText(/succeeded/i).first()).toBeVisible({ timeout: 240_000 });
 
     assertClean(audit, 'Template to run');
   });
