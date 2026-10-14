@@ -13,6 +13,9 @@ const PipelineManagement = lazy(() => import('./pages/PipelineManagement'));
 const PipelineDetails = lazy(() => import('./pages/PipelineDetails'));
 const ReliabilityTesting = lazy(() => import('./pages/ReliabilityTesting'));
 const Reports = lazy(() => import('./pages/Reports'));
+const DevVizPlayground = import.meta.env.DEV
+  ? lazy(() => import('./features/viz/Playground'))
+  : null;
 
 function PageFallback() {
   return (
@@ -36,6 +39,9 @@ export default function App() {
     <Suspense fallback={<PageFallback />}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        {import.meta.env.DEV && DevVizPlayground && (
+          <Route path="/dev/viz" element={<DevVizPlayground />} />
+        )}
         <Route element={<AuthGuard />}>
           <Route element={<PageLayout />}>
             <Route path="/" element={<Dashboard />} />

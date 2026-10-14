@@ -498,7 +498,7 @@ export const PipelineScene3D: React.FC<PipelineScene3DProps> = ({
           maxPolarAngle={1.6}
           minAzimuthAngle={-0.7}
           maxAzimuthAngle={0.7}
-          enableDamping
+          enableDamping={!paused}
         />
 
         {/* 4 Stations */}
