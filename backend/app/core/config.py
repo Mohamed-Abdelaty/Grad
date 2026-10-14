@@ -137,6 +137,12 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v  # type: ignore[return-value]
 
+    # ── Output Preview & Download (UI-6) ───────────────────────────────────────
+    OUTPUT_PREVIEW_MAX_ROWS: int = 500
+    OUTPUT_PREVIEW_MAX_FILE_BYTES: int = 256 * 1024 * 1024  # 256 MiB
+    OUTPUT_DOWNLOAD_MAX_BYTES: int = 500 * 1024 * 1024      # 500 MiB
+    OUTPUT_DOWNLOAD_TOKEN_TTL_SECONDS: int = 60
+
 
 @lru_cache
 def get_settings() -> Settings:

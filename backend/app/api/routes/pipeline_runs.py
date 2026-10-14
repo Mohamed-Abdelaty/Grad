@@ -36,20 +36,39 @@ import asyncio
 import json
 import logging
 import uuid as _uuid
-from datetime import datetime, timezone
-from typing import Any, AsyncGenerator
+from datetime import datetime, timedelta, timezone
+from typing import Any, AsyncGenerator, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.background import BackgroundTask
 
 from app.api.deps import get_current_user
+from app.core.config import get_settings
 from app.core.security import decode_access_token
 from app.database.session import get_db
 from app.models.pipeline_run import PipelineRun
 from app.models.pipeline_run_event import PipelineRunEvent
 from app.pipeline.progress import build_progress_dict, tracker
+from app.services.output_service import (
+    FileTooLargeError,
+    InvalidDownloadTokenError,
+    InvalidOutputPathError,
+    OutputNotFoundError,
+    OutputTooLargeError,
+    SchemaMismatchError,
+    StorageUnavailableError,
+    build_parquet_file,
+    create_download_token,
+    describe_output,
+    iter_csv,
+    preview_output,
+    sanitize_filename,
+    verify_download_token,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -640,3 +659,217 @@ async def cancel_pipeline_run(
         content={"accepted": accepted, "run_id": run_id},
         status_code=202 if accepted else 409,
     )
+
+
+# ── UI-6 Output Inspection & Download Endpoints ────────────────────────────────
+
+
+class DownloadLinkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    format: Literal["csv", "parquet"]
+
+
+@router.get(
+    "/{run_id}/output",
+    summary="Get output metadata for a completed pipeline run",
+    dependencies=[Depends(get_current_user)],
+)
+async def get_run_output_metadata(
+    run_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    run_uuid = _parse_run_id(run_id)
+    run = await _get_run_or_404(db, run_uuid)
+
+    if run.status != "succeeded":
+        raise HTTPException(
+            status_code=409,
+            detail="Run has no completed output",
+        )
+
+    try:
+        return describe_output(run)
+    except InvalidOutputPathError:
+        raise HTTPException(status_code=400, detail="Output path is not allowed")
+    except OutputNotFoundError:
+        raise HTTPException(status_code=404, detail="No output files found")
+    except StorageUnavailableError:
+        raise HTTPException(status_code=503, detail="Storage is unavailable")
+    except Exception as exc:
+        logger.exception("Unexpected error describing output for run %s: %s", run_id, exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get(
+    "/{run_id}/output/preview",
+    summary="Get sample rows preview of pipeline run output",
+    dependencies=[Depends(get_current_user)],
+)
+async def get_run_output_preview(
+    run_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    run_uuid = _parse_run_id(run_id)
+    run = await _get_run_or_404(db, run_uuid)
+
+    if run.status != "succeeded":
+        raise HTTPException(
+            status_code=409,
+            detail="Run has no completed output",
+        )
+
+    try:
+        return preview_output(run, limit=limit)
+    except InvalidOutputPathError:
+        raise HTTPException(status_code=400, detail="Output path is not allowed")
+    except OutputNotFoundError:
+        raise HTTPException(status_code=404, detail="No output files found")
+    except FileTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc))
+    except StorageUnavailableError:
+        raise HTTPException(status_code=503, detail="Storage is unavailable")
+    except Exception as exc:
+        logger.exception("Unexpected error generating preview for run %s: %s", run_id, exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post(
+    "/{run_id}/output/download-link",
+    summary="Generate a signed one-time download link for pipeline run output",
+)
+async def create_output_download_link(
+    run_id: str,
+    body: DownloadLinkRequest,
+    current_user: Any = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    run_uuid = _parse_run_id(run_id)
+    run = await _get_run_or_404(db, run_uuid)
+
+    if run.status != "succeeded":
+        raise HTTPException(
+            status_code=409,
+            detail="Run has no completed output",
+        )
+
+    try:
+        meta = describe_output(run)
+        settings = get_settings()
+        if meta["totalSizeBytes"] > settings.OUTPUT_DOWNLOAD_MAX_BYTES:
+            mb_total = round(meta["totalSizeBytes"] / (1024 * 1024), 1)
+            mb_max = round(settings.OUTPUT_DOWNLOAD_MAX_BYTES / (1024 * 1024), 1)
+            raise OutputTooLargeError(
+                f"Output is {mb_total} MB; maximum downloadable size is {mb_max} MB. Read it from HDFS directly."
+            )
+
+        user_str = getattr(current_user, "username", current_user) if current_user else "anonymous"
+        token = create_download_token(run, body.format, str(user_str))
+        exp_iso = (
+            datetime.now(timezone.utc)
+            + timedelta(seconds=settings.OUTPUT_DOWNLOAD_TOKEN_TTL_SECONDS)
+        ).isoformat()
+
+        return {
+            "url": f"/api/pipeline-runs/{run_id}/output/download?token={token}",
+            "expiresAt": exp_iso,
+            "sizeBytes": meta["totalSizeBytes"],
+        }
+    except InvalidOutputPathError:
+        raise HTTPException(status_code=400, detail="Output path is not allowed")
+    except OutputNotFoundError:
+        raise HTTPException(status_code=404, detail="No output files found")
+    except OutputTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc))
+    except StorageUnavailableError:
+        raise HTTPException(status_code=503, detail="Storage is unavailable")
+    except Exception as exc:
+        logger.exception("Unexpected error creating download link for run %s: %s", run_id, exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get(
+    "/{run_id}/output/download",
+    summary="Download pipeline output via signed one-time token",
+)
+async def download_run_output(
+    run_id: str,
+    token: str = Query(..., description="Signed one-time download token"),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    run_uuid = _parse_run_id(run_id)
+
+    try:
+        claims = verify_download_token(token, expected_run_id=str(run_uuid))
+    except InvalidDownloadTokenError:
+        raise HTTPException(status_code=401, detail="Invalid or expired download token.")
+
+    run = await _get_run_or_404(db, run_uuid)
+    if run.status != "succeeded":
+        raise HTTPException(
+            status_code=409,
+            detail="Run has no completed output",
+        )
+
+    fmt = claims.get("format", "csv")
+    pipeline_name = str(run.id)[:8]
+    if getattr(run, "pipeline", None) and getattr(run.pipeline, "name", None):
+        pipeline_name = run.pipeline.name
+    elif getattr(run, "pipeline_id", None):
+        try:
+            from app.models.pipeline import Pipeline
+            p = await db.get(Pipeline, run.pipeline_id)
+            if p and getattr(p, "name", None):
+                pipeline_name = p.name
+        except Exception:
+            pass
+    safe_name = sanitize_filename(pipeline_name)
+    filename = f"{safe_name}-{str(run.id)[:8]}.{fmt}"
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+    }
+
+    try:
+        if fmt == "csv":
+            return StreamingResponse(
+                iter_csv(run),
+                media_type="text/csv; charset=utf-8",
+                headers=headers,
+            )
+        elif fmt == "parquet":
+            parquet_path, cleanup_fn = build_parquet_file(run)
+
+            def _file_stream():
+                try:
+                    with open(parquet_path, "rb") as f:
+                        while chunk := f.read(65536):
+                            yield chunk
+                finally:
+                    cleanup_fn()
+
+            return StreamingResponse(
+                _file_stream(),
+                media_type="application/vnd.apache.parquet",
+                headers=headers,
+                background=BackgroundTask(cleanup_fn),
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported output format")
+    except OutputTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc))
+    except InvalidOutputPathError:
+        raise HTTPException(status_code=400, detail="Output path is not allowed")
+    except OutputNotFoundError:
+        raise HTTPException(status_code=404, detail="No output files found")
+    except StorageUnavailableError:
+        raise HTTPException(status_code=503, detail="Storage is unavailable")
+    except SchemaMismatchError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Unexpected error streaming download for run %s: %s", run_id, exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
