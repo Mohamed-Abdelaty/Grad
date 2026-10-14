@@ -232,6 +232,12 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
       data-testid="exp-monitor"
       className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl flex flex-col gap-6"
     >
+      {/* Polite live region for accessibility */}
+      <div aria-live="polite" className="sr-only">
+        Phase: {detail.currentPhase}, Fault phase: {faultPhaseLabels[detail.faultPhase] || detail.faultPhase}
+        {countdown.active ? `, Fault active: ${countdown.elapsed} seconds of ${countdown.total} seconds` : ''}
+      </div>
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
         <div className="flex flex-col gap-1.5">

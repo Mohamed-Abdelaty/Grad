@@ -111,6 +111,22 @@ export function ExperimentWizard({
     }
   };
 
+  // Keyboard navigation for Step 2 fault radiogroup
+  const handleFaultKeyDown = (e: React.KeyboardEvent, index: number) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const nextIdx = (index + 1) % options.faults.length;
+      setSelectedFault(options.faults[nextIdx].id);
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const prevIdx = (index - 1 + options.faults.length) % options.faults.length;
+      setSelectedFault(options.faults[prevIdx].id);
+    } else if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      setSelectedFault(options.faults[index].id);
+    }
+  };
+
   const handleCopyYaml = () => {
     navigator.clipboard.writeText(yamlContent);
     setCopied(true);
@@ -272,7 +288,7 @@ export function ExperimentWizard({
           </div>
 
           <div role="radiogroup" aria-label="Fault Type Selection" className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {options.faults.map((f) => {
+            {options.faults.map((f, idx) => {
               const isSelected = selectedFault === f.id;
               return (
                 <div
@@ -280,14 +296,9 @@ export function ExperimentWizard({
                   data-testid={`fault-${f.id}`}
                   role="radio"
                   aria-checked={isSelected}
-                  tabIndex={0}
+                  tabIndex={isSelected ? 0 : -1}
                   onClick={() => setSelectedFault(f.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === ' ' || e.key === 'Enter') {
-                      e.preventDefault();
-                      setSelectedFault(f.id);
-                    }
-                  }}
+                  onKeyDown={(e) => handleFaultKeyDown(e, idx)}
                   className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between gap-3 focus:outline-none focus:ring-2 focus:ring-brand ${
                     isSelected
                       ? 'bg-brand/10 border-brand shadow-md'
