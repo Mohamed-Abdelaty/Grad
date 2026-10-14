@@ -13,7 +13,7 @@ import { StageStepper } from '../components/pipelines/details/StageStepper';
 import { ActiveProgress } from '../components/pipelines/details/ActiveProgress';
 import { CountersGrid } from '../components/pipelines/details/CountersGrid';
 import { ThroughputChart } from '../components/pipelines/details/ThroughputChart';
-import { VizSlot } from '../components/pipelines/details/VizSlot';
+import { PipelineVisualization } from '../features/viz/PipelineVisualization';
 import { ServicesPanel } from '../components/pipelines/details/ServicesPanel';
 import { FailurePanel } from '../components/pipelines/details/FailurePanel';
 import { SuccessSummary } from '../components/pipelines/details/SuccessSummary';
@@ -195,8 +195,8 @@ export default function PipelineDetails() {
         {/* Tab 1: Overview */}
         <TabPanel id="overview">
           <div className="space-y-6">
-            {/* 1. Visualization Slot (UI-7 reserved) */}
-            <VizSlot />
+            {/* 1. Visualization Slot (UI-7) */}
+            <PipelineVisualization progress={progress} />
 
             {/* 2. Stage Stepper */}
             <StageStepper
