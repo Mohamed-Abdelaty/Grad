@@ -188,6 +188,7 @@ class PipelineGenerator:
         storage_config = {
             "type": config.storage.type,
             "path": config.storage.path,
+            "mode": getattr(config.storage, "mode", "overwrite"),
         }
         steps.append(
             ExecutionStep(

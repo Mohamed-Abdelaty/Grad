@@ -638,3 +638,102 @@ class TestSparkBranchWithMockedSubmitter:
 
         assert ctx.status == "success"
         assert "storage:local" in ctx.metrics
+
+    def test_spark_prerun_hdfs_delete_runs_on_overwrite(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """When write mode is overwrite, pre-run HDFS delete is executed on the run output path."""
+        from unittest.mock import AsyncMock, patch
+
+        plan = self._make_plan_with_spark(tmp_path)
+        storage_step = next(s for s in plan.steps if s.step_type == "storage")
+        storage_step.config["path"] = "/data/custom_sales"
+        storage_step.config["mode"] = "overwrite"
+
+        mock_result = {
+            "input_rows": 10,
+            "output_rows": 10,
+            "duration_seconds": 1.0,
+            "status": "success",
+        }
+
+        with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+             patch("app.pipeline.executor.HdfsStorageClient") as MockHdfsClient:
+            mock_client_instance = MockHdfsClient.return_value
+            mock_client_instance.path_exists.return_value = True
+            mock_client_instance.content_summary.return_value = {"fileCount": 1, "length": 100}
+            mock_client_instance._normalize_hdfs_path.side_effect = lambda p: p.replace("hdfs://namenode:9000", "")
+
+            instance = MockSubmitter.return_value
+            instance.submit_batch_job = AsyncMock(return_value=mock_result)
+
+            ctx = executor.execute(plan)
+
+        assert ctx.status == "success"
+        mock_client_instance.delete.assert_called_with("hdfs://namenode:9000/data/custom_sales", recursive=True)
+
+    def test_spark_prerun_hdfs_delete_skipped_on_append(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """When write mode is append, pre-run HDFS delete must NEVER be called."""
+        from unittest.mock import AsyncMock, patch
+
+        plan = self._make_plan_with_spark(tmp_path)
+        storage_step = next(s for s in plan.steps if s.step_type == "storage")
+        storage_step.config["path"] = "/data/custom_sales"
+        storage_step.config["mode"] = "append"
+
+        mock_result = {
+            "input_rows": 10,
+            "output_rows": 10,
+            "duration_seconds": 1.0,
+            "status": "success",
+        }
+
+        with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+             patch("app.pipeline.executor.HdfsStorageClient") as MockHdfsClient:
+            mock_client_instance = MockHdfsClient.return_value
+            mock_client_instance.path_exists.return_value = True
+            mock_client_instance.content_summary.return_value = {"fileCount": 1, "length": 100}
+
+            instance = MockSubmitter.return_value
+            instance.submit_batch_job = AsyncMock(return_value=mock_result)
+
+            ctx = executor.execute(plan)
+
+        assert ctx.status == "success"
+        mock_client_instance.delete.assert_not_called()
+
+    def test_spark_prerun_hdfs_delete_safeguards_base_paths(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """Safeguards must prevent deleting base root directories like /data or /tmp."""
+        from unittest.mock import AsyncMock, patch
+
+        plan = self._make_plan_with_spark(tmp_path)
+        storage_step = next(s for s in plan.steps if s.step_type == "storage")
+        storage_step.config["path"] = "/data"
+        storage_step.config["mode"] = "overwrite"
+
+        mock_result = {
+            "input_rows": 10,
+            "output_rows": 10,
+            "duration_seconds": 1.0,
+            "status": "success",
+        }
+
+        with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+             patch("app.pipeline.executor.HdfsStorageClient") as MockHdfsClient:
+            mock_client_instance = MockHdfsClient.return_value
+            mock_client_instance.path_exists.return_value = True
+            mock_client_instance.content_summary.return_value = {"fileCount": 1, "length": 100}
+            mock_client_instance._normalize_hdfs_path.side_effect = lambda p: p.replace("hdfs://namenode:9000", "")
+
+            instance = MockSubmitter.return_value
+            instance.submit_batch_job = AsyncMock(return_value=mock_result)
+
+            ctx = executor.execute(plan)
+
+        assert ctx.status == "success"
+        mock_client_instance.delete.assert_not_called()
+

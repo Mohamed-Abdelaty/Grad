@@ -683,11 +683,20 @@ class PipelineExecutor:
 
             # ── Submit job & background HDFS poller ────────────────────────────
             hdfs_client = HdfsStorageClient()
-            if output_path and output_path.startswith("hdfs://"):
-                try:
-                    hdfs_client.delete(output_path, recursive=True)
-                except Exception:
-                    pass
+            write_mode = (
+                storage_step.config.get("mode", "overwrite")
+                if storage_step
+                else "overwrite"
+            )
+            # Only clean target directory if write_mode is overwrite, output_path is HDFS,
+            # and is strictly the run's own sub-path (never root or base directories).
+            if write_mode == "overwrite" and output_path and output_path.startswith("hdfs://"):
+                norm = hdfs_client._normalize_hdfs_path(output_path)
+                if norm not in ("/", "/data", "/data/", "/tmp", "/tmp/"):
+                    try:
+                        hdfs_client.delete(output_path, recursive=True)
+                    except Exception:
+                        pass
 
             stop_hdfs_poller = threading.Event()
             hdfs_poller_thread: threading.Thread | None = None

@@ -290,6 +290,9 @@ class StorageConfig(BaseModel):
         ..., description="Storage backend type."
     )
     path: str = Field(..., description="Absolute output path.")
+    mode: Literal["overwrite", "append"] = Field(
+        default="overwrite", description="Write mode: overwrite (default) or append."
+    )
 
 
 class MonitoringConfig(BaseModel):
