@@ -14,3 +14,38 @@ if (typeof window !== 'undefined' && !window.ResizeObserver) {
     disconnect() {}
   };
 }
+
+// Mock @react-three/fiber and @react-three/drei for jsdom tests
+vi.mock('@react-three/fiber', () => ({
+  Canvas: ({ children, ...props }: any) => {
+    return {
+      $$typeof: Symbol.for('react.element'),
+      type: 'div',
+      key: null,
+      ref: null,
+      props: { 'data-testid': 'mock-canvas', ...props, children },
+    };
+  },
+  useFrame: vi.fn(),
+  useThree: () => ({
+    camera: { position: { x: 0, y: 2.4, z: 9 }, updateProjectionMatrix: vi.fn() },
+    size: { width: 1000, height: 300 },
+    gl: { domElement: document.createElement('canvas') },
+    invalidate: vi.fn(),
+  }),
+}));
+
+vi.mock('@react-three/drei', () => ({
+  OrbitControls: () => null,
+  Html: ({ children }: any) => {
+    return {
+      $$typeof: Symbol.for('react.element'),
+      type: 'div',
+      key: null,
+      ref: null,
+      props: { children },
+    };
+  },
+  PerformanceMonitor: () => null,
+}));
+
