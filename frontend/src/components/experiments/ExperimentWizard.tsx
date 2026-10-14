@@ -222,7 +222,7 @@ export function ExperimentWizard({
 
       {/* Step 1: Target Selection */}
       {currentStep === 1 && (
-        <div className="flex flex-col gap-4">
+        <div data-testid="exp-wizard-step-1" className="flex flex-col gap-4">
           <div>
             <h3 className="text-sm font-medium text-slate-200">1. Select Target Service</h3>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -248,7 +248,7 @@ export function ExperimentWizard({
               return (
                 <div
                   key={t.id}
-                  data-testid={`target-${t.id}`}
+                  data-testid={`target-opt-${t.id}`}
                   role="radio"
                   aria-checked={isSelected}
                   tabIndex={isSelected ? 0 : -1}
@@ -279,7 +279,7 @@ export function ExperimentWizard({
 
       {/* Step 2: Fault Selection */}
       {currentStep === 2 && (
-        <div className="flex flex-col gap-4">
+        <div data-testid="exp-wizard-step-2" className="flex flex-col gap-4">
           <div>
             <h3 className="text-sm font-medium text-slate-200">2. Select Fault Type</h3>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -293,7 +293,7 @@ export function ExperimentWizard({
               return (
                 <div
                   key={f.id}
-                  data-testid={`fault-${f.id}`}
+                  data-testid={`fault-opt-${f.id}`}
                   role="radio"
                   aria-checked={isSelected}
                   tabIndex={isSelected ? 0 : -1}
@@ -325,7 +325,7 @@ export function ExperimentWizard({
 
       {/* Step 3: Parameters Configuration */}
       {currentStep === 3 && (
-        <div className="flex flex-col gap-5">
+        <div data-testid="exp-wizard-step-3" className="flex flex-col gap-5">
           <div>
             <h3 className="text-sm font-medium text-slate-200">3. Configure Parameters & Thresholds</h3>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -364,6 +364,7 @@ export function ExperimentWizard({
                 <div className="flex items-center gap-2">
                   <input
                     id="exp-duration-num"
+                    data-testid="fault-duration-input"
                     type="number"
                     min={limits.minDurationSeconds}
                     max={limits.maxDurationSeconds}
@@ -467,7 +468,7 @@ export function ExperimentWizard({
 
       {/* Step 4: Review and Confirmation */}
       {currentStep === 4 && (
-        <div className="flex flex-col gap-5">
+        <div data-testid="exp-wizard-step-4" className="flex flex-col gap-5">
           <div>
             <h3 className="text-sm font-medium text-slate-200">4. Review & Launch</h3>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -555,6 +556,7 @@ export function ExperimentWizard({
         {currentStep < 4 ? (
           <button
             type="button"
+            data-testid="wizard-next"
             onClick={() => setCurrentStep((prev) => Math.min(4, prev + 1))}
             disabled={!canProceed}
             className={`px-5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all ${
@@ -569,13 +571,13 @@ export function ExperimentWizard({
         ) : (
           <button
             type="button"
-            data-testid="btn-start-experiment"
+            data-testid="btn-start-exp"
             disabled={!isStep4Valid}
             onClick={handleStartExperiment}
             title={runningExperimentName ? `Experiment ${runningExperimentName} is already running` : undefined}
             className={`px-6 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
               isStep4Valid
-                ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-900/30'
+                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-900/30'
                 : 'opacity-40 cursor-not-allowed bg-slate-800 text-slate-500'
             }`}
           >

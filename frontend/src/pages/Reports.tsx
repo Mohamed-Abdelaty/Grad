@@ -168,7 +168,7 @@ export default function Reports() {
   }, [reports]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div data-testid="page-reports" className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -185,6 +185,7 @@ export default function Reports() {
         <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-lg">
           <button
             type="button"
+            data-testid="view-mode-cards"
             onClick={() => handleToggleView('cards')}
             className={`p-1.5 rounded text-xs font-medium flex items-center gap-1.5 transition-colors ${
               viewMode === 'cards'
@@ -198,6 +199,7 @@ export default function Reports() {
           </button>
           <button
             type="button"
+            data-testid="view-mode-table"
             onClick={() => handleToggleView('table')}
             className={`p-1.5 rounded text-xs font-medium flex items-center gap-1.5 transition-colors ${
               viewMode === 'table'
@@ -287,6 +289,7 @@ export default function Reports() {
 
         {/* Target Filter */}
         <select
+          data-testid="filter-target"
           value={targetFilter}
           onChange={(e) => updateQueryParam('target', e.target.value)}
           className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand"
@@ -301,6 +304,7 @@ export default function Reports() {
 
         {/* Fault Filter */}
         <select
+          data-testid="filter-fault"
           value={faultFilter}
           onChange={(e) => updateQueryParam('fault', e.target.value)}
           className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand"
@@ -315,6 +319,7 @@ export default function Reports() {
 
         {/* Result Filter */}
         <select
+          data-testid="filter-result"
           value={resultFilter}
           onChange={(e) => updateQueryParam('result', e.target.value)}
           className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand"
@@ -371,7 +376,7 @@ export default function Reports() {
         </div>
       ) : viewMode === 'cards' ? (
         /* Cards View */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div data-testid="reports-cards" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {reports.map((report) => {
             const isChecked = selectedIds.includes(report.id);
             return (
@@ -470,7 +475,7 @@ export default function Reports() {
         </div>
       ) : (
         /* Table View */
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+        <div data-testid="reports-table" className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-950 text-slate-400 uppercase font-semibold text-[11px] border-b border-slate-800">
@@ -596,7 +601,7 @@ export default function Reports() {
 
       {/* Floating Compare Action Bar */}
       {selectedIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 border border-brand/60 shadow-2xl rounded-2xl px-5 py-3 flex items-center gap-4 text-xs font-semibold text-slate-100 backdrop-blur-md animate-in slide-in-from-bottom-6">
+        <div data-testid="compare-selection-bar" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 border border-brand/60 shadow-2xl rounded-2xl px-5 py-3 flex items-center gap-4 text-xs font-semibold text-slate-100 backdrop-blur-md animate-in slide-in-from-bottom-6">
           <span className="text-brand-light font-mono">
             {selectedIds.length} {selectedIds.length === 1 ? 'report' : 'reports'} selected
           </span>
@@ -604,6 +609,7 @@ export default function Reports() {
 
           <button
             type="button"
+            data-testid="btn-compare-now"
             onClick={() => setCompareOpen(true)}
             disabled={selectedIds.length < 2}
             className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md ${

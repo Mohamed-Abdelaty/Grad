@@ -576,10 +576,6 @@ async def cancel_experiment(
     runner = _RUNNING_RUNNERS.get(str(experiment_id))
     if runner is not None:
         runner.cancel()
-        return {
-            "message": "Cancellation requested.",
-            "experiment_id": str(experiment_id),
-        }
 
     from sqlalchemy import select
 
@@ -664,16 +660,16 @@ async def list_reports(
 
     if target:
         query = query.where(
-            (Report.metadata_["target"].astext == target)
-            | (Report.metadata_["targetService"].astext == target)
+            (Report.metadata_["target"].as_string() == target)
+            | (Report.metadata_["targetService"].as_string() == target)
         )
     if fault:
         query = query.where(
-            (Report.metadata_["failure_type"].astext == fault)
-            | (Report.metadata_["faultType"].astext == fault)
+            (Report.metadata_["failure_type"].as_string() == fault)
+            | (Report.metadata_["faultType"].as_string() == fault)
         )
     if result:
-        query = query.where(Report.metadata_["result"].astext == result)
+        query = query.where(Report.metadata_["result"].as_string() == result)
     if parsed_from:
         query = query.where(Report.created_at >= parsed_from)
     if parsed_to:
@@ -689,9 +685,9 @@ async def list_reports(
     if sort == "created_asc":
         query = query.order_by(Report.created_at.asc())
     elif sort == "recovery_asc":
-        query = query.order_by(Report.metadata_["recovery_time_seconds"].astext.cast(func.float).asc().nullslast())
+        query = query.order_by(Report.metadata_["recovery_time_seconds"].as_float().asc().nullslast())
     elif sort == "recovery_desc":
-        query = query.order_by(Report.metadata_["recovery_time_seconds"].astext.cast(func.float).desc().nullslast())
+        query = query.order_by(Report.metadata_["recovery_time_seconds"].as_float().desc().nullslast())
     else:  # created_desc
         query = query.order_by(Report.created_at.desc())
 

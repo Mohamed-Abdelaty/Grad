@@ -229,7 +229,7 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
 
   return (
     <div
-      data-testid="exp-monitor"
+      data-testid="active-exp-monitor"
       className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl flex flex-col gap-6"
     >
       {/* Polite live region for accessibility */}
@@ -279,7 +279,7 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
         <div className="flex items-center gap-3">
           <div className="flex flex-col items-end gap-1">
             <span
-              data-testid="fault-phase"
+              data-testid="exp-fault-badge"
               className={`px-3 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 ${
                 faultPhaseColors[detail.faultPhase] || faultPhaseColors.not_injected
               }`}
@@ -299,6 +299,7 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
           {isRunning && (
             <button
               type="button"
+              data-testid="btn-cancel-exp"
               onClick={() => setCancelModalOpen(true)}
               disabled={isCancelling}
               className="px-3.5 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-200 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
@@ -322,7 +323,7 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
         </div>
 
         <div
-          data-testid="lifecycle"
+          data-testid="exp-lifecycle"
           className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80"
         >
           {detail.phases.map((phase) => {
@@ -401,7 +402,7 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
                 <XCircle className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
               )}
               <div>
-                <h3 className="text-base font-bold">
+                <h3 data-testid="exp-result-verdict" className="text-base font-bold">
                   Experiment Result: {detail.result || 'INCOMPLETE'}
                 </h3>
                 {detail.failedCriteria.length > 0 ? (
@@ -510,7 +511,7 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
       )}
 
       {/* Execution Events Log with LogViewer */}
-      <div className="flex flex-col gap-3">
+      <div data-testid="exp-log-viewer" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
           <span className="font-semibold text-slate-300">
             Real Execution Events ({events.length})

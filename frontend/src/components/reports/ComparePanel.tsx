@@ -42,6 +42,7 @@ export function ComparePanel({ open, onClose, reports }: Props) {
           </div>
           <button
             type="button"
+            data-testid="btn-close-compare"
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
             title="Close comparison"

@@ -96,19 +96,22 @@ export default function ReportDetails() {
   }, [detail]);
 
   const availabilityData = useMemo(() => {
-    if (!detail?.results?.availabilitySamples) return null;
-    return availabilityStepData(detail.results.availabilitySamples, {
-      start: detail.faultInjectedAt,
-      end: detail.faultRevertedAt,
+    const samples = detail?.results?.availabilitySamples || (detail as any)?.availabilitySamples;
+    if (!samples) return null;
+    return availabilityStepData(samples, {
+      start: detail?.faultInjectedAt,
+      end: detail?.faultRevertedAt,
     });
   }, [detail]);
 
   const throughputData = useMemo(() => {
-    return detail?.results ? throughputBars(detail.results) : null;
+    const res = detail?.results || (detail as any);
+    return res ? throughputBars(res) : null;
   }, [detail]);
 
   const cpuData = useMemo(() => {
-    return detail?.results?.cpuSamples ? resourceSeries(detail.results.cpuSamples) : null;
+    const samples = detail?.results?.cpuSamples || (detail as any)?.cpuSamples;
+    return samples ? resourceSeries(samples) : null;
   }, [detail]);
 
   const handleExportJson = () => {
@@ -178,7 +181,7 @@ export default function ReportDetails() {
       : (detail.logs || []).filter((l) => !logSearch || l.toLowerCase().includes(logSearch.toLowerCase()));
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+    <div data-testid="page-report-details" className="space-y-6 max-w-6xl mx-auto pb-12">
       {/* Top Navigation & Actions Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
         <Link
@@ -192,6 +195,7 @@ export default function ReportDetails() {
         <div className="flex items-center gap-3">
           <button
             type="button"
+            data-testid="btn-export-json"
             onClick={handleExportJson}
             className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors"
             title="Download full report as JSON"
@@ -202,7 +206,7 @@ export default function ReportDetails() {
           <button
             type="button"
             onClick={handlePrint}
-            className="px-3.5 py-1.5 bg-brand hover:bg-brand-dark text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
+            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
             title="Print or export as PDF"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -217,6 +221,7 @@ export default function ReportDetails() {
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3">
               <span
+                data-testid="report-verdict-pill"
                 className={`px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
                   isPass
                     ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
@@ -292,7 +297,7 @@ export default function ReportDetails() {
         ) : null}
 
         {/* Criteria Evaluation Table */}
-        <div className="flex flex-col gap-2">
+        <div data-testid="report-criteria-table" className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-slate-200">Acceptance Criteria Evaluation</h2>
           <div className="overflow-x-auto border border-slate-800 rounded-xl">
             <table className="w-full text-left text-xs divide-y divide-slate-800">
@@ -329,7 +334,7 @@ export default function ReportDetails() {
         </div>
 
         {/* Key Metrics Table */}
-        <div className="flex flex-col gap-2">
+        <div data-testid="report-key-metrics" className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-slate-200">Key Execution Metrics</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex flex-col gap-1">
@@ -401,7 +406,7 @@ export default function ReportDetails() {
         </div>
 
         {/* 12-Phase Lifecycle Timeline */}
-        <div className="flex flex-col gap-2">
+        <div data-testid="report-timeline" className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-slate-200">Lifecycle Phases Timeline</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
             {detail.phases.map((p) => {
@@ -445,7 +450,9 @@ export default function ReportDetails() {
         </div>
 
         {/* Dynamic Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div data-testid="report-charts" className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold text-slate-200">Operational Telemetry & Performance Charts</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Availability Step Chart */}
           {availabilityData && (
             <div className="bg-slate-950/60 border border-slate-800 p-4 rounded-xl flex flex-col gap-2">
@@ -537,10 +544,11 @@ export default function ReportDetails() {
               </div>
             </div>
           )}
+          </div>
         </div>
 
         {/* AI Analysis Panel */}
-        <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/40">
+        <div data-testid="report-ai-panel" className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/40">
           <button
             type="button"
             onClick={() => setAiExpanded(!aiExpanded)}
@@ -589,7 +597,7 @@ export default function ReportDetails() {
                   )}
                 </div>
               ) : (
-                <p className="text-slate-500 italic">
+                <p className="text-slate-400 italic">
                   AI analysis not generated for this run; run with AI insights enabled to populate.
                 </p>
               )}
@@ -598,7 +606,7 @@ export default function ReportDetails() {
         </div>
 
         {/* Execution Log */}
-        <div className="flex flex-col gap-3">
+        <div data-testid="report-logs" className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
             <span className="font-semibold text-slate-300">
               Execution Log Output ({logLines.length} lines)

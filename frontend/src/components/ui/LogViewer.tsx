@@ -79,7 +79,7 @@ export function LogViewer({
         <div className="px-3 py-1.5 bg-surface-base border-b border-surface-border text-xs font-medium text-slate-400 flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <span>{label}</span>
-            <span className="tabular-nums text-slate-500">{itemCount} lines</span>
+            <span className="tabular-nums text-slate-400">{itemCount} lines</span>
           </div>
           {headerControls && <div>{headerControls}</div>}
         </div>
@@ -95,7 +95,7 @@ export function LogViewer({
         style={{ maxHeight }}
       >
         {itemCount === 0 ? (
-          <p className="text-xs text-slate-600 italic font-sans">{emptyMessage}</p>
+          <p className="text-xs text-slate-400 italic font-sans">{emptyMessage}</p>
         ) : entries ? (
           entries.map((entry, i) => {
             const level = entry.level || 'info';
@@ -105,7 +105,7 @@ export function LogViewer({
                 className="flex items-start gap-2 leading-relaxed hover:bg-slate-900/60 rounded px-1.5 py-0.5"
               >
                 {entry.timestamp && (
-                  <span className="text-slate-500 tabular-nums select-none shrink-0 text-[11px]">
+                  <span className="text-slate-400 tabular-nums select-none shrink-0 text-[11px]">
                     {entry.timestamp}
                   </span>
                 )}

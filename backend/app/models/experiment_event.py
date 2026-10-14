@@ -11,12 +11,16 @@ from datetime import datetime
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.database.base import Base
 
 
-class ExperimentEvent(Base):
+class _EventBase(DeclarativeBase):
+    metadata = Base.metadata
+
+
+class ExperimentEvent(_EventBase):
     """
     A single execution event emitted during a ChaosLab experiment.
     """
