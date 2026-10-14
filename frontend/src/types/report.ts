@@ -1,14 +1,45 @@
-// Raw shape returned by GET /api/reports (list endpoint).
+import { ExperimentDetail } from './experiment';
+
 export interface ReportListItem {
-  report_id: string;
+  id: string;
+  experimentId: string;
   title: string;
-  created_at: string;
-  // summary == Report.metadata_ — a dict of canonical metric fields.
-  summary: Record<string, unknown>;
+  targetService: string;
+  faultType: string;
+  result: 'PASS' | 'FAIL' | null;
+  createdAt: string;
+  recoveryTimeSeconds: number | null;
+  dataLoss: number;
+  throughputBaseline: number | null;
+  throughputDuringFault: number | null;
+  availabilityPercentage: number | null;
+  errorRate: number | null;
+  cpuAvgPercent: number | null;
+  memoryAvgBytes: number | null;
+
+  // Compatibility fields
+  report_id?: string;
+  created_at?: string;
+  summary?: Record<string, unknown>;
 }
 
-// Canonical frontend Report type — produced by mapToReport() in api/experiments.ts.
-// All metric fields are nullable because not every experiment path populates every metric.
+export interface ReportDetail extends ExperimentDetail {
+  reportId: string;
+  aiAnalysis: Record<string, unknown> | null;
+}
+
+export interface ReportFilterParams {
+  target?: string;
+  fault?: string;
+  result?: 'PASS' | 'FAIL';
+  from?: string;
+  to?: string;
+  sort?: 'created_desc' | 'created_asc' | 'recovery_asc' | 'recovery_desc';
+  limit?: number;
+  offset?: number;
+}
+
+// Canonical frontend Report type for compatibility with existing components
 export interface Report {
   id: string;
   title: string;
@@ -20,6 +51,5 @@ export interface Report {
   availabilityPercentage: number | null;
   throughputRecordsPerSec: number | null;
   dataLossPercentage: number | null;
-  // Full metadata dict for charts that need arbitrary fields.
   summary: Record<string, unknown>;
 }
