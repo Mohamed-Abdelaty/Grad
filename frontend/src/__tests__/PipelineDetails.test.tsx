@@ -435,18 +435,18 @@ describe('PipelineDetails Live Operations View', () => {
     expect(configTab).toBeInTheDocument();
     await waitFor(() => {
       expect(configTab).toHaveTextContent('sales-pipeline');
+      expect(screen.getByTestId('mock-yaml-editor')).toBeInTheDocument();
     });
     expect(configTab).toHaveTextContent('/data/sales_output');
-    expect(screen.getByTestId('mock-yaml-editor')).toBeInTheDocument();
   });
 
-  it('Output tab renders next phase placeholder and storage destination', async () => {
+  it('Output tab renders not-ready state while pipeline is running', async () => {
     renderPage(['/pipelines/run-test-123?tab=output']);
 
     const outputTab = screen.getByTestId('output-tab');
     expect(outputTab).toBeInTheDocument();
-    expect(outputTab).toHaveTextContent('Output preview is added in the next phase');
-    expect(outputTab).toHaveTextContent('/data/sales_output');
+    expect(screen.getByTestId('output-not-ready')).toBeInTheDocument();
+    expect(outputTab).toHaveTextContent('Pipeline is still running');
   });
 
   it('re-render isolation: updating lastUpdatedAt does not re-render heavy tabs', async () => {

@@ -264,6 +264,8 @@ export default function PipelineDetails() {
         {/* Tab 4: Output */}
         <TabPanel id="output">
           <OutputTab
+            runId={runId || ''}
+            status={status}
             progress={progress}
             actualOutputPath={run?.actualOutputPath}
             fallbackOutputPath={run?.outputPath}
