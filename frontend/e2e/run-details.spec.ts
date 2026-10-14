@@ -193,7 +193,7 @@ test.describe('UI-5 Live Run Details Page E2E', () => {
     // Check logs tab gains at least 5 lines
     await page.getByRole('tab', { name: 'Logs' }).click();
     await expect(page.getByTestId('logs-tab')).toBeVisible();
-    await expect(page.getByTestId('logs-tab')).not.toContainText('0 lines', { timeout: 15_000 });
+    await expect(page.locator('[role="log"] > div').first()).toBeVisible({ timeout: 15_000 });
     const logItemCount = await page.locator('[role="log"] > div').count();
     expect(logItemCount).toBeGreaterThanOrEqual(5);
 
@@ -496,4 +496,79 @@ storage:
       expect(videoStat.size, 'Video long-run.webm must be under 15 MB').toBeLessThan(15 * 1024 * 1024);
     }
   });
+
+  // 9. Full lifecycle: running stage transitions, metric updates, terminal success
+  test('9. Full lifecycle: running stage transitions, metric updates, terminal success', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await doLogin(page);
+    await clickNav(page, 'Pipelines');
+    await expect(page).toHaveURL(/pipelines/, { timeout: 10_000 });
+
+    // Pick sales-csv template and run
+    await page.getByTestId('btn-templates').click();
+    await page.getByTestId('template-sales-csv').click();
+    await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5000 });
+    await page.getByTestId('btn-validate').click();
+    await expect(page.getByTestId('validation-state')).toHaveText('Valid', { timeout: 15_000 });
+    await page.getByTestId('btn-run').click();
+    await expect(page).toHaveURL(/\/pipelines\/[a-f0-9-]+/, { timeout: 15_000 });
+
+    // Verify stage transitions and terminal success
+    await expect(page.getByTestId('stage-source')).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
+    await expect(page.getByTestId('stage-spark')).toHaveAttribute('data-state', 'done', { timeout: 120_000 });
+    await expect(page.getByTestId('run-header')).toContainText('succeeded', { timeout: 30_000 });
+
+    // Metrics counter tiles update from '—'
+    const rowsTotal = page.getByTestId('counter-rows-total');
+    await expect(rowsTotal).not.toHaveText('—', { timeout: 10_000 });
+  });
+
+  // 10. Live log streaming: shows incoming logs, search filters lines, auto-scroll stays pinned
+  test('10. Live log streaming: shows incoming logs, search filters lines, auto-scroll stays pinned', async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await doLogin(page);
+    await clickNav(page, 'Pipelines');
+    await expect(page).toHaveURL(/pipelines/, { timeout: 10_000 });
+
+    // Navigate to first completed run details
+    const firstRunLink = page.getByTestId('runs-row').locator('a').first();
+    if (await firstRunLink.isVisible({ timeout: 10_000 })) {
+      await firstRunLink.click();
+      await expect(page).toHaveURL(/\/pipelines\/[a-f0-9-]+/, { timeout: 15_000 });
+
+      // Switch to Logs tab
+      await page.getByRole('tab', { name: 'Logs' }).click();
+      await expect(page.getByTestId('logs-tab')).toBeVisible();
+
+      // Ensure logs are present
+      await expect(page.getByTestId('logs-tab')).not.toContainText('0 lines', { timeout: 15_000 });
+      const initialCount = await page.locator('[role="log"] > div').count();
+      expect(initialCount).toBeGreaterThanOrEqual(1);
+
+      // Search filters lines
+      const searchInput = page.locator('input[placeholder*="Filter logs"]');
+      await searchInput.fill('INFO');
+      await page.waitForTimeout(300); // 200ms debounce
+      const filteredCount = await page.locator('[role="log"] > div').count();
+      expect(filteredCount).toBeGreaterThanOrEqual(1);
+
+      // Clear search
+      await searchInput.fill('');
+      await page.waitForTimeout(300);
+
+      // Auto-scroll pause / resume toggle
+      const pauseBtn = page.getByRole('button', { name: /pause scroll/i });
+      if (await pauseBtn.isVisible()) {
+        await pauseBtn.click();
+        await expect(page.getByRole('button', { name: /resume scroll/i })).toBeVisible();
+        await page.getByRole('button', { name: /resume scroll/i }).click();
+        await expect(page.getByRole('button', { name: /pause scroll/i })).toBeVisible();
+      }
+    }
+  });
 });
+

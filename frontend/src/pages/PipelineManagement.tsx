@@ -67,7 +67,15 @@ export default function PipelineManagement() {
   const templatesButtonRef = useRef<HTMLButtonElement>(null);
 
   // Editor content & file metadata
-  const [yamlContent, setYamlContent] = useState('');
+  const [yamlContent, setYamlContent] = useState(() => {
+    const state = location.state as { yaml?: string; fileName?: string } | null;
+    if (state?.yaml) return state.yaml;
+    try {
+      return sessionStorage.getItem('pipeline_editor_draft') || '';
+    } catch {
+      return '';
+    }
+  });
   const [fileName, setFileName] = useState('pipeline.yaml');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -214,6 +222,11 @@ export default function PipelineManagement() {
   // Handle user typing
   const handleEditorChange = (newVal: string) => {
     setYamlContent(newVal);
+    try {
+      sessionStorage.setItem('pipeline_editor_draft', newVal);
+    } catch {
+      // ignore
+    }
     setHasUnsavedChanges(true);
     // Any edit invalidates previous successful validation
     if (validationStatus === 'valid') {
@@ -225,6 +238,11 @@ export default function PipelineManagement() {
   const applyContent = (content: string, name: string) => {
     setYamlContent(content);
     setFileName(name);
+    try {
+      sessionStorage.setItem('pipeline_editor_draft', content);
+    } catch {
+      // ignore
+    }
     setHasUnsavedChanges(false);
     performValidation(content);
   };

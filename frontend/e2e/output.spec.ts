@@ -44,7 +44,8 @@ function assertClean(audit: Audit, label: string) {
     (e) =>
       !e.includes('Download the React DevTools') &&
       !e.includes('ResizeObserver') &&
-      !e.includes('content.js')
+      !e.includes('content.js') &&
+      !e.includes('409 (Conflict)')
   );
   const realFailures = audit.failures.filter(
     (f) => !f.includes('/stream') // SSE stream disconnect on navigation

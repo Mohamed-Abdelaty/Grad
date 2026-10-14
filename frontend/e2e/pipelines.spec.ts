@@ -457,4 +457,48 @@ storage:
       }
     }
   });
+
+  // 11. Visual snapshot: 5 responsive viewport screenshots saved and valid
+  test('11. Visual snapshot: 5 responsive viewport screenshots saved and valid', async () => {
+    const screenshotDir = path.resolve('..', 'docs', 'screenshots', 'ui-4');
+    const requiredFiles = [
+      'empty_state.png',
+      'valid_state.png',
+      'invalid_state.png',
+      'runs_table_filters.png',
+      'mobile_valid_state.png',
+    ];
+    for (const f of requiredFiles) {
+      const fullPath = path.join(screenshotDir, f);
+      expect(fs.existsSync(fullPath), `Screenshot file ${f} must exist`).toBe(true);
+      const stat = fs.statSync(fullPath);
+      expect(stat.size, `Screenshot ${f} size ${stat.size} must be under 400 KB`).toBeLessThan(400 * 1024);
+      expect(stat.size, `Screenshot ${f} size ${stat.size} must be greater than 1 KB`).toBeGreaterThan(1024);
+    }
+  });
+
+  // 12. Persistence: editing YAML, navigating away, and returning keeps draft
+  test('12. Persistence: editing YAML, navigating away, and returning keeps draft', async ({
+    page,
+  }) => {
+    await doLogin(page);
+    await clickNav(page, 'Pipelines');
+    await expect(page).toHaveURL(/pipelines/, { timeout: 10_000 });
+
+    const draftText = '# draft persistence test\npipeline:\n  name: test_persist\n';
+    await setEditorContent(page, draftText);
+    await expect(page.locator('.cm-content')).toContainText('test_persist');
+
+    // Navigate away to Dashboard
+    await clickNav(page, 'Dashboard');
+    await expect(page).toHaveURL('/', { timeout: 10_000 });
+
+    // Navigate back to Pipelines
+    await clickNav(page, 'Pipelines');
+    await expect(page).toHaveURL(/pipelines/, { timeout: 10_000 });
+
+    // Confirm draft is preserved in editor
+    await expect(page.locator('.cm-content')).toContainText('test_persist', { timeout: 5000 });
+  });
 });
+
