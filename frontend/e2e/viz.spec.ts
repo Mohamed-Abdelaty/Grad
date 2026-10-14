@@ -271,8 +271,8 @@ test.describe('UI-7 Pipeline Visualization E2E', () => {
 
     // Initial heap measurement
     const initialHeap = await page.evaluate(() => {
-      const mem = (performance as any).memory;
-      return mem ? mem.usedJSHeapSize : null;
+      const perf = performance as unknown as { memory?: { usedJSHeapSize: number } };
+      return perf.memory ? perf.memory.usedJSHeapSize : null;
     });
 
     console.log(`[UI-7 E2E] Initial JS heap: ${initialHeap ? (initialHeap / (1024 * 1024)).toFixed(2) + ' MB' : 'N/A'}`);
@@ -281,8 +281,8 @@ test.describe('UI-7 Pipeline Visualization E2E', () => {
     await page.waitForTimeout(60_000);
 
     const finalHeap = await page.evaluate(() => {
-      const mem = (performance as any).memory;
-      return mem ? mem.usedJSHeapSize : null;
+      const perf = performance as unknown as { memory?: { usedJSHeapSize: number } };
+      return perf.memory ? perf.memory.usedJSHeapSize : null;
     });
 
     console.log(`[UI-7 E2E] Final JS heap after 60s: ${finalHeap ? (finalHeap / (1024 * 1024)).toFixed(2) + ' MB' : 'N/A'}`);
@@ -313,8 +313,8 @@ test.describe('UI-7 Pipeline Visualization E2E', () => {
     await expect(page.getByTestId('viz-canvas')).toBeVisible({ timeout: 15_000 });
 
     const initialHeap = await page.evaluate(() => {
-      const mem = (performance as any).memory;
-      return mem ? mem.usedJSHeapSize : null;
+      const perf = performance as unknown as { memory?: { usedJSHeapSize: number } };
+      return perf.memory ? perf.memory.usedJSHeapSize : null;
     });
 
     // Navigate away and back 10 times via sidebar nav and runs table link
@@ -331,8 +331,8 @@ test.describe('UI-7 Pipeline Visualization E2E', () => {
     }
 
     const finalHeap = await page.evaluate(() => {
-      const mem = (performance as any).memory;
-      return mem ? mem.usedJSHeapSize : null;
+      const perf = performance as unknown as { memory?: { usedJSHeapSize: number } };
+      return perf.memory ? perf.memory.usedJSHeapSize : null;
     });
 
     console.log(
