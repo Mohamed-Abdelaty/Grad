@@ -97,3 +97,49 @@
     transition: width var(--duration-base) var(--ease-default);
   }
 }
+
+/* ── Print Stylesheet ─────────────────────────────────────────────────────── */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+  aside, nav, header, .no-print, button, [role="navigation"] {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  .bg-slate-900, .bg-slate-950, .bg-slate-800, .bg-slate-900\/40, .bg-slate-900\/60, .bg-slate-900\/80, .bg-slate-900\/50 {
+    background-color: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+  }
+  .text-slate-100, .text-slate-200, .text-slate-300, .text-slate-400, .text-slate-500 {
+    color: #0f172a !important;
+  }
+  pre, code {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+  th, td {
+    border: 1px solid #cbd5e1 !important;
+    color: #000000 !important;
+  }
+  @page {
+    margin: 1.5cm;
+    size: auto;
+  }
+}

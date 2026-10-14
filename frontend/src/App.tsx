@@ -13,6 +13,7 @@ const PipelineManagement = lazy(() => import('./pages/PipelineManagement'));
 const PipelineDetails = lazy(() => import('./pages/PipelineDetails'));
 const ReliabilityTesting = lazy(() => import('./pages/ReliabilityTesting'));
 const Reports = lazy(() => import('./pages/Reports'));
+const ReportDetails = lazy(() => import('./pages/ReportDetails'));
 const DevVizPlayground = import.meta.env.DEV
   ? lazy(() => import('./features/viz/Playground'))
   : null;
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="/pipelines/:runId" element={<PipelineDetails />} />
             <Route path="/reliability" element={<ReliabilityTesting />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/reports/:id" element={<ReportDetails />} />
           </Route>
         </Route>
       </Routes>
