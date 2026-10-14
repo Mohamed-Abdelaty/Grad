@@ -193,7 +193,7 @@ test.describe('UI-5 Live Run Details Page E2E', () => {
     // Check logs tab gains at least 5 lines
     await page.getByRole('tab', { name: 'Logs' }).click();
     await expect(page.getByTestId('logs-tab')).toBeVisible();
-    await expect(page.getByTestId('logs-tab')).toContainText('lines');
+    await expect(page.getByTestId('logs-tab')).not.toContainText('0 lines', { timeout: 15_000 });
     const logItemCount = await page.locator('[role="log"] > div').count();
     expect(logItemCount).toBeGreaterThanOrEqual(5);
 
