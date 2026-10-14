@@ -1,127 +1,63 @@
 import React from 'react';
-import { SceneModel, StationModel, PipeModel } from './model';
+import { SceneModel, StationModel } from './model';
 
 export interface Scene2DProps {
   model: SceneModel;
   paused?: boolean;
 }
 
-// Inline SVGs for states
-function StateIcon({ state }: { state: StationModel['state'] }) {
+// Inline SVG Icon per state
+function StateIcon({ state, x, y }: { state: StationModel['state']; x: number; y: number }) {
+  const gProps = { transform: `translate(${x}, ${y})`, 'data-testid': `icon-${state}` };
   switch (state) {
     case 'active':
       return (
-        <svg
-          data-testid="icon-active"
-          className="inline-block w-4 h-4 mr-1 animate-spin"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-        </svg>
+        <g {...gProps}>
+          <circle cx="8" cy="8" r="6" stroke="#38bdf8" strokeWidth="2" fill="none" strokeDasharray="16 8" />
+        </g>
       );
     case 'done':
       return (
-        <svg
-          data-testid="icon-done"
-          className="inline-block w-4 h-4 mr-1 text-emerald-400"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M20 6 9 17l-5-5" />
-        </svg>
+        <g {...gProps}>
+          <circle cx="8" cy="8" r="6" stroke="#34d399" strokeWidth="1.5" fill="none" />
+          <path d="M5 8.5 L7 10.5 L11 6.5" stroke="#34d399" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        </g>
       );
     case 'error':
       return (
-        <svg
-          data-testid="icon-error"
-          className="inline-block w-4 h-4 mr-1 text-rose-500"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="12" />
-          <line x1="12" y1="16" x2="12.01" y2="16" />
-        </svg>
+        <g {...gProps}>
+          <circle cx="8" cy="8" r="6" stroke="#f43f5e" strokeWidth="1.5" fill="none" />
+          <line x1="8" y1="5" x2="8" y2="8.5" stroke="#f43f5e" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="8" cy="11" r="0.75" fill="#f43f5e" />
+        </g>
       );
     case 'faulted':
       return (
-        <svg
-          data-testid="icon-faulted"
-          className="inline-block w-4 h-4 mr-1 text-rose-400"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-          <line x1="12" y1="9" x2="12" y2="13" />
-          <line x1="12" y1="17" x2="12.01" y2="17" />
-        </svg>
+        <g {...gProps}>
+          <polygon points="8,3 14,13 2,13" stroke="#f43f5e" strokeWidth="1.5" fill="none" />
+          <line x1="8" y1="6.5" x2="8" y2="9.5" stroke="#f43f5e" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="8" cy="11.5" r="0.75" fill="#f43f5e" />
+        </g>
       );
     case 'recovering':
       return (
-        <svg
-          data-testid="icon-recovering"
-          className="inline-block w-4 h-4 mr-1 text-amber-400 animate-spin"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-          <path d="M21 3v5h-5" />
-          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-          <path d="M3 21v-5h5" />
-        </svg>
+        <g {...gProps}>
+          <circle cx="8" cy="8" r="6" stroke="#fbbf24" strokeWidth="1.5" fill="none" strokeDasharray="10 6" />
+        </g>
       );
     case 'skipped':
       return (
-        <svg
-          data-testid="icon-skipped"
-          className="inline-block w-4 h-4 mr-1 text-slate-400"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
+        <g {...gProps}>
+          <line x1="4" y1="8" x2="12" y2="8" stroke="#94a3b8" strokeWidth="2" strokeDasharray="3 2" />
+        </g>
       );
     case 'pending':
     default:
       return (
-        <svg
-          data-testid="icon-pending"
-          className="inline-block w-4 h-4 mr-1 text-slate-500"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <polyline points="12 6 12 12 16 14" />
-        </svg>
+        <g {...gProps}>
+          <circle cx="8" cy="8" r="6" stroke="#64748b" strokeWidth="1.5" fill="none" />
+          <polyline points="8 5 8 8 10 9" stroke="#64748b" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        </g>
       );
   }
 }
@@ -310,6 +246,7 @@ export const Scene2D: React.FC<Scene2DProps> = ({ model, paused = false }) => {
                 opacity={station.state === 'pending' ? 0.4 : 1}
               >
                 {/* Station Label & Icon */}
+                <StateIcon state={station.state} x={x + 10} y={VESSEL_Y - 26} />
                 <text
                   x={x + VESSEL_WIDTH / 2}
                   y={VESSEL_Y - 22}

@@ -92,7 +92,6 @@ function PipeParticles({
     return arr;
   }, [count]);
 
-  const length = toPos[0] - fromPos[0];
   const startX = fromPos[0] + 0.9;
   const endX = toPos[0] - 0.9;
   const pipeDist = endX - startX;
@@ -257,8 +256,7 @@ function Station3D({
         const shake = Math.sin((timeSinceTransition / 0.4) * Math.PI * 8) * 0.08;
         groupRef.current.position.x = position[0] + shake;
       } else if (station.state === 'faulted') {
-        // Flicker
-        const flicker = Math.sin(state.clock.getElapsedTime() * 50) > 0 ? 1 : 0.4;
+        // Flicker / fault state
         groupRef.current.scale.set(1, 1, 1);
         groupRef.current.position.x = position[0];
       } else if (station.state === 'recovering') {
@@ -443,7 +441,7 @@ export const PipelineScene3D: React.FC<PipelineScene3DProps> = ({
   onFps,
   onContextLost,
 }) => {
-  const [controlsRef, setControlsRef] = useState<any>(null);
+  const [controlsRef, setControlsRef] = useState<{ reset: () => void } | null>(null);
 
   const isAnyWorking = model.stations.some((s) => s.working);
   const frameloop = paused ? 'demand' : isAnyWorking ? 'always' : 'demand';
@@ -512,7 +510,7 @@ export const PipelineScene3D: React.FC<PipelineScene3DProps> = ({
         ))}
 
         {/* Translucent Pipes & Instanced Particles */}
-        {model.pipes.map((pipe, idx) => {
+        {model.pipes.map((pipe) => {
           const fromKey = pipe.from;
           const toKey = pipe.to;
           const pFrom = STATION_POSITIONS[fromKey];

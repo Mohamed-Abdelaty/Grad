@@ -107,7 +107,7 @@ export const PipelineVisualization: React.FC<PipelineVisualizationProps> = ({
   }, [model?.announce]);
 
   const handle3DError = useCallback(
-    (err: Error) => {
+    () => {
       onChunkLoadError();
       toast.error('Failed to load 3D view, falling back to 2D');
     },

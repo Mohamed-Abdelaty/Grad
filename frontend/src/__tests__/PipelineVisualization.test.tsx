@@ -5,7 +5,6 @@ import { axe } from 'vitest-axe';
 import { PipelineVisualization } from '../features/viz/PipelineVisualization';
 import { RunProgress } from '../types/runProgress';
 import { resetWebGLCacheForTesting } from '../features/viz/useVizMode';
-import { toast } from 'sonner';
 
 vi.mock('sonner', () => ({
   toast: {
@@ -53,7 +52,7 @@ describe('PipelineVisualization Component', () => {
 
     HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation((contextId) => {
       if (contextId === 'webgl2' || contextId === 'webgl') {
-        return {} as any;
+        return {} as unknown as RenderingContext;
       }
       return null;
     });

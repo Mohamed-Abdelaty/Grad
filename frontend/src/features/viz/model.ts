@@ -372,8 +372,6 @@ export function toSceneModel(p: RunProgress, ctx: SceneContext): SceneModel {
   let announce = 'Pipeline run running.';
 
   const errorStation = resolvedStations.find((s) => s.state === 'error');
-  const faultedStation = resolvedStations.find((s) => s.state === 'faulted');
-  const recoveringStation = resolvedStations.find((s) => s.state === 'recovering');
   const activeStation = resolvedStations.find((s) => s.state === 'active');
 
   if (p.status === 'failed' || errorStation) {

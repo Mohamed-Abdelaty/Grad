@@ -24,7 +24,7 @@ describe('useVizMode', () => {
     // Default WebGL available
     HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation((contextId) => {
       if (contextId === 'webgl2' || contextId === 'webgl') {
-        return {} as any;
+        return {} as unknown as RenderingContext;
       }
       return null;
     });

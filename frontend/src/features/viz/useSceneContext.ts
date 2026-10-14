@@ -34,7 +34,7 @@ export function useSceneContext(progress: RunProgress | null | undefined): Scene
       }
       return { peakLag: newLag, peakRate: newRate };
     });
-  }, [progress?.runId, progress?.kafka?.consumerLag, progress?.throughput?.recordsPerSecond]);
+  }, [progress]);
 
   return ctx;
 }

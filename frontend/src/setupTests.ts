@@ -17,7 +17,7 @@ if (typeof window !== 'undefined' && !window.ResizeObserver) {
 
 // Mock @react-three/fiber and @react-three/drei for jsdom tests
 vi.mock('@react-three/fiber', () => ({
-  Canvas: ({ children, ...props }: any) => {
+  Canvas: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => {
     return {
       $$typeof: Symbol.for('react.element'),
       type: 'div',
@@ -37,7 +37,7 @@ vi.mock('@react-three/fiber', () => ({
 
 vi.mock('@react-three/drei', () => ({
   OrbitControls: () => null,
-  Html: ({ children }: any) => {
+  Html: ({ children }: { children?: React.ReactNode }) => {
     return {
       $$typeof: Symbol.for('react.element'),
       type: 'div',

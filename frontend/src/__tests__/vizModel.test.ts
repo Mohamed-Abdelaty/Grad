@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import { toSceneModel, mapFaultTargetToStation, SceneContext } from '../features/viz/model';
+import { renderHook } from '@testing-library/react';
+import { toSceneModel, SceneContext } from '../features/viz/model';
 import { useSceneContext } from '../features/viz/useSceneContext';
 import { RunProgress, StageProgress } from '../types/runProgress';
 
