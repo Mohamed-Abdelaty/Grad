@@ -773,6 +773,7 @@ async def create_output_download_link(
         return {
             "url": f"/api/pipeline-runs/{run_id}/output/download?token={token}",
             "expiresAt": exp_iso,
+            "expiresIn": settings.OUTPUT_DOWNLOAD_TOKEN_TTL_SECONDS,
             "sizeBytes": meta["totalSizeBytes"],
         }
     except InvalidOutputPathError:

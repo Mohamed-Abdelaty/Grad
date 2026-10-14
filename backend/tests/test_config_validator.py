@@ -73,12 +73,12 @@ class TestPlaceholderPasswords:
 
     def test_strong_password_accepted_in_development(self, monkeypatch):
         monkeypatch.setenv('APP_ENV', 'development')
-        s = _make_settings(ADMIN_USERNAME='admin', ADMIN_PASSWORD='REDACTED')
-        assert s.ADMIN_PASSWORD == 'REDACTED'
+        s = _make_settings(ADMIN_USERNAME='admin', ADMIN_PASSWORD='custom-test-secret-123')
+        assert s.ADMIN_PASSWORD == 'custom-test-secret-123'
 
     def test_placeholder_username_is_not_blocked(self, monkeypatch):
         """Only the password field has placeholder blocking; username does not."""
         monkeypatch.setenv('APP_ENV', 'development')
         # Should NOT raise — 'admin' is a placeholder password but a reasonable username.
-        s = _make_settings(ADMIN_USERNAME='admin', ADMIN_PASSWORD='REDACTED')
+        s = _make_settings(ADMIN_USERNAME='admin', ADMIN_PASSWORD='custom-test-secret-123')
         assert s.ADMIN_USERNAME == 'admin'

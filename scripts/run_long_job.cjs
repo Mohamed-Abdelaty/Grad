@@ -43,11 +43,24 @@ async function main() {
 
   const page = await context.newPage();
 
+function getCredentials() {
+  const u = process.env.E2E_USERNAME;
+  const p = process.env.E2E_PASSWORD;
+  if (!u) {
+    throw new Error('Missing required environment variable: E2E_USERNAME');
+  }
+  if (!p) {
+    throw new Error('Missing required environment variable: E2E_PASSWORD');
+  }
+  return { username: u, password: p };
+}
+
   // Login
+  const { username, password } = getCredentials();
   console.log('Logging in...');
   await page.goto('http://localhost:3000/login');
-  await page.locator('#username').fill('admin');
-  await page.locator('#password').fill('REDACTED');
+  await page.locator('#username').fill(username);
+  await page.locator('#password').fill(password);
   await page.getByRole('button', { name: /login|sign in/i }).click();
   await page.waitForURL('http://localhost:3000/');
 

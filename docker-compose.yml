@@ -381,7 +381,7 @@ services:
       # Read from .env (via env_file above). Explicit entries here ensure the
       # values are visible in `docker-compose config` output for auditing.
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-REDACTED}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       # ── Compose project name pin (single source of truth) ────────────────────
       # Must match the top-level name: in this file and Settings.COMPOSE_PROJECT_NAME.
       # safety.py reads PROJECT_CONTAINER_PREFIX from Settings.COMPOSE_PROJECT_NAME.

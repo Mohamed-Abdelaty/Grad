@@ -14,11 +14,11 @@ const USERNAME = process.env.E2E_USERNAME ?? '';
 const PASSWORD = process.env.E2E_PASSWORD ?? '';
 
 test.beforeAll(() => {
-  if (!USERNAME || !PASSWORD) {
-    throw new Error(
-      'E2E_USERNAME and E2E_PASSWORD must be set.\n' +
-      'Example: E2E_USERNAME=admin E2E_PASSWORD=REDACTED npm run e2e'
-    );
+  if (!USERNAME) {
+    throw new Error('Missing required environment variable: E2E_USERNAME');
+  }
+  if (!PASSWORD) {
+    throw new Error('Missing required environment variable: E2E_PASSWORD');
   }
 });
 

@@ -47,6 +47,7 @@ export interface OutputPreview {
 export interface DownloadLink {
   url: string;
   expiresAt: string;
+  expiresIn?: number;
   sizeBytes: number;
-  format: 'csv' | 'parquet';
+  format?: 'csv' | 'parquet';
 }

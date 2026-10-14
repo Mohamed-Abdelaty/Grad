@@ -545,13 +545,15 @@ def create_download_token(run: PipelineRun, format_type: str, username: str) -> 
     """Generate a short-lived (60 s) signed single-use download token."""
     settings = get_settings()
     now = datetime.now(timezone.utc)
-    exp = now + timedelta(seconds=settings.OUTPUT_DOWNLOAD_TOKEN_TTL_SECONDS)
+    iat = int(now.timestamp())
+    exp = iat + settings.OUTPUT_DOWNLOAD_TOKEN_TTL_SECONDS
     claims = {
         "sub": username,
         "purpose": "output_download",
         "run_id": str(run.id),
         "format": format_type,
         "jti": str(uuid.uuid4()),
+        "iat": iat,
         "exp": exp,
     }
     return jwt.encode(claims, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)

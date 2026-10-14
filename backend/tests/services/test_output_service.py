@@ -458,33 +458,108 @@ def test_download_total_too_large_raises():
 # ── 7. Signed One-Time Download Tokens ─────────────────────────────────────────
 
 
-def test_download_token_verification_and_single_use():
+# ── 7. Signed Download Tokens & TTL (Step 3.3) ──────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_download_token_expires_in_and_iat_delta():
+    """Step 3.3.a: response expiresIn == 60 and token exp - iat == 60."""
     run_id = uuid.uuid4()
-    run = PipelineRun(id=run_id, output_path="/data/test")
+    run = PipelineRun(id=run_id, status="succeeded", output_path="/data/test")
+    db = AsyncMock()
+    db.get.return_value = run
 
-    token = create_download_token(run, "csv", "admin")
-    assert token is not None
+    with patch("app.api.routes.pipeline_runs.describe_output", return_value={"totalSizeBytes": 1000}):
+        res = await create_output_download_link(
+            str(run_id),
+            body=DownloadLinkRequest(format="csv"),
+            current_user="admin",
+            db=db,
+        )
 
-    # First verify succeeds
-    payload = verify_download_token(token, str(run_id), "csv")
-    assert payload["format"] == "csv"
-    assert payload["run_id"] == str(run_id)
-
-    # Second verify of same token fails (replay protection)
-    with pytest.raises(InvalidDownloadTokenError):
-        verify_download_token(token, str(run_id), "csv")
-
-
-def test_download_token_expired():
-    run_id = uuid.uuid4()
-    run = PipelineRun(id=run_id, output_path="/data/test")
-
+    assert res["expiresIn"] == 60
     settings = get_settings()
-    with patch.object(settings, "OUTPUT_DOWNLOAD_TOKEN_TTL_SECONDS", -10):
+    token = res["url"].split("token=")[1]
+    claims = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+    assert claims["exp"] - claims["iat"] == 60
+
+
+def test_download_token_valid_at_59s():
+    """Step 3.3.b: token valid at 59 s."""
+    run_id = uuid.uuid4()
+    run = PipelineRun(id=run_id, output_path="/data/test")
+    t0 = datetime.now(timezone.utc)
+    t0_ts = int(t0.timestamp())
+
+    with patch("app.services.output_service.datetime") as mock_dt:
+        mock_dt.now.return_value = t0
         token = create_download_token(run, "csv", "admin")
 
+    with patch("jose.jwt.timegm", return_value=t0_ts + 59):
+        claims = verify_download_token(token, str(run_id), "csv")
+        assert claims["format"] == "csv"
+        assert claims["run_id"] == str(run_id)
+
+
+@pytest.mark.asyncio
+async def test_download_token_rejected_at_61s():
+    """Step 3.3.c: token rejected with 401 at 61 s."""
+    run_id = uuid.uuid4()
+    run = PipelineRun(id=run_id, status="succeeded", output_path="/data/test")
+    db = AsyncMock()
+    db.get.return_value = run
+    t0 = datetime.now(timezone.utc)
+    t0_ts = int(t0.timestamp())
+
+    with patch("app.services.output_service.datetime") as mock_dt:
+        mock_dt.now.return_value = t0
+        token = create_download_token(run, "csv", "admin")
+
+    with patch("jose.jwt.timegm", return_value=t0_ts + 61):
+        with pytest.raises(InvalidDownloadTokenError):
+            verify_download_token(token, str(run_id), "csv")
+
+        with pytest.raises(HTTPException) as exc:
+            await download_run_output(str(run_id), token=token, db=db)
+        assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_download_token_second_use_returns_401():
+    """Step 3.3.d: second use of a valid token returns 401 (single use)."""
+    run_id = uuid.uuid4()
+    run = PipelineRun(id=run_id, status="succeeded", output_path="/data/test")
+    db = AsyncMock()
+    db.get.return_value = run
+
+    token = create_download_token(run, "csv", "admin")
+
+    # First verify succeeds
+    claims = verify_download_token(token, str(run_id), "csv")
+    assert claims["run_id"] == str(run_id)
+
+    # Second verify of same token raises InvalidDownloadTokenError and route returns 401
     with pytest.raises(InvalidDownloadTokenError):
         verify_download_token(token, str(run_id), "csv")
+
+    with pytest.raises(HTTPException) as exc:
+        await download_run_output(str(run_id), token=token, db=db)
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_access_jwt_rejected_as_download_token_401():
+    """Step 3.3.e: an access JWT is rejected as a download token (401)."""
+    run_id = uuid.uuid4()
+    db = AsyncMock()
+    access_token = create_access_token({"sub": "admin"})
+
+    with pytest.raises(InvalidDownloadTokenError):
+        verify_download_token(access_token, str(run_id), "csv")
+
+    with pytest.raises(HTTPException) as exc:
+        await download_run_output(str(run_id), token=access_token, db=db)
+    assert exc.value.status_code == 401
 
 
 def test_download_token_mismatched_run_or_format():
@@ -501,14 +576,6 @@ def test_download_token_mismatched_run_or_format():
     # Mismatched format
     with pytest.raises(InvalidDownloadTokenError):
         verify_download_token(token, str(run_id1), "parquet")
-
-
-def test_access_token_cannot_be_used_as_download_token():
-    run_id = uuid.uuid4()
-    access_token = create_access_token({"sub": "admin"})
-
-    with pytest.raises(InvalidDownloadTokenError):
-        verify_download_token(access_token, str(run_id), "csv")
 
 
 # ── 8. Status Codes (Route Handlers) ───────────────────────────────────────────

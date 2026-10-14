@@ -3,9 +3,33 @@ import json
 import time
 import subprocess
 
+import os
+import urllib.parse
+
+def _get_credentials():
+    u = os.environ.get("ADMIN_USERNAME") or os.environ.get("E2E_USERNAME")
+    p = os.environ.get("ADMIN_PASSWORD") or os.environ.get("E2E_PASSWORD")
+    if not u or not p:
+        env_file = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+        if os.path.exists(env_file):
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("ADMIN_USERNAME=") and not u:
+                        u = line.split("=", 1)[1].strip()
+                    elif line.startswith("ADMIN_PASSWORD=") and not p:
+                        p = line.split("=", 1)[1].strip()
+    if not u:
+        raise RuntimeError("Missing required environment variable: ADMIN_USERNAME or E2E_USERNAME")
+    if not p:
+        raise RuntimeError("Missing required environment variable: ADMIN_PASSWORD or E2E_PASSWORD")
+    return u, p
+
 def main():
     print("--- 1. Login ---")
-    req = urllib.request.Request("http://localhost:3000/api/auth/login", data=b"username=admin&password=REDACTED", headers={"Content-Type": "application/x-www-form-urlencoded"})
+    u, p = _get_credentials()
+    login_data = urllib.parse.urlencode({"username": u, "password": p}).encode("utf-8")
+    req = urllib.request.Request("http://localhost:3000/api/auth/login", data=login_data, headers={"Content-Type": "application/x-www-form-urlencoded"})
     res = urllib.request.urlopen(req)
     token = json.loads(res.read())["access_token"]
 
