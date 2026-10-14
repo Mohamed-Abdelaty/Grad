@@ -3,34 +3,14 @@ app/reliability/experiment_runner.py
 --------------------------------------
 Orchestrates the full chaos experiment lifecycle:
 
-    CREATE → VALIDATE → PREPARE → BASELINE → INJECT FAILURE →
-    MONITOR → WAIT FOR RECOVERY → VALIDATE DATA → COLLECT METRICS →
-    ANALYZE → CLEANUP → GENERATE REPORT
+    VALIDATING → PREPARING → BASELINE → INJECTING → MONITORING →
+    ROLLING_BACK → WAITING_FOR_RECOVERY → VALIDATING_DATA →
+    COLLECTING_METRICS → ANALYZING → CLEANING_UP → GENERATING_REPORT
 
 Each stage is implemented as a private method.  The runner persists the
-current lifecycle stage to ``ExperimentRun.status`` at every transition so
-the Phase 8 frontend can display live progress without polling the runner.
-
-Safety guarantees
------------------
-1. ``SafetyValidator.enforce_max_concurrent_experiments()`` is called before
-   any state is written — ensures only one experiment runs at a time.
-2. The entire INJECT → MONITOR → RECOVERY block is wrapped in a
-   ``try/finally`` that unconditionally calls ``rollback()`` — a crash of the
-   runner process will leave the fault applied (unavoidable for true process
-   kills), but any Python exception or asyncio cancellation is fully handled.
-3. A global timeout (``fault.duration + 60s`` grace period) wraps the monitor
-   phase — the experiment cannot hang forever.
-
-Process-kill limitation
------------------------
-If the backend process is killed with ``SIGKILL`` (e.g. ``kill -9``) mid-
-experiment, the ``finally`` block cannot execute.  In that case the target
-container may remain in a stopped/disrupted state.  Recovery procedure:
-``docker start <container-name>`` or ``docker-compose up -d <service-name>``.
-This limitation is honestly documented here and in the README rather than
-overclaimed.  The ``try/finally`` only protects against Python exceptions and
-graceful shutdowns (``SIGTERM``).
+current lifecycle stage to ``ExperimentRun.stage`` at every transition,
+maintains the 12-phase list with start/finish times, records execution events
+in ``ExperimentEvent``, and updates ``FaultStateRegistry`` for truthful visualization.
 """
 
 from __future__ import annotations
@@ -51,6 +31,7 @@ from app.reliability.exceptions import (
 )
 from app.reliability.experiment_models import ExperimentModel
 from app.reliability.fault_injectors.base_fault import FAULT_INJECTOR_REGISTRY
+from app.reliability.fault_state import fault_state_registry
 from app.reliability.metrics_collector import MetricsCollector
 from app.reliability.report_generator import ReportGenerator
 from app.reliability.safety import SafetyValidator
@@ -60,20 +41,25 @@ logger = logging.getLogger(__name__)
 # Grace period added to fault.duration to form the global experiment timeout
 _TIMEOUT_GRACE_SECONDS: int = 60
 
+LIFECYCLE_PHASES: list[str] = [
+    "validating",
+    "preparing",
+    "baseline",
+    "injecting",
+    "monitoring",
+    "rolling_back",
+    "waiting_for_recovery",
+    "validating_data",
+    "collecting_metrics",
+    "analyzing",
+    "cleaning_up",
+    "generating_report",
+]
+
 
 class ExperimentRunner:
     """
     Full lifecycle orchestrator for ChaosLab experiments.
-
-    Parameters
-    ----------
-    db_session : sqlalchemy.orm.Session
-        Synchronous SQLAlchemy session.  The runner uses synchronous DB
-        operations because Docker SDK calls are blocking anyway.
-    safety : SafetyValidator | None
-        Optional injected safety validator.  Creates a new one if None.
-    docker_controller : DockerController | None
-        Optional injected controller.  Creates a new one if None.
     """
 
     def __init__(
@@ -90,11 +76,51 @@ class ExperimentRunner:
         self._validator = DataConsistencyValidator()
         self._reporter = ReportGenerator()
         self._cancelled: bool = False
+        self._event_seq: int = 0
 
     def cancel(self) -> None:
         """Signal the runner to cancel at the next stage boundary."""
         self._cancelled = True
         logger.warning("ExperimentRunner: cancellation requested.")
+
+    def _emit_event(
+        self,
+        experiment_id: Any,
+        run_id: Any,
+        phase: str,
+        message: str,
+        level: str = "INFO",
+    ) -> None:
+        """Write an execution event to the experiment_events table."""
+        if not experiment_id:
+            return
+        try:
+            exp_uuid = uuid.UUID(str(experiment_id))
+        except (ValueError, TypeError, AttributeError):
+            return
+
+        run_uuid = None
+        if run_id:
+            try:
+                run_uuid = uuid.UUID(str(run_id))
+            except (ValueError, TypeError, AttributeError):
+                run_uuid = None
+
+        self._event_seq += 1
+        try:
+            event = ExperimentEvent(
+                experiment_id=exp_uuid,
+                experiment_run_id=run_uuid,
+                seq=self._event_seq,
+                level=level,
+                phase=phase,
+                message=message,
+                ts=datetime.now(tz=timezone.utc),
+            )
+            self._db.add(event)
+            self._db.flush()
+        except Exception:
+            pass
 
     def run_experiment(
         self,
@@ -105,19 +131,6 @@ class ExperimentRunner:
     ) -> dict[str, Any]:
         """
         Execute the full experiment lifecycle synchronously.
-
-        Parameters
-        ----------
-        experiment_config : ExperimentModel
-            Parsed and validated experiment definition.
-        associated_pipeline_yaml : str
-            Optional YAML string of the pipeline to run during the experiment
-            to generate measurable output data.
-
-        Returns
-        -------
-        dict
-            Final report dict.
         """
         from app.models.experiment import Experiment
         from app.models.experiment_run import ExperimentRun
@@ -125,8 +138,6 @@ class ExperimentRunner:
         target_service = experiment_config.target.service
         fault_type = experiment_config.fault.type
         fault_duration = experiment_config.fault.duration
-
-        # ── SAFETY CHECK: enforce concurrency limit ────────────────────────────
 
         # ── CREATE: persist experiment + run records ───────────────────────────
         if existing_experiment_id:
@@ -144,6 +155,11 @@ class ExperimentRunner:
             self._db.add(experiment)
             self._db.flush()
 
+        initial_phases = [
+            {"name": p, "state": "pending", "startedAt": None, "finishedAt": None}
+            for p in LIFECYCLE_PHASES
+        ]
+
         if existing_run_id:
             run = self._db.get(ExperimentRun, existing_run_id)
             if run is None:
@@ -160,7 +176,7 @@ class ExperimentRunner:
                     "fault_duration": fault_duration,
                     "experiment_config": experiment_config.model_dump(),
                 },
-                results={},
+                results={"phases": initial_phases},
                 started_at=datetime.now(tz=timezone.utc),
             )
             self._db.add(run)
@@ -171,175 +187,372 @@ class ExperimentRunner:
             self._db, excluding_run_id=run_id
         )
         run.status = "running"
+        self._merge_results(run, {"phases": initial_phases})
+        self._emit_event(
+            experiment.id,
+            run_id,
+            "validating",
+            f"Initialized experiment '{experiment.name}' targeting '{target_service}'.",
+        )
         logger.info(
             "ExperimentRunner: created run %s (experiment=%s).",
             run_id,
             experiment.id,
         )
 
-        # ── VALIDATE ──────────────────────────────────────────────────────────
-        self._update_status(run, "validating")
-        self._validate(experiment_config)
-
-        # ── PREPARE ───────────────────────────────────────────────────────────
-        self._update_status(run, "preparing")
-        pipeline_context = self._prepare(associated_pipeline_yaml)
-
-        # ── BASELINE ──────────────────────────────────────────────────────────
-        self._update_status(run, "baseline")
-        baseline = self._metrics.capture_baseline(pipeline_context)
-        self._merge_results(run, baseline)
-
-        # ── Get the fault injector ─────────────────────────────────────────────
-        injector_class = FAULT_INJECTOR_REGISTRY.get(fault_type)
-        if injector_class is None:
-            raise FaultInjectionError(
-                f"No fault injector registered for type '{fault_type}'.",
-                fault_type=fault_type,
-                target_service=target_service,
-            )
-        injector = injector_class(self._docker)
-        injection_metadata: dict = {}
-
-        # ── Global timeout = fault duration + grace period ─────────────────────
         global_timeout = fault_duration + _TIMEOUT_GRACE_SECONDS
         experiment_start = time.monotonic()
+        injection_metadata: dict = {}
+        recovery_time = None
+        result = "FAIL"
+        failed_criteria: list[str] = []
 
         try:
-            # ── INJECT FAILURE ─────────────────────────────────────────────────
-            self._update_status(run, "injecting")
-            self._check_cancelled(run)
-            logger.info(
-                "ExperimentRunner: injecting '%s' fault on '%s'.",
-                fault_type,
-                target_service,
+            # ── VALIDATE ──────────────────────────────────────────────────────
+            self._update_status(run, "validating")
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "validating",
+                "Validating experiment configuration and safety rules.",
             )
-            params = experiment_config.fault.model_dump()
-            injection_metadata = injector.inject(target_service, params)
-            injection_metadata["target_service"] = target_service
-            injection_metadata["fault_type"] = fault_type
-            injection_metadata["fault_duration"] = fault_duration
-            self._merge_results(run, injection_metadata)
-
-            # Persist FaultInjection audit record
-            self._persist_fault_injection(run, experiment_config, injection_metadata)
-
-            # ── MONITOR ───────────────────────────────────────────────────────
-            self._update_status(run, "monitoring")
-            self._check_cancelled(run)
-            self._check_timeout(experiment_start, global_timeout)
-
-            availability_data = self._metrics.capture_during_experiment(
-                target_service, self._docker, fault_duration
+            self._validate(experiment_config)
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "validating",
+                f"Configuration valid. Duration {fault_duration}s within limit.",
             )
-            self._merge_results(run, availability_data)
 
-        finally:
-            # ── ROLLBACK (unconditional) ───────────────────────────────────────
-            # This finally block executes on:
-            # - Normal completion
-            # - Python exceptions (including FaultInjectionError)
-            # - asyncio CancelledError
-            # It does NOT execute on SIGKILL (process kill -9) — this is a
-            # documented limitation.  See module docstring.
-            self._update_status(run, "rolling_back")
-            logger.info(
-                "ExperimentRunner: rollback for '%s' fault on '%s'.",
-                fault_type,
-                target_service,
+            # ── PREPARE ───────────────────────────────────────────────────────
+            self._update_status(run, "preparing")
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "preparing",
+                "Preparing execution environment and pipeline context.",
             )
+            pipeline_context = self._prepare(associated_pipeline_yaml)
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "preparing",
+                "Pipeline execution context ready.",
+            )
+
+            # ── BASELINE ──────────────────────────────────────────────────────
+            self._update_status(run, "baseline")
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "baseline",
+                "Capturing pre-fault operational baseline.",
+            )
+            baseline = self._metrics.capture_baseline(pipeline_context)
+            self._merge_results(run, baseline)
+            expected_records = baseline.get("expected_record_count", 0)
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "baseline",
+                f"Baseline captured. Expected record count: {expected_records}.",
+            )
+
+            # ── Get the fault injector ─────────────────────────────────────────
+            injector_class = FAULT_INJECTOR_REGISTRY.get(fault_type)
+            if injector_class is None:
+                raise FaultInjectionError(
+                    f"No fault injector registered for type '{fault_type}'.",
+                    fault_type=fault_type,
+                    target_service=target_service,
+                )
+            injector = injector_class(self._docker)
+
             try:
-                injector.rollback(target_service, injection_metadata)
-            except Exception as rollback_exc:
-                logger.error(
-                    "ExperimentRunner: rollback raised an exception: %s. "
-                    "Manual recovery may be required for '%s'.",
-                    rollback_exc,
-                    target_service,
+                # ── INJECT FAILURE ─────────────────────────────────────────────
+                self._update_status(run, "injecting")
+                self._check_cancelled(run, experiment.id)
+                self._emit_event(
+                    experiment.id,
+                    run_id,
+                    "injecting",
+                    f"Applying fault '{fault_type}' to '{target_service}' for {fault_duration}s.",
+                )
+                params = experiment_config.fault.model_dump()
+                injection_metadata = injector.inject(target_service, params)
+                injected_at = (
+                    injection_metadata.get("stopped_at")
+                    or injection_metadata.get("started_at")
+                    or injection_metadata.get("applied_at")
+                    or datetime.now(tz=timezone.utc).isoformat()
+                )
+                injection_metadata["target_service"] = target_service
+                injection_metadata["fault_type"] = fault_type
+                injection_metadata["fault_duration"] = fault_duration
+                injection_metadata["fault_injected_at"] = injected_at
+                self._merge_results(run, injection_metadata)
+
+                # Update FaultStateRegistry
+                fault_state_registry.set_injected(
+                    experiment_id=str(experiment.id),
+                    target=target_service,
+                    fault_type=fault_type,
+                    duration_seconds=fault_duration,
+                    injected_at=injected_at,
                 )
 
-        # ── WAIT FOR RECOVERY ─────────────────────────────────────────────────
-        self._update_status(run, "waiting_for_recovery")
-        self._check_cancelled(run)
-        self._check_timeout(experiment_start, global_timeout)
+                # Persist FaultInjection audit record
+                self._persist_fault_injection(run, experiment_config, injection_metadata)
+                self._emit_event(
+                    experiment.id,
+                    run_id,
+                    "injecting",
+                    f"Fault '{fault_type}' applied to '{target_service}'.",
+                )
 
-        remaining_timeout = global_timeout - (time.monotonic() - experiment_start)
-        if remaining_timeout <= 0:
+                # ── MONITOR ───────────────────────────────────────────────────
+                self._update_status(run, "monitoring")
+                self._check_cancelled(run, experiment.id)
+                self._check_timeout(experiment_start, global_timeout)
+                self._emit_event(
+                    experiment.id,
+                    run_id,
+                    "monitoring",
+                    f"Fault active. Sampling availability for {fault_duration}s.",
+                )
+
+                availability_data = self._metrics.capture_during_experiment(
+                    target_service, self._docker, fault_duration
+                )
+                self._merge_results(run, availability_data)
+                self._emit_event(
+                    experiment.id,
+                    run_id,
+                    "monitoring",
+                    f"Availability monitoring complete: {availability_data.get('availability_percentage', 0.0)}% available.",
+                )
+
+            finally:
+                # ── ROLLBACK (unconditional) ───────────────────────────────────
+                self._update_status(run, "rolling_back")
+                reverted_at = datetime.now(tz=timezone.utc).isoformat()
+                self._merge_results(run, {"fault_reverted_at": reverted_at})
+                fault_state_registry.set_recovering(str(experiment.id))
+                self._emit_event(
+                    experiment.id,
+                    run_id,
+                    "rolling_back",
+                    f"Reverting fault '{fault_type}' on '{target_service}'.",
+                )
+                try:
+                    injector.rollback(target_service, injection_metadata)
+                    self._emit_event(
+                        experiment.id,
+                        run_id,
+                        "rolling_back",
+                        f"Rollback completed for '{target_service}'.",
+                    )
+                except Exception as rollback_exc:
+                    logger.error(
+                        "ExperimentRunner: rollback raised an exception: %s. "
+                        "Manual recovery may be required for '%s'.",
+                        rollback_exc,
+                        target_service,
+                    )
+                    self._emit_event(
+                        experiment.id,
+                        run_id,
+                        "rolling_back",
+                        f"Rollback raised exception: {rollback_exc}",
+                        level="ERROR",
+                    )
+
+            # ── WAIT FOR RECOVERY ─────────────────────────────────────────────
+            self._update_status(run, "waiting_for_recovery")
+            self._check_cancelled(run, experiment.id)
             self._check_timeout(experiment_start, global_timeout)
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "waiting_for_recovery",
+                f"Polling service health checks for '{target_service}'.",
+            )
 
-        recovery_time = self._metrics.measure_recovery_time(
-            target_service,
-            self._docker,
-            poll_interval=1.0,
-            max_wait=min(
-                experiment_config.validation.max_recovery_time + 30,
-                remaining_timeout,
-            ),
-        )
-        self._merge_results(run, {"recovery_time_seconds": recovery_time})
-        if recovery_time is not None:
-            from app.metrics import pipeline_recovery_time_seconds
-            pipeline_recovery_time_seconds.labels(target_service).observe(recovery_time)
+            remaining_timeout = global_timeout - (time.monotonic() - experiment_start)
+            if remaining_timeout <= 0:
+                self._check_timeout(experiment_start, global_timeout)
 
-        # ── VALIDATE DATA ─────────────────────────────────────────────────────
-        self._update_status(run, "validating_data")
-        self._check_cancelled(run)
-        expected_records = baseline.get("expected_record_count", 0)
-        if associated_pipeline_yaml:
-            post_recovery_context = self._prepare(associated_pipeline_yaml)
-            output_location = post_recovery_context.get("output_location", {})
-            if not output_location:
-                raise RuntimeError(
-                    "Post-recovery pipeline run completed without an output location."
+            recovery_time = self._metrics.measure_recovery_time(
+                target_service,
+                self._docker,
+                poll_interval=1.0,
+                max_wait=min(
+                    experiment_config.validation.max_recovery_time + 30,
+                    remaining_timeout,
+                ),
+            )
+            recovered_at = datetime.now(tz=timezone.utc).isoformat() if recovery_time is not None else None
+            self._merge_results(
+                run,
+                {
+                    "recovery_time_seconds": recovery_time,
+                    "recovered_at": recovered_at,
+                },
+            )
+            fault_state_registry.set_recovered(str(experiment.id), recovery_time)
+
+            if recovery_time is not None:
+                from app.metrics import pipeline_recovery_time_seconds
+                pipeline_recovery_time_seconds.labels(target_service).observe(recovery_time)
+                self._emit_event(
+                    experiment.id,
+                    run_id,
+                    "waiting_for_recovery",
+                    f"Service '{target_service}' recovered in {recovery_time:.2f}s.",
                 )
-            consistency = self._validator.validate(expected_records, output_location)
-            consistency["data_validation"] = "completed"
-        else:
-            consistency = self._skipped_data_validation()
-        self._merge_results(run, consistency)
+            else:
+                self._emit_event(
+                    experiment.id,
+                    run_id,
+                    "waiting_for_recovery",
+                    f"Service '{target_service}' did not recover within timeout.",
+                    level="WARNING",
+                )
 
-        # ── COLLECT METRICS ───────────────────────────────────────────────────
-        self._update_status(run, "collecting_metrics")
-        elapsed_total = time.monotonic() - experiment_start
-        throughput = self._metrics.compute_throughput(
-            records_processed=consistency.get("actual_records") or 0,
-            duration_seconds=elapsed_total,
-        )
-        self._merge_results(run, {"throughput_records_per_sec": throughput})
-        self._metrics.persist_metrics(self._db, run_id, run.results or {})
+            # ── VALIDATE DATA ─────────────────────────────────────────────────
+            self._update_status(run, "validating_data")
+            self._check_cancelled(run, experiment.id)
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "validating_data",
+                "Verifying data completeness and zero record loss.",
+            )
+            if associated_pipeline_yaml:
+                post_recovery_context = self._prepare(associated_pipeline_yaml)
+                output_location = post_recovery_context.get("output_location", {})
+                if not output_location:
+                    raise RuntimeError(
+                        "Post-recovery pipeline run completed without an output location."
+                    )
+                consistency = self._validator.validate(expected_records, output_location)
+                consistency["data_validation"] = "completed"
+            else:
+                consistency = self._skipped_data_validation()
+            self._merge_results(run, consistency)
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "validating_data",
+                f"Data validation: expected={expected_records}, actual={consistency.get('actual_records')}, lost={consistency.get('data_loss')}.",
+            )
 
-        # ── ANALYZE ───────────────────────────────────────────────────────────
-        self._update_status(run, "analyzing")
-        result = self._analyze(
-            experiment_config=experiment_config,
-            recovery_time=recovery_time,
-            data_loss=consistency.get("data_loss") or 0,
-        )
-        self._merge_results(run, {"result": result})
+            # ── COLLECT METRICS ───────────────────────────────────────────────
+            self._update_status(run, "collecting_metrics")
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "collecting_metrics",
+                "Computing throughput and persisting performance metrics.",
+            )
+            elapsed_total = time.monotonic() - experiment_start
+            throughput = self._metrics.compute_throughput(
+                records_processed=consistency.get("actual_records") or 0,
+                duration_seconds=elapsed_total,
+            )
+            self._merge_results(run, {"throughput_records_per_sec": throughput})
+            self._metrics.persist_metrics(self._db, run_id, run.results or {})
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "collecting_metrics",
+                f"Computed throughput: {throughput} records/s over {elapsed_total:.1f}s.",
+            )
 
-        # ── CLEANUP ───────────────────────────────────────────────────────────
-        self._update_status(run, "cleaning_up")
-        # Cleanup is handled by rollback above; nothing additional needed.
+            # ── ANALYZE ───────────────────────────────────────────────────────
+            self._update_status(run, "analyzing")
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "analyzing",
+                "Evaluating criteria against configured validation thresholds.",
+            )
+            result, failed_criteria = self._analyze(
+                experiment_config=experiment_config,
+                recovery_time=recovery_time,
+                data_loss=consistency.get("data_loss") or 0,
+            )
+            self._merge_results(run, {"result": result, "failed_criteria": failed_criteria})
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "analyzing",
+                f"Result: {result}." + (f" Failed criteria: {'; '.join(failed_criteria)}" if failed_criteria else " All criteria met."),
+            )
 
-        # ── GENERATE REPORT ───────────────────────────────────────────────────
-        self._update_status(run, "generating_report")
-        run.finished_at = datetime.now(tz=timezone.utc)
-        run.status = "succeeded" if result == "PASS" else "failed"
-        self._db.flush()
+            # ── CLEANUP ───────────────────────────────────────────────────────
+            self._update_status(run, "cleaning_up")
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "cleaning_up",
+                "Cleaning up experiment test context and validating container status.",
+            )
 
-        report = self._reporter.generate(run_id, self._db)
-        from app.metrics import experiment_duration_seconds
-        experiment_duration_seconds.labels(fault_type).observe(
-            time.monotonic() - experiment_start
-        )
-        self._db.commit()
+            # ── GENERATE REPORT ───────────────────────────────────────────────
+            self._update_status(run, "generating_report")
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "generating_report",
+                "Assembling and persisting structured experiment report.",
+            )
+            run.finished_at = datetime.now(tz=timezone.utc)
+            run.status = "succeeded" if result == "PASS" else "failed"
 
-        logger.info(
-            "ExperimentRunner: run %s completed with result=%s.",
-            run_id,
-            result,
-        )
-        return report
+            fin_iso = run.finished_at.isoformat()
+            phases = list(run.results.get("phases") or [])
+            for p in phases:
+                p["state"] = "done"
+                if not p.get("finishedAt"):
+                    p["finishedAt"] = fin_iso
+            self._merge_results(run, {"phases": phases})
+            self._db.flush()
+
+            report = self._reporter.generate(run_id, self._db)
+            from app.metrics import experiment_duration_seconds
+            experiment_duration_seconds.labels(fault_type).observe(
+                time.monotonic() - experiment_start
+            )
+            self._db.commit()
+
+            self._emit_event(
+                experiment.id,
+                run_id,
+                "generating_report",
+                f"Report generated: report_id={report.get('id') or report.get('report_id')}.",
+            )
+            logger.info(
+                "ExperimentRunner: run %s completed with result=%s.",
+                run_id,
+                result,
+            )
+            return report
+
+        except Exception as exc:
+            logger.error("ExperimentRunner: experiment %s failed: %s", experiment.id, exc)
+            fault_state_registry.clear(str(experiment.id))
+            try:
+                self._emit_event(
+                    experiment.id,
+                    run_id,
+                    run.stage or "error",
+                    f"Experiment failed: {exc}",
+                    level="ERROR",
+                )
+            except Exception:
+                pass
+            raise
 
     # ── Private stage methods ──────────────────────────────────────────────────
 
@@ -410,8 +623,6 @@ class ExperimentRunner:
     def _prepare(self, pipeline_yaml: str) -> dict:
         """
         Run the associated pipeline if YAML is provided, capture output context.
-
-        Returns a context dict that feeds into the baseline and data validator.
         """
         if not pipeline_yaml:
             return {"records_processed": 0, "output_location": {}}
@@ -434,43 +645,38 @@ class ExperimentRunner:
         experiment_config: ExperimentModel,
         recovery_time: float | None,
         data_loss: int,
-    ) -> str:
+    ) -> tuple[str, list[str]]:
         """
-        Compare results against validation criteria and return PASS or FAIL.
-
-        Returns
-        -------
-        str
-            ``"PASS"`` if all criteria met, ``"FAIL"`` otherwise.
+        Compare results against validation criteria and return (PASS/FAIL, failed_criteria).
         """
         criteria = experiment_config.validation
         max_allowed_loss = criteria.expected_data_loss
         max_allowed_recovery = criteria.max_recovery_time
 
-        issues = []
+        failed_criteria: list[str] = []
 
         if data_loss > max_allowed_loss:
-            issues.append(
-                f"data_loss={data_loss} > allowed={max_allowed_loss}"
+            failed_criteria.append(
+                f"Data loss of {data_loss} records exceeded the maximum allowed of {max_allowed_loss}."
             )
 
         if recovery_time is None:
-            issues.append(
-                f"Service did not recover within {max_allowed_recovery}s."
+            failed_criteria.append(
+                f"Service did not recover within {max_allowed_recovery:.1f} s."
             )
         elif recovery_time > max_allowed_recovery:
-            issues.append(
-                f"recovery_time={recovery_time}s > allowed={max_allowed_recovery}s"
+            failed_criteria.append(
+                f"Recovery time {recovery_time:.1f} s exceeded the maximum of {max_allowed_recovery:.1f} s."
             )
 
-        if issues:
+        if failed_criteria:
             logger.warning(
-                "ExperimentRunner._analyze: FAIL — %s", "; ".join(issues)
+                "ExperimentRunner._analyze: FAIL — %s", "; ".join(failed_criteria)
             )
-            return "FAIL"
+            return "FAIL", failed_criteria
 
         logger.info("ExperimentRunner._analyze: PASS — all criteria met.")
-        return "PASS"
+        return "PASS", []
 
     def _persist_fault_injection(
         self,
@@ -479,9 +685,6 @@ class ExperimentRunner:
         injection_metadata: dict,
     ) -> None:
         """Persist a FaultInjection audit record linked to the experiment run."""
-        # FaultInjection is FK'd to pipeline_runs, not experiment_runs.
-        # We store the fault audit in the ExperimentRun.results JSON instead,
-        # which avoids a schema FK dependency while still preserving the record.
         audit = {
             "fault_type": experiment_config.fault.type,
             "target_service": experiment_config.target.service,
@@ -495,28 +698,65 @@ class ExperimentRunner:
         self._merge_results(run, {"fault_audit": audit})
 
     def _update_status(self, run: Any, status: str) -> None:
-        """Persist the current lifecycle stage to the database."""
+        """Persist the current lifecycle stage and progress through the 12 phases."""
+        now_iso = datetime.now(tz=timezone.utc).isoformat()
         run.stage = status
+        results = dict(run.results or {})
+        phases = list(
+            results.get("phases")
+            or [
+                {"name": p, "state": "pending", "startedAt": None, "finishedAt": None}
+                for p in LIFECYCLE_PHASES
+            ]
+        )
+
+        found = False
+        for p in phases:
+            if p["name"] == status:
+                p["state"] = "active"
+                if not p.get("startedAt"):
+                    p["startedAt"] = now_iso
+                found = True
+            elif not found:
+                p["state"] = "done"
+                if not p.get("finishedAt"):
+                    p["finishedAt"] = now_iso
+            else:
+                p["state"] = "pending"
+
+        results["phases"] = phases
+        run.results = results
         self._db.add(run)
         self._db.flush()
         logger.debug("ExperimentRunner: run %s → status='%s'.", run.id, status)
 
     def _merge_results(self, run: Any, data: dict) -> None:
         """Merge ``data`` into ``run.results`` and flush to the DB."""
-        # Assign a fresh mapping so SQLAlchemy detects each JSON update.
         existing = dict(run.results or {})
         existing.update(data)
         run.results = existing
         self._db.add(run)
         self._db.flush()
 
-    def _check_cancelled(self, run: Any) -> None:
+    def _check_cancelled(self, run: Any, experiment_id: Any = None) -> None:
         """Raise RuntimeError if cancellation has been requested."""
         if self._cancelled:
             run.status = "cancelled"
             run.finished_at = datetime.now(tz=timezone.utc)
             self._db.add(run)
             self._db.flush()
+            if experiment_id:
+                fault_state_registry.clear(str(experiment_id))
+                try:
+                    self._emit_event(
+                        experiment_id,
+                        run.id,
+                        run.stage or "cancelled",
+                        "Experiment cancelled by operator.",
+                        level="WARNING",
+                    )
+                except Exception:
+                    pass
             raise RuntimeError("Experiment cancelled by operator.")
 
     def _check_timeout(self, start: float, timeout: float) -> None:

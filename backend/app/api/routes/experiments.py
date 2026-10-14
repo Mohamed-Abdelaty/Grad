@@ -2,20 +2,6 @@
 app/api/routes/experiments.py
 -------------------------------
 ChaosLab experiment management and reporting API.
-
-Endpoints:
-    POST   /api/experiments                — create + validate an experiment
-    GET    /api/experiments                — list all experiments
-    GET    /api/experiments/{id}           — full detail with current stage
-    POST   /api/experiments/{id}/run       — trigger async experiment run
-    POST   /api/experiments/{id}/cancel    — cancel a running experiment
-    GET    /api/reports                    — list all experiment reports
-    GET    /api/reports/{id}               — full report detail
-
-Architecture:
-    Routes contain no business logic — they call service functions only.
-    ExperimentRunner is triggered via ``BackgroundTasks`` so the HTTP call
-    returns immediately with the run ID (Phase 8 polls for live status).
 """
 
 from __future__ import annotations
@@ -26,24 +12,23 @@ from datetime import datetime, timezone
 from typing import Any
 
 import yaml
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.database.session import get_db
-from app.reliability.experiment_models import ExperimentModel
 from app.reliability.exceptions import (
     ExperimentValidationError,
     TooManyConcurrentExperimentsError,
     UnsafeTargetError,
 )
+from app.reliability.experiment_models import ExperimentModel
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["experiments"])
 
-
-from app.api.deps import get_current_user
 
 @router.get(
     "/api/experiments/allowed-targets",
@@ -68,10 +53,8 @@ async def get_experiment_options_endpoint(
 
     return get_experiment_options()
 
+
 # ── In-memory cancellation registry ───────────────────────────────────────────
-# Maps experiment_run_id (str) → ExperimentRunner instance (if running).
-# A production system would use Redis or a DB flag; for Phase 7 this is
-# sufficient for single-process, single-worker deployments.
 _RUNNING_RUNNERS: dict[str, Any] = {}
 
 
@@ -82,10 +65,7 @@ class ExperimentCreateRequest(BaseModel):
     """Request body for POST /api/experiments."""
 
     yaml_content: str = ""
-    """Raw YAML string of the experiment definition."""
-
     pipeline_yaml: str = ""
-    """Optional pipeline YAML to run as part of the experiment."""
 
 
 class ExperimentCreateResponse(BaseModel):
@@ -100,6 +80,7 @@ class ExperimentCreateResponse(BaseModel):
 
 
 # ── Helper: parse + validate experiment YAML ──────────────────────────────────
+
 
 def _parse_experiment_yaml(yaml_content: str) -> ExperimentModel:
     """Parse and validate experiment YAML, raising HTTPException on error."""
@@ -126,6 +107,7 @@ def _get_sync_session():
 
 # ── Background runner task ─────────────────────────────────────────────────────
 
+
 def _run_experiment_background(
     experiment_db_id: str,
     experiment_run_id: str,
@@ -134,9 +116,6 @@ def _run_experiment_background(
 ) -> None:
     """
     Run the full experiment lifecycle in a background thread.
-
-    Persists a ``ChaosExperimentRecord`` DB row with the result.
-    Updates status at every stage so the GET endpoint shows live progress.
     """
     from app.database.session import SyncSessionLocal
     from app.reliability.experiment_runner import ExperimentRunner
@@ -199,27 +178,24 @@ async def create_experiment(
 ) -> ExperimentCreateResponse:
     """
     Parse, validate, and persist a new experiment definition.
-
-    Does NOT run the experiment — call ``POST /api/experiments/{id}/run``
-    to trigger execution.
-
-    Raises
-    ------
-    422
-        If the YAML fails Pydantic validation or safety pre-checks.
     """
     experiment_config = _parse_experiment_yaml(request.yaml_content)
 
     # Pre-validate safety (before any DB write)
     try:
-        from app.reliability.safety import SafetyValidator
+        from app.reliability.safety import CRITICAL_PLATFORM_SERVICES, SafetyValidator
 
+        target_service = experiment_config.target.service
+        if target_service in CRITICAL_PLATFORM_SERVICES:
+            raise UnsafeTargetError(
+                f"Service '{target_service}' is a protected platform service and cannot be targeted.",
+                service_name=target_service,
+            )
         safety = SafetyValidator()
         safety.validate_duration(experiment_config.fault.duration)
     except UnsafeTargetError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
-    # Persist experiment record via async session
     from app.models.experiment import Experiment
 
     experiment = Experiment(
@@ -262,7 +238,6 @@ async def list_experiments(
 
     output = []
     for exp in experiments:
-        # Get latest run
         run_stmt = (
             select(ExperimentRun)
             .where(ExperimentRun.experiment_id == exp.id)
@@ -273,15 +248,24 @@ async def list_experiments(
         latest_run = run_result.scalar_one_or_none()
 
         run_params = latest_run.params if latest_run and latest_run.params else {}
+        results = latest_run.results if latest_run and latest_run.results else {}
         output.append(
             {
                 "experiment_id": str(exp.id),
+                "id": str(exp.id),
                 "name": exp.name,
                 "created_at": exp.created_at.isoformat(),
+                "createdAt": exp.created_at.isoformat(),
                 "latest_run_status": latest_run.status if latest_run else None,
                 "latest_run_id": str(latest_run.id) if latest_run else None,
                 "target_service": run_params.get("target_service"),
+                "target": run_params.get("target_service"),
                 "fault_type": run_params.get("fault_type"),
+                "faultType": run_params.get("fault_type"),
+                "status": latest_run.status if latest_run else "pending",
+                "result": results.get("result"),
+                "duration": run_params.get("fault_duration"),
+                "startedAt": latest_run.started_at.isoformat() if latest_run and latest_run.started_at else None,
             }
         )
     return output
@@ -299,6 +283,8 @@ async def get_experiment(
     from sqlalchemy import select
     from app.models.experiment import Experiment
     from app.models.experiment_run import ExperimentRun
+    from app.reliability.experiment_runner import LIFECYCLE_PHASES
+    from app.reliability.fault_state import fault_state_registry
 
     experiment = await db.get(Experiment, experiment_id)
     if experiment is None:
@@ -315,27 +301,154 @@ async def get_experiment(
 
     params = latest_run.params if latest_run and latest_run.params else {}
     results = latest_run.results if latest_run and latest_run.results else {}
+    exp_config = params.get("experiment_config") or {}
+    validation_cfg = exp_config.get("validation") or {}
+    fault_cfg = exp_config.get("fault") or {}
+
+    raw_samples = results.get("samples") or []
+    avail_samples = [
+        {"t": s["timestamp"], "available": s["available"]}
+        for s in raw_samples
+        if isinstance(s, dict) and "timestamp" in s and "available" in s
+    ] if raw_samples else None
+
+    avail_pct = results.get("availability_percentage")
+    if avail_pct is not None:
+        err_rate = round(max(0.0, min(1.0, (100.0 - float(avail_pct)) / 100.0)), 4)
+    else:
+        err_rate = None
+
+    total_ops = results.get("total_samples", len(raw_samples) if raw_samples else 0)
+    avail_ops = results.get("available_samples", sum(1 for s in raw_samples if s.get("available")))
+    err_count = total_ops - avail_ops if total_ops is not None else 0
+
+    target_service = params.get("target_service") or results.get("target_service") or "not started"
+    fault_type = params.get("fault_type") or results.get("fault_type") or "not started"
+    fault_duration = params.get("fault_duration") or results.get("fault_duration") or 20
+
+    # Ensure all 12 phases always present
+    recorded_phases = {p["name"]: p for p in (results.get("phases") or []) if isinstance(p, dict) and "name" in p}
+    full_phases = []
+    current_phase = latest_run.stage if latest_run and latest_run.stage else "validating"
+    for phase_name in LIFECYCLE_PHASES:
+        if phase_name in recorded_phases:
+            full_phases.append(recorded_phases[phase_name])
+        else:
+            full_phases.append({
+                "name": phase_name,
+                "state": "pending",
+                "startedAt": None,
+                "finishedAt": None,
+            })
+
+    # Fault phase badge calculation
+    curr_fault = fault_state_registry.current()
+    if curr_fault and curr_fault.experimentId == str(experiment.id):
+        fault_phase = curr_fault.phase
+    elif results.get("recovered_at") or results.get("recovery_time_seconds") is not None:
+        fault_phase = "recovered"
+    elif results.get("fault_reverted_at"):
+        fault_phase = "recovering"
+    elif results.get("fault_injected_at"):
+        fault_phase = "injected"
+    else:
+        fault_phase = "not_injected"
+
+    audit = results.get("fault_audit") or {}
+    fault_injected_at = results.get("fault_injected_at") or audit.get("injected_at")
+    fault_reverted_at = results.get("fault_reverted_at")
+    recovered_at = results.get("recovered_at")
+
+    results_payload = dict(results)
+    results_payload.update({
+        "recoveryTimeSeconds": results.get("recovery_time_seconds"),
+        "dataLoss": results.get("data_loss", 0),
+        "duplicates": results.get("duplicate_ids_found", 0),
+        "expectedRecords": results.get("expected_record_count", 0),
+        "processedRecords": results.get("actual_records", 0),
+        "throughputBaseline": results.get("throughput_baseline"),
+        "throughputDuringFault": None,
+        "throughputAfter": results.get("throughput_records_per_sec"),
+        "throughputDegradationPercent": results.get("throughput_degradation_percent"),
+        "availabilityPercentage": avail_pct,
+        "errorRate": err_rate,
+        "errorCount": err_count,
+        "totalOperations": total_ops,
+        "availabilitySamples": avail_samples,
+        "throughputSamples": None,
+        "cpuSamples": None,
+        "memorySamples": None,
+    })
+
     # Stage-transition log lines are stored in results["logs"] by the runner.
-    # Fall back to an empty list so the UI always receives a list (never null).
     execution_logs = results.get("logs") if isinstance(results.get("logs"), list) else []
+
     return {
         "id": str(experiment.id),
         "name": experiment.name,
         "description": experiment.description,
         "experimentYaml": experiment.experiment_yaml,
         "pipelineYaml": experiment.pipeline_yaml,
-        "target": params.get("target_service", "not started"),
-        "faultType": params.get("fault_type", "not started"),
+        "target": target_service,
+        "targetService": target_service,
+        "faultType": fault_type,
+        "faultParams": fault_cfg,
+        "durationSeconds": fault_duration,
+        "thresholds": {
+            "expectedDataLoss": validation_cfg.get("expected_data_loss", 0),
+            "maxRecoverySeconds": validation_cfg.get("max_recovery_time", 60.0),
+        },
         "status": latest_run.status if latest_run else "pending",
-        "createdAt": experiment.created_at.isoformat(),
-        "lifecycleStage": latest_run.stage if latest_run and latest_run.stage else "pending",
-        # Real timestamps so the UI can compute elapsed time from server clock.
+        "currentPhase": current_phase,
+        "lifecycleStage": current_phase,
+        "phases": full_phases,
+        "runId": str(latest_run.id) if latest_run else None,
         "runStartedAt": latest_run.started_at.isoformat() if latest_run and latest_run.started_at else None,
         "runFinishedAt": latest_run.finished_at.isoformat() if latest_run and latest_run.finished_at else None,
+        "faultInjectedAt": fault_injected_at,
+        "faultRevertedAt": fault_reverted_at,
+        "recoveredAt": recovered_at,
+        "faultPhase": fault_phase,
+        "serverTime": datetime.now(tz=timezone.utc).isoformat(),
+        "pipelineRunId": str(latest_run.pipeline_run_id) if latest_run and latest_run.pipeline_run_id else None,
+        "result": results.get("result"),
+        "failedCriteria": results.get("failed_criteria", []),
+        "results": results_payload,
         "logs": execution_logs,
-        "results": results,
     }
 
+
+@router.get(
+    "/api/experiments/{experiment_id}/events",
+    summary="Get execution events for an experiment run",
+)
+async def get_experiment_events(
+    experiment_id: uuid.UUID,
+    after: int = 0,
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """Return real execution events emitted by the runner with seq > after."""
+    from sqlalchemy import select
+    from app.models.experiment_event import ExperimentEvent
+
+    stmt = (
+        select(ExperimentEvent)
+        .where(ExperimentEvent.experiment_id == experiment_id)
+        .where(ExperimentEvent.seq > after)
+        .order_by(ExperimentEvent.seq.asc())
+    )
+    result = await db.execute(stmt)
+    events = result.scalars().all()
+    return [
+        {
+            "seq": e.seq,
+            "level": e.level,
+            "phase": e.phase,
+            "message": e.message,
+            "ts": e.ts.isoformat(),
+        }
+        for e in events
+    ]
 
 
 @router.post(
@@ -351,26 +464,23 @@ async def run_experiment(
 ) -> dict:
     """
     Trigger the ExperimentRunner asynchronously.
-
-    Returns immediately with a ``run_id`` (HTTP 202).  Poll
-    ``GET /api/experiments/{id}`` for live lifecycle stage progress.
-
-    The request body must contain the experiment YAML (and optionally
-    the pipeline YAML) since experiments are stateless definitions.
     """
-    experiment_config = None
-
-    try:
-        from app.reliability.safety import SafetyValidator
-
-        safety = SafetyValidator()
-        pass
-        # Note: validate_target requires Docker socket — deferred to runner
-    except UnsafeTargetError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
-
+    from app.database.session import SyncSessionLocal
     from app.models.experiment import Experiment
     from app.models.experiment_run import ExperimentRun
+    from app.reliability.safety import SafetyValidator
+
+    # Check concurrency before accepting
+    with SyncSessionLocal() as sync_db:
+        safety = SafetyValidator()
+        safety.reap_stale_experiments(sync_db)
+        try:
+            safety.enforce_max_concurrent_experiments(sync_db)
+        except TooManyConcurrentExperimentsError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail=str(exc),
+            )
 
     experiment = await db.get(Experiment, experiment_id)
     if experiment is None:
@@ -393,16 +503,35 @@ async def run_experiment(
     experiment_config = _parse_experiment_yaml(experiment.experiment_yaml)
     SafetyValidator().validate_duration(experiment_config.fault.duration)
 
+    initial_phases = [
+        {"name": p, "state": "pending", "startedAt": None, "finishedAt": None}
+        for p in [
+            "validating",
+            "preparing",
+            "baseline",
+            "injecting",
+            "monitoring",
+            "rolling_back",
+            "waiting_for_recovery",
+            "validating_data",
+            "collecting_metrics",
+            "analyzing",
+            "cleaning_up",
+            "generating_report",
+        ]
+    ]
+
     run = ExperimentRun(
         experiment_id=experiment.id,
         status="pending",
+        stage="validating",
         params={
             "target_service": experiment_config.target.service,
             "fault_type": experiment_config.fault.type,
             "fault_duration": experiment_config.fault.duration,
             "experiment_config": experiment_config.model_dump(),
         },
-        results={},
+        results={"phases": initial_phases},
         started_at=datetime.now(tz=timezone.utc),
     )
     db.add(run)
@@ -437,9 +566,13 @@ async def cancel_experiment(
 ) -> dict:
     """
     Signal the running ExperimentRunner to cancel at the next stage boundary.
-
-    The runner's ``finally`` block will still execute rollback.
     """
+    from app.models.experiment import Experiment
+    from app.models.experiment_run import ExperimentRun
+    from app.reliability.fault_state import fault_state_registry
+
+    fault_state_registry.clear(str(experiment_id))
+
     runner = _RUNNING_RUNNERS.get(str(experiment_id))
     if runner is not None:
         runner.cancel()
@@ -449,8 +582,6 @@ async def cancel_experiment(
         }
 
     from sqlalchemy import select
-    from app.models.experiment import Experiment
-    from app.models.experiment_run import ExperimentRun
 
     experiment = await db.get(Experiment, experiment_id)
     if experiment is None:
@@ -467,6 +598,7 @@ async def cancel_experiment(
         run = ExperimentRun(
             experiment_id=experiment.id,
             status="cancelled",
+            stage="cancelled",
             params={},
             results={"message": "Cancelled before the run started."},
             started_at=datetime.now(tz=timezone.utc),
@@ -478,6 +610,7 @@ async def cancel_experiment(
         results["message"] = "Cancelled by operator."
         run.results = results
         run.status = "cancelled"
+        run.stage = "cancelled"
         run.finished_at = datetime.now(tz=timezone.utc)
         db.add(run)
     await db.commit()
@@ -489,27 +622,107 @@ async def cancel_experiment(
     "/api/reports",
     summary="List all generated experiment reports",
 )
-async def list_reports(db: AsyncSession = Depends(get_db)) -> list[dict]:
-    """Return all persisted experiment reports."""
-    from sqlalchemy import select
+async def list_reports(
+    response: Response,
+    target: str | None = None,
+    fault: str | None = None,
+    result: str | None = None,
+    from_date: str | None = Query(default=None, alias="from"),
+    to_date: str | None = Query(default=None, alias="to"),
+    sort: str = "created_desc",
+    limit: int = Query(50, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """Return filtered, sorted experiment reports with X-Total-Count header."""
+    from sqlalchemy import func, select
     from app.models.report import Report
 
-    stmt = (
-        select(Report)
-        .where(Report.report_type == "chaos_experiment")
-        .order_by(Report.created_at.desc())
-    )
-    result = await db.execute(stmt)
-    reports = result.scalars().all()
-    return [
-        {
+    # Validate query values
+    if result is not None and result not in ("", "PASS", "FAIL"):
+        raise HTTPException(status_code=422, detail=f"Invalid result filter: '{result}'. Must be PASS or FAIL.")
+
+    valid_sorts = {"created_desc", "created_asc", "recovery_asc", "recovery_desc"}
+    if sort not in valid_sorts:
+        raise HTTPException(status_code=422, detail=f"Invalid sort parameter: '{sort}'. Must be one of {valid_sorts}.")
+
+    parsed_from = None
+    if from_date:
+        try:
+            parsed_from = datetime.fromisoformat(from_date.replace("Z", "+00:00"))
+        except Exception:
+            raise HTTPException(status_code=422, detail=f"Invalid 'from' date format: '{from_date}'.")
+
+    parsed_to = None
+    if to_date:
+        try:
+            parsed_to = datetime.fromisoformat(to_date.replace("Z", "+00:00"))
+        except Exception:
+            raise HTTPException(status_code=422, detail=f"Invalid 'to' date format: '{to_date}'.")
+
+    query = select(Report).where(Report.report_type == "chaos_experiment")
+
+    if target:
+        query = query.where(
+            (Report.metadata_["target"].astext == target)
+            | (Report.metadata_["targetService"].astext == target)
+        )
+    if fault:
+        query = query.where(
+            (Report.metadata_["failure_type"].astext == fault)
+            | (Report.metadata_["faultType"].astext == fault)
+        )
+    if result:
+        query = query.where(Report.metadata_["result"].astext == result)
+    if parsed_from:
+        query = query.where(Report.created_at >= parsed_from)
+    if parsed_to:
+        query = query.where(Report.created_at <= parsed_to)
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total_res = await db.execute(count_query)
+    total_count = total_res.scalar() or 0
+    response.headers["X-Total-Count"] = str(total_count)
+
+    # Sorting
+    if sort == "created_asc":
+        query = query.order_by(Report.created_at.asc())
+    elif sort == "recovery_asc":
+        query = query.order_by(Report.metadata_["recovery_time_seconds"].astext.cast(func.float).asc().nullslast())
+    elif sort == "recovery_desc":
+        query = query.order_by(Report.metadata_["recovery_time_seconds"].astext.cast(func.float).desc().nullslast())
+    else:  # created_desc
+        query = query.order_by(Report.created_at.desc())
+
+    query = query.offset(offset).limit(limit)
+    res = await db.execute(query)
+    reports = res.scalars().all()
+
+    output = []
+    for r in reports:
+        meta = r.metadata_ or {}
+        output.append({
+            "id": str(r.id),
             "report_id": str(r.id),
+            "experimentId": meta.get("experiment_id") or meta.get("experiment_run_id"),
             "title": r.title,
-            "created_at": r.created_at.isoformat(),
-            "summary": r.metadata_,
-        }
-        for r in reports
-    ]
+            "targetService": meta.get("targetService") or meta.get("target"),
+            "faultType": meta.get("faultType") or meta.get("failure_type"),
+            "result": meta.get("result"),
+            "createdAt": r.created_at.isoformat(),
+            "recoveryTimeSeconds": meta.get("recoveryTimeSeconds") if meta.get("recoveryTimeSeconds") is not None else meta.get("recovery_time_seconds"),
+            "dataLoss": meta.get("dataLoss") if meta.get("dataLoss") is not None else meta.get("data_loss"),
+            "throughputBaseline": meta.get("throughputBaseline") if meta.get("throughputBaseline") is not None else meta.get("throughput_baseline"),
+            "throughputDuringFault": meta.get("throughputDuringFault"),
+            "availabilityPercentage": meta.get("availabilityPercentage") if meta.get("availabilityPercentage") is not None else meta.get("availability_percentage"),
+            "errorRate": meta.get("errorRate") if meta.get("errorRate") is not None else meta.get("error_rate"),
+            "cpuAvgPercent": meta.get("cpuAvgPercent"),
+            "memoryAvgBytes": meta.get("memoryAvgBytes"),
+            "summary": meta,
+        })
+
+    return output
 
 
 @router.get(
@@ -520,16 +733,18 @@ async def get_report(
     report_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Return the full report matching the canonical JSON shape from Section 10."""
+    """Return the full report matching Section 2.1 and 2.2."""
     from app.models.report import Report
 
     report = await db.get(Report, report_id)
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found.")
 
-    return report.metadata_ or {
-        "report_id": str(report.id),
-        "title": report.title,
-        "created_at": report.created_at.isoformat(),
-    }
+    meta = dict(report.metadata_ or {})
+    meta["id"] = str(report.id)
+    meta["report_id"] = str(report.id)
+    meta["title"] = report.title
+    meta["createdAt"] = report.created_at.isoformat()
+    meta["aiAnalysis"] = meta.get("aiAnalysis")  # null when not computed
 
+    return meta

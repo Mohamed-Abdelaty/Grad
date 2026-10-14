@@ -7,6 +7,7 @@ this single module to register every table with the shared MetaData.
 
 from app.models.audit_log import AuditLog
 from app.models.experiment import Experiment
+from app.models.experiment_event import ExperimentEvent
 from app.models.experiment_run import ExperimentRun
 from app.models.fault_injection import FaultInjection
 from app.models.metric import Metric
@@ -19,6 +20,7 @@ from app.models.user import User
 __all__ = [
     "AuditLog",
     "Experiment",
+    "ExperimentEvent",
     "ExperimentRun",
     "FaultInjection",
     "Metric",

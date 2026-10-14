@@ -536,6 +536,16 @@ class RunProgressTracker:
                     st["state"] = "skipped"
                     st["finishedAt"] = _utc_now()
 
+        if event_type in ("run_success", "run_failed", "run_cancelled"):
+            try:
+                from app.reliability.fault_state import fault_state_registry
+
+                active_fault = fault_state_registry.snapshot()
+                if active_fault is not None:
+                    state["fault"] = active_fault
+            except Exception:
+                pass
+
     # ── Granular Updates ───────────────────────────────────────────────────────
 
     def update_source(
@@ -714,6 +724,15 @@ class RunProgressTracker:
             if state is None:
                 return None
 
+            try:
+                from app.reliability.fault_state import fault_state_registry
+
+                active_fault = fault_state_registry.snapshot()
+                if state.get("status") == "running":
+                    state["fault"] = active_fault
+            except Exception:
+                pass
+
             return build_progress_dict(
                 run_id=run_id,
                 status=state["status"],
@@ -752,6 +771,22 @@ class RunProgressTracker:
                 error=state.get("error"),
                 fault=state.get("fault"),
             )
+
+    def snapshot(self, run_id: str | None = None) -> dict[str, Any] | None:
+        """
+        Return the progress snapshot for *run_id* or the latest running pipeline.
+        Merges fault state from FaultStateRegistry into running pipelines.
+        """
+        if run_id is not None:
+            return self.get_progress(run_id)
+        with self._lock:
+            for rid, s in reversed(list(self._runs.items())):
+                if s.get("status") == "running":
+                    return self.get_progress(rid)
+            if self._runs:
+                last_rid = list(self._runs.keys())[-1]
+                return self.get_progress(last_rid)
+        return None
 
     def get_events_after(self, run_id: str, after_seq: int) -> list[dict]:
         """Return all in-memory events with seq > *after_seq*."""

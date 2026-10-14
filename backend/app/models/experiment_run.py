@@ -72,6 +72,12 @@ class ExperimentRun(Base):
         comment="Timestamp when the run completed.",
     )
 
+    pipeline_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="Associated pipeline run ID if driven by this experiment.",
+    )
+
     # ── Relationships ──────────────────────────────────────────────────────────
     experiment: Mapped["Experiment"] = relationship(  # noqa: F821
         "Experiment",
