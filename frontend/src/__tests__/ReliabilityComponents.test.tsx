@@ -333,6 +333,7 @@ describe('Reliability UI Components & Accessibility', () => {
       );
 
       expect(screen.getByTestId('compare-panel')).toBeInTheDocument();
+      expect(screen.getByText('Availability during fault window')).toBeInTheDocument();
       expect(screen.getByText(/Kafka Test 1/i)).toBeInTheDocument();
       expect(screen.getByText(/Spark Test 2/i)).toBeInTheDocument();
       expect(screen.getByText('12.0 s')).toBeInTheDocument();
@@ -376,6 +377,41 @@ describe('Reliability UI Components & Accessibility', () => {
       expect(screen.getByText(/Maintain current consumer retry timeout/i)).toBeInTheDocument();
       expect(screen.getByText(/Export JSON/i)).toBeInTheDocument();
       expect(screen.getByText(/Print Report/i)).toBeInTheDocument();
+    });
+
+    it('verifies label "Availability during fault window" and N/A rendering for unmeasured metrics', async () => {
+      const nullReportDetail: ReportDetail = {
+        ...mockReportDetail,
+        results: {
+          ...mockReportDetail.results,
+          dataLoss: null,
+          expectedRecords: null,
+          processedRecords: null,
+          duplicates: null,
+          availabilityPercentage: null,
+          throughputDegradationPercent: null,
+          errorRate: null,
+          totalOperations: null,
+        },
+      };
+
+      vi.spyOn(reportsApi, 'getReport').mockResolvedValue(nullReportDetail);
+      vi.spyOn(experimentsApi, 'getExperimentEvents').mockResolvedValue([]);
+
+      render(
+        <MemoryRouter initialEntries={['/reports/rep-test-null']}>
+          <Routes>
+            <Route path="/reports/:id" element={<ReportDetails />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Availability during fault window')).toBeInTheDocument();
+      });
+
+      const naElements = screen.getAllByText('N/A');
+      expect(naElements.length).toBeGreaterThanOrEqual(4);
     });
 
     it('has zero accessibility violations (axe-core)', async () => {

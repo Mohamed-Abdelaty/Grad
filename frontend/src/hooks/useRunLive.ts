@@ -100,7 +100,9 @@ export function useRunLive(runId: string | undefined): UseRunLiveReturn {
           setLastUpdatedAt(Date.now());
 
           if (['succeeded', 'failed', 'cancelled'].includes(snap.status)) {
-            stopAndClose(runId);
+            if (!snap.fault || snap.fault.phase === 'recovered') {
+              stopAndClose(runId);
+            }
           }
         } catch (err: unknown) {
           if (import.meta.env.DEV) {
@@ -208,7 +210,9 @@ export function useRunLive(runId: string | undefined): UseRunLiveReturn {
                   setLastUpdatedAt(Date.now());
 
                   if (['succeeded', 'failed', 'cancelled'].includes(mapped.status)) {
-                    stopAndClose(runId);
+                    if (!mapped.fault || mapped.fault.phase === 'recovered') {
+                      stopAndClose(runId);
+                    }
                   }
                 }
               } catch (parseErr) {

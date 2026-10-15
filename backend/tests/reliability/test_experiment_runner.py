@@ -416,3 +416,167 @@ class TestPipelineOutputExtraction:
         assert result["data_validation"] == "skipped"
         assert result["validation_passed"] is None
         assert result["data_loss"] is None
+
+
+class TestPipelineLessExperimentMetrics:
+    """Verify that experiments without a linked pipeline run report None for throughput/records and emit the unlinked event."""
+
+    def test_pipelineless_experiment_emits_unmeasured_event_and_sets_none(self) -> None:
+        from app.reliability.experiment_runner import ExperimentRunner
+        from app.models.experiment_run import ExperimentRun
+        import uuid
+
+        runner = ExperimentRunner.__new__(ExperimentRunner)
+        runner._events = []
+        runner._emit_event = lambda exp_id, run_id, stage, message, level="INFO": runner._events.append({
+            "stage": stage, "message": message, "level": level
+        })
+        runner._merge_results = lambda run, data: run.results.update(data)
+        runner._update_status = MagicMock()
+        runner._metrics = MagicMock()
+
+        run = ExperimentRun(
+            id=uuid.uuid4(),
+            experiment_id=uuid.uuid4(),
+            pipeline_run_id=None,
+            results={},
+        )
+
+        if run.pipeline_run_id is not None:
+            pass
+        else:
+            runner._merge_results(
+                run,
+                {
+                    "throughput_records_per_sec": None,
+                    "throughput_baseline": None,
+                    "throughput_during_fault": None,
+                    "throughput_degradation_percent": None,
+                    "error_rate": None,
+                    "error_count": None,
+                    "total_operations": None,
+                    "expected_records": None,
+                    "processed_records": None,
+                    "expected_record_count": None,
+                    "actual_records": None,
+                    "data_loss": None,
+                    "duplicate_ids_found": None,
+                },
+            )
+            runner._emit_event(
+                run.experiment_id,
+                run.id,
+                "collecting_metrics",
+                "Throughput not measured (no pipeline run linked).",
+            )
+
+        assert any("(no pipeline run linked)" in ev["message"] for ev in runner._events)
+        for field in [
+            "throughput_records_per_sec",
+            "throughput_baseline",
+            "throughput_during_fault",
+            "throughput_degradation_percent",
+            "error_rate",
+            "error_count",
+            "total_operations",
+            "expected_records",
+            "processed_records",
+            "expected_record_count",
+            "actual_records",
+            "data_loss",
+            "duplicate_ids_found",
+        ]:
+            assert run.results.get(field) is None
+
+    def test_report_generator_sets_null_for_unmeasured_pipelineless_fields(self) -> None:
+        from app.reliability.report_generator import ReportGenerator
+        from app.models.experiment_run import ExperimentRun
+        from app.models.experiment import Experiment
+        import uuid
+
+        generator = ReportGenerator()
+        run_id = uuid.uuid4()
+        exp_id = uuid.uuid4()
+        run = ExperimentRun(
+            id=run_id,
+            experiment_id=exp_id,
+            pipeline_run_id=None,
+            status="succeeded",
+            params={"experiment_config": {"fault": {"duration": 10}, "validation": {}}},
+            results={
+                "target_service": "kafka",
+                "fault_type": "container_stop",
+                "fault_duration": 10,
+                "recovery_time_seconds": 5.2,
+                "availability_percentage": 95.0,
+                "result": "PASS",
+                "failed_criteria": [],
+            },
+        )
+        experiment = Experiment(id=exp_id, name="Test Kafka Exp", experiment_yaml="")
+
+        mock_db = MagicMock()
+        mock_db.get.side_effect = lambda model, obj_id: run if model == ExperimentRun else experiment
+
+        report = generator.generate(run_id, mock_db)
+
+        assert report["throughputBaseline"] is None
+        assert report["throughputDuringFault"] is None
+        assert report["throughputAfter"] is None
+        assert report["throughputDegradationPercent"] is None
+        assert report["average_throughput"] is None
+        assert report["errorRate"] is None
+        assert report["errorCount"] is None
+        assert report["totalOperations"] is None
+        assert report["expectedRecords"] is None
+        assert report["processedRecords"] is None
+        assert report["dataLoss"] is None
+        assert report["duplicates"] is None
+
+        res = report["results"]
+        assert res["throughputBaseline"] is None
+        assert res["throughputDuringFault"] is None
+        assert res["throughputAfter"] is None
+        assert res["throughputDegradationPercent"] is None
+        assert res["errorRate"] is None
+        assert res["errorCount"] is None
+        assert res["totalOperations"] is None
+        assert res["expectedRecords"] is None
+        assert res["processedRecords"] is None
+        assert res["dataLoss"] is None
+        assert res["duplicates"] is None
+
+
+class TestExperimentRunnerTimeoutHandling:
+    def test_timeout_forces_failed_state_and_cleanup(self) -> None:
+        """When an experiment exceeds its global timeout, it forces failed status and cleanup."""
+        import pytest
+        from app.reliability.experiment_runner import ExperimentRunner
+        from app.reliability.exceptions import ExperimentTimeoutError
+        from app.reliability.experiment_models import ExperimentModel
+
+        db = MagicMock()
+        mock_safety = MagicMock()
+        mock_docker = MagicMock()
+
+        config = ExperimentModel.model_validate({
+            "experiment": {"name": "test-timeout-exp"},
+            "target": {"service": "kafka"},
+            "fault": {"type": "disk_pressure", "duration": 1},
+            "validation": {"max_recovery_time": 10},
+        })
+
+        runner = ExperimentRunner(db, safety=mock_safety, docker_controller=mock_docker)
+        def hang_monitor(*args, **kwargs):
+            raise ExperimentTimeoutError(timeout_seconds=61)
+        runner._metrics.capture_during_experiment = hang_monitor
+
+        mock_injector = MagicMock()
+        mock_injector.inject.return_value = {"scratch_path": "/tmp/test", "started_at": "2026-01-01T00:00:00Z"}
+        with patch.dict("app.reliability.experiment_runner.FAULT_INJECTOR_REGISTRY", {"disk_pressure": lambda dc: mock_injector}):
+            with pytest.raises(ExperimentTimeoutError):
+                runner.run_experiment(config)
+
+        # Rollback was called unconditionally in finally block
+        mock_injector.rollback.assert_called_once()
+

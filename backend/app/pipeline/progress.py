@@ -727,9 +727,8 @@ class RunProgressTracker:
             try:
                 from app.reliability.fault_state import fault_state_registry
 
-                active_fault = fault_state_registry.snapshot()
                 if state.get("status") == "running":
-                    state["fault"] = active_fault
+                    state["fault"] = fault_state_registry.snapshot()
             except Exception:
                 pass
 

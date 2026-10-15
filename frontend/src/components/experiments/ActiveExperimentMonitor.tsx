@@ -473,25 +473,27 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
             <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex flex-col gap-1">
               <span className="text-[11px] text-slate-400">Data Loss</span>
               <span className="text-base font-bold font-mono text-slate-100">
-                {detail.results.dataLoss}
+                {detail.results.dataLoss !== null && detail.results.dataLoss !== undefined ? detail.results.dataLoss : 'N/A'}
               </span>
             </div>
             <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex flex-col gap-1">
               <span className="text-[11px] text-slate-400">Expected / Processed</span>
               <span className="text-sm font-bold font-mono text-slate-100 truncate">
-                {detail.results.expectedRecords} / {detail.results.processedRecords}
+                {detail.results.expectedRecords !== null && detail.results.expectedRecords !== undefined
+                  ? `${detail.results.expectedRecords} / ${detail.results.processedRecords ?? 'N/A'}`
+                  : 'N/A'}
               </span>
             </div>
             <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex flex-col gap-1">
               <span className="text-[11px] text-slate-400">Duplicates</span>
               <span className="text-base font-bold font-mono text-slate-100">
-                {detail.results.duplicates}
+                {detail.results.duplicates !== null && detail.results.duplicates !== undefined ? detail.results.duplicates : 'N/A'}
               </span>
             </div>
             <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex flex-col gap-1">
-              <span className="text-[11px] text-slate-400">Availability</span>
+              <span className="text-[11px] text-slate-400">Availability during fault window</span>
               <span className="text-base font-bold font-mono text-slate-100">
-                {detail.results.availabilityPercentage !== null
+                {detail.results.availabilityPercentage !== null && detail.results.availabilityPercentage !== undefined
                   ? `${detail.results.availabilityPercentage.toFixed(1)}%`
                   : 'N/A'}
               </span>
@@ -499,7 +501,7 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
             <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex flex-col gap-1">
               <span className="text-[11px] text-slate-400">Throughput Degr.</span>
               <span className="text-base font-bold font-mono text-slate-100">
-                {detail.results.throughputDegradationPercent !== null
+                {detail.results.throughputDegradationPercent !== null && detail.results.throughputDegradationPercent !== undefined
                   ? `${detail.results.throughputDegradationPercent.toFixed(1)}%`
                   : 'N/A'}
               </span>

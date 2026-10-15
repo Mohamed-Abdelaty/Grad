@@ -332,7 +332,9 @@ export function toSceneModel(p: RunProgress, ctx: SceneContext): SceneModel {
   const summary = resolvedStations.map((s) => {
     let details = '';
     if (s.state === 'active') {
-      if (s.key === 'source') {
+      if (s.note) {
+        details = ` ${s.note.endsWith('.') ? s.note : s.note + '.'}`;
+      } else if (s.key === 'source') {
         details = s.counter ? ` ${s.counter} rows read.` : '.';
       } else if (s.key === 'kafka') {
         if (p.mode === 'batch' && typeof p.kafka?.published === 'number' && typeof p.source?.rowsTotal === 'number' && p.source.rowsTotal > 0) {
@@ -349,7 +351,9 @@ export function toSceneModel(p: RunProgress, ctx: SceneContext): SceneModel {
         details = s.counter ? ` ${s.counter}.` : '.';
       }
     } else if (s.state === 'done') {
-      if (s.key === 'spark' && typeof p.spark?.recordsIn === 'number' && typeof p.spark?.recordsOut === 'number') {
+      if (s.note) {
+        details = ` ${s.note.endsWith('.') ? s.note : s.note + '.'}`;
+      } else if (s.key === 'spark' && typeof p.spark?.recordsIn === 'number' && typeof p.spark?.recordsOut === 'number') {
         details = ` Processed ${formatCount(p.spark.recordsIn)} in, ${formatCount(p.spark.recordsOut)} out.`;
       } else if (s.key === 'hdfs' && p.hdfs?.verified) {
         details = ' Verified.';
@@ -359,7 +363,7 @@ export function toSceneModel(p: RunProgress, ctx: SceneContext): SceneModel {
     } else if (s.state === 'pending') {
       details = '.';
     } else if (s.note) {
-      details = ` ${s.note}.`;
+      details = ` ${s.note.endsWith('.') ? s.note : s.note + '.'}`;
     } else {
       details = '.';
     }

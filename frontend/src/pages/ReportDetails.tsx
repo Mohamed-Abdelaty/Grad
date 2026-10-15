@@ -359,26 +359,28 @@ export default function ReportDetails() {
             <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex flex-col gap-1">
               <span className="text-[11px] text-slate-400">Data Loss</span>
               <span className="text-lg font-bold font-mono text-slate-100">
-                {results.dataLoss ?? 0} records
+                {results.dataLoss !== null && results.dataLoss !== undefined ? `${results.dataLoss} records` : 'N/A'}
               </span>
             </div>
 
             <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex flex-col gap-1">
               <span className="text-[11px] text-slate-400">Expected vs Processed</span>
               <span className="text-sm font-bold font-mono text-slate-100 truncate">
-                {results.expectedRecords ?? 0} / {results.processedRecords ?? 0}
+                {results.expectedRecords !== null && results.expectedRecords !== undefined
+                  ? `${results.expectedRecords} / ${results.processedRecords ?? 'N/A'}`
+                  : 'N/A'}
               </span>
             </div>
 
             <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex flex-col gap-1">
               <span className="text-[11px] text-slate-400">Duplicate Records</span>
               <span className="text-lg font-bold font-mono text-slate-100">
-                {results.duplicates ?? 0}
+                {results.duplicates !== null && results.duplicates !== undefined ? results.duplicates : 'N/A'}
               </span>
             </div>
 
             <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex flex-col gap-1">
-              <span className="text-[11px] text-slate-400">Availability</span>
+              <span className="text-[11px] text-slate-400">Availability during fault window</span>
               <span className="text-lg font-bold font-mono text-slate-100">
                 {results.availabilityPercentage !== null && results.availabilityPercentage !== undefined
                   ? `${results.availabilityPercentage.toFixed(1)}%`
@@ -400,16 +402,15 @@ export default function ReportDetails() {
               <span className="text-[11px] text-slate-400">Error Rate / Count</span>
               <span className="text-sm font-bold font-mono text-slate-100 truncate">
                 {results.errorRate !== null && results.errorRate !== undefined
-                  ? `${(results.errorRate * 100).toFixed(2)}%`
-                  : '0%'}{' '}
-                ({results.errorCount ?? 0} errors)
+                  ? `${(results.errorRate * 100).toFixed(2)}% (${results.errorCount ?? 0} errors)`
+                  : 'N/A'}
               </span>
             </div>
 
             <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex flex-col gap-1">
               <span className="text-[11px] text-slate-400">Total Operations</span>
               <span className="text-lg font-bold font-mono text-slate-100">
-                {results.totalOperations ?? 'N/A'}
+                {results.totalOperations !== null && results.totalOperations !== undefined ? results.totalOperations : 'N/A'}
               </span>
             </div>
           </div>

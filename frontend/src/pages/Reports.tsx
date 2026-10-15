@@ -441,10 +441,10 @@ export default function Reports() {
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-400 block font-sans">Data Loss</span>
-                    <span className="font-bold text-slate-100">{report.dataLoss} rec</span>
+                    <span className="font-bold text-slate-100">{report.dataLoss !== null && report.dataLoss !== undefined ? `${report.dataLoss} rec` : 'N/A'}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-sans">Availability</span>
+                    <span className="text-[10px] text-slate-400 block font-sans">Availability during fault window</span>
                     <span className="font-bold text-slate-100">
                       {report.availabilityPercentage !== null ? `${report.availabilityPercentage.toFixed(1)}%` : 'N/A'}
                     </span>
@@ -452,7 +452,7 @@ export default function Reports() {
                   <div>
                     <span className="text-[10px] text-slate-400 block font-sans">Error Rate</span>
                     <span className="font-bold text-slate-100">
-                      {report.errorRate !== null ? `${(report.errorRate * 100).toFixed(1)}%` : '0%'}
+                      {report.errorRate !== null ? `${(report.errorRate * 100).toFixed(1)}%` : 'N/A'}
                     </span>
                   </div>
                 </div>
@@ -519,7 +519,7 @@ export default function Reports() {
                     </div>
                   </th>
                   <th className="py-3 px-4">Data Loss</th>
-                  <th className="py-3 px-4">Availability</th>
+                  <th className="py-3 px-4">Availability during fault window</th>
                   <th className="py-3 px-4">Action</th>
                 </tr>
               </thead>
@@ -572,7 +572,7 @@ export default function Reports() {
                           ? `${report.recoveryTimeSeconds.toFixed(1)} s`
                           : 'N/A'}
                       </td>
-                      <td className="py-2.5 px-4">{report.dataLoss}</td>
+                      <td className="py-2.5 px-4">{report.dataLoss !== null && report.dataLoss !== undefined ? report.dataLoss : 'N/A'}</td>
                       <td className="py-2.5 px-4">
                         {report.availabilityPercentage !== null
                           ? `${report.availabilityPercentage.toFixed(1)}%`

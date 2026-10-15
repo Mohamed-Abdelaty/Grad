@@ -87,16 +87,31 @@ class ReportGenerator:
         ] if raw_samples else None
 
         avail_pct = results.get("availability_percentage")
-        if avail_pct is not None:
+        has_pipeline = bool(run.pipeline_run_id)
+
+        if has_pipeline and avail_pct is not None:
             err_rate = round(max(0.0, min(1.0, (100.0 - float(avail_pct)) / 100.0)), 4)
         else:
             err_rate = None
 
-        total_ops = results.get("total_samples", len(raw_samples) if raw_samples else 0)
-        avail_ops = results.get("available_samples", sum(1 for s in raw_samples if s.get("available")))
-        err_count = total_ops - avail_ops if total_ops is not None else 0
+        if has_pipeline:
+            total_ops = results.get("total_samples", len(raw_samples) if raw_samples else 0)
+            avail_ops = results.get("available_samples", sum(1 for s in raw_samples if s.get("available")))
+            err_count = total_ops - avail_ops if total_ops is not None else 0
+        else:
+            total_ops = None
+            err_count = None
 
         # ── Extract metrics from results dict ──────────────────────────────────
+        expected_recs = results.get("expected_record_count") if has_pipeline else None
+        processed_recs = results.get("actual_records") if has_pipeline else None
+        data_loss_val = results.get("data_loss") if has_pipeline else None
+        duplicates_val = results.get("duplicate_ids_found") if has_pipeline else None
+        avg_throughput = results.get("throughput_records_per_sec") if has_pipeline else None
+        tp_baseline = results.get("throughput_baseline") if has_pipeline else None
+        tp_after = results.get("throughput_records_per_sec") if has_pipeline else None
+        tp_degradation = results.get("throughput_degradation_percent") if has_pipeline else None
+
         report_dict: dict[str, Any] = {
             "id": "",  # populated after insert
             "experiment_id": str(run.experiment_id),
@@ -115,18 +130,18 @@ class ReportGenerator:
             },
             "recovery_time_seconds": results.get("recovery_time_seconds"),
             "recoveryTimeSeconds": results.get("recovery_time_seconds"),
-            "expected_records": results.get("expected_record_count", 0),
-            "expectedRecords": results.get("expected_record_count", 0),
-            "processed_records": results.get("actual_records", 0),
-            "processedRecords": results.get("actual_records", 0),
-            "data_loss": results.get("data_loss", 0),
-            "dataLoss": results.get("data_loss", 0),
-            "duplicates": results.get("duplicate_ids_found", 0),
-            "average_throughput": results.get("throughput_records_per_sec", 0.0),
-            "throughputBaseline": results.get("throughput_baseline"),
+            "expected_records": expected_recs,
+            "expectedRecords": expected_recs,
+            "processed_records": processed_recs,
+            "processedRecords": processed_recs,
+            "data_loss": data_loss_val,
+            "dataLoss": data_loss_val,
+            "duplicates": duplicates_val,
+            "average_throughput": avg_throughput,
+            "throughputBaseline": tp_baseline,
             "throughputDuringFault": None,
-            "throughputAfter": results.get("throughput_records_per_sec"),
-            "throughputDegradationPercent": results.get("throughput_degradation_percent"),
+            "throughputAfter": tp_after,
+            "throughputDegradationPercent": tp_degradation,
             "availability_percentage": avail_pct,
             "availabilityPercentage": avail_pct,
             "error_rate": err_rate,
@@ -151,14 +166,14 @@ class ReportGenerator:
             },
             "results": {
                 "recoveryTimeSeconds": results.get("recovery_time_seconds"),
-                "dataLoss": results.get("data_loss", 0),
-                "duplicates": results.get("duplicate_ids_found", 0),
-                "expectedRecords": results.get("expected_record_count", 0),
-                "processedRecords": results.get("actual_records", 0),
-                "throughputBaseline": results.get("throughput_baseline"),
+                "dataLoss": data_loss_val,
+                "duplicates": duplicates_val,
+                "expectedRecords": expected_recs,
+                "processedRecords": processed_recs,
+                "throughputBaseline": tp_baseline,
                 "throughputDuringFault": None,
-                "throughputAfter": results.get("throughput_records_per_sec"),
-                "throughputDegradationPercent": results.get("throughput_degradation_percent"),
+                "throughputAfter": tp_after,
+                "throughputDegradationPercent": tp_degradation,
                 "availabilityPercentage": avail_pct,
                 "errorRate": err_rate,
                 "errorCount": err_count,

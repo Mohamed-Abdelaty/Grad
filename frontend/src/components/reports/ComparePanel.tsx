@@ -131,7 +131,7 @@ export function ComparePanel({ open, onClose, reports }: Props) {
                 <td className="py-2.5 px-4 font-sans font-medium text-slate-300">Data Loss</td>
                 {reports.map((r) => (
                   <td key={r.id} className="py-2.5 px-4">
-                    {r.dataLoss} records
+                    {r.dataLoss !== null && r.dataLoss !== undefined ? `${r.dataLoss} records` : 'N/A'}
                   </td>
                 ))}
               </tr>
@@ -158,7 +158,7 @@ export function ComparePanel({ open, onClose, reports }: Props) {
 
               {/* Availability */}
               <tr>
-                <td className="py-2.5 px-4 font-sans font-medium text-slate-300">Availability</td>
+                <td className="py-2.5 px-4 font-sans font-medium text-slate-300">Availability during fault window</td>
                 {reports.map((r) => (
                   <td key={r.id} className="py-2.5 px-4 font-semibold">
                     {r.availabilityPercentage !== null ? `${r.availabilityPercentage.toFixed(1)}%` : 'N/A'}
@@ -171,7 +171,7 @@ export function ComparePanel({ open, onClose, reports }: Props) {
                 <td className="py-2.5 px-4 font-sans font-medium text-slate-300">Error Rate</td>
                 {reports.map((r) => (
                   <td key={r.id} className="py-2.5 px-4">
-                    {r.errorRate !== null ? `${(r.errorRate * 100).toFixed(2)}%` : '0%'}
+                    {r.errorRate !== null ? `${(r.errorRate * 100).toFixed(2)}%` : 'N/A'}
                   </td>
                 ))}
               </tr>

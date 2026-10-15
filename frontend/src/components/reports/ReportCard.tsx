@@ -43,7 +43,7 @@ export default function ReportCard({ report }: Props) {
 
       <div className="grid grid-cols-3 gap-4 text-sm bg-slate-900/50 p-3 rounded">
         <MetricCell label="Recovery Time" value={recovery} />
-        <MetricCell label="Availability" value={availability} />
+        <MetricCell label="Availability during fault window" value={availability} />
         <MetricCell label="Data Loss" value={dataLoss} />
       </div>
     </div>

@@ -151,12 +151,14 @@ def _mark_background_run_failed(db: Any, run_id: str, error: str) -> None:
     """Persist an early runner failure so the UI never polls forever."""
     from app.models.experiment_run import ExperimentRun
 
-    run = db.get(ExperimentRun, run_id)
+    run_uuid = uuid.UUID(run_id) if isinstance(run_id, str) else run_id
+    run = db.get(ExperimentRun, run_uuid)
     if run is None or run.status == "cancelled":
         return
 
     results = run.results or {}
     results["error"] = error
+    results["result"] = "FAIL"
     run.results = results
     run.status = "failed"
     run.finished_at = datetime.now(tz=timezone.utc)

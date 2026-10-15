@@ -167,7 +167,12 @@ class ExperimentRunner:
         ]
 
         if existing_run_id:
-            run = self._db.get(ExperimentRun, existing_run_id)
+            run_uuid = (
+                uuid.UUID(existing_run_id)
+                if isinstance(existing_run_id, str)
+                else existing_run_id
+            )
+            run = self._db.get(ExperimentRun, run_uuid)
             if run is None:
                 raise ValueError(f"Experiment run '{existing_run_id}' was not found.")
             if run.experiment_id != experiment.id:
@@ -297,7 +302,20 @@ class ExperimentRunner:
                         f"Fault injection failed: {exc}",
                         level="ERROR",
                     )
-                    failed_criteria = [f"fault_injection_failed: {exc}"]
+                    error_str = str(exc)
+                    if "tc" in error_str.lower() or "iproute2" in error_str.lower():
+                        reason = "tc"
+                    elif "stress-ng" in error_str.lower():
+                        reason = "stress-ng"
+                    elif "stress" in error_str.lower():
+                        reason = "stress"
+                    elif "not found" in error_str.lower() or "executable file not found" in error_str.lower():
+                        reason = "required tool"
+                    else:
+                        reason = error_str
+                    failed_criteria = [
+                        f"The fault could not be applied: {reason} is not available in the {target_service} container, so the system was not tested."
+                    ]
                     result = "FAIL"
                     self._merge_results(run, {
                         "result": result,
@@ -523,18 +541,44 @@ class ExperimentRunner:
                 "Computing throughput and persisting performance metrics.",
             )
             elapsed_total = time.monotonic() - experiment_start
-            throughput = self._metrics.compute_throughput(
-                records_processed=consistency.get("actual_records") or 0,
-                duration_seconds=elapsed_total,
-            )
-            self._merge_results(run, {"throughput_records_per_sec": throughput})
-            self._metrics.persist_metrics(self._db, run_id, run.results or {})
-            self._emit_event(
-                experiment.id,
-                run_id,
-                "collecting_metrics",
-                f"Computed throughput: {throughput} records/s over {elapsed_total:.1f}s.",
-            )
+            if run.pipeline_run_id is not None:
+                throughput = self._metrics.compute_throughput(
+                    records_processed=consistency.get("actual_records") or 0,
+                    duration_seconds=elapsed_total,
+                )
+                self._merge_results(run, {"throughput_records_per_sec": throughput})
+                self._metrics.persist_metrics(self._db, run_id, run.results or {})
+                self._emit_event(
+                    experiment.id,
+                    run_id,
+                    "collecting_metrics",
+                    f"Computed throughput: {throughput} records/s over {elapsed_total:.1f}s.",
+                )
+            else:
+                self._merge_results(
+                    run,
+                    {
+                        "throughput_records_per_sec": None,
+                        "throughput_baseline": None,
+                        "throughput_during_fault": None,
+                        "throughput_degradation_percent": None,
+                        "error_rate": None,
+                        "error_count": None,
+                        "total_operations": None,
+                        "expected_records": None,
+                        "processed_records": None,
+                        "expected_record_count": None,
+                        "actual_records": None,
+                        "data_loss": None,
+                        "duplicate_ids_found": None,
+                    },
+                )
+                self._emit_event(
+                    experiment.id,
+                    run_id,
+                    "collecting_metrics",
+                    "Throughput not measured (no pipeline run linked).",
+                )
 
             # ── ANALYZE ───────────────────────────────────────────────────────
             self._update_status(run, "analyzing")
@@ -626,11 +670,23 @@ class ExperimentRunner:
         except Exception as exc:
             logger.error("ExperimentRunner: experiment %s failed: %s", experiment.id, exc)
             fault_state_registry.clear(str(experiment.id))
+            if run is not None:
+                run.status = "failed"
+                run.finished_at = datetime.now(tz=timezone.utc)
+                res = dict(run.results or {})
+                res["error"] = str(exc)
+                res["result"] = "FAIL"
+                run.results = res
+                try:
+                    self._db.add(run)
+                    self._db.commit()
+                except Exception:
+                    pass
             try:
                 self._emit_event(
                     experiment.id,
                     run_id,
-                    run.stage or "error",
+                    run.stage if run else "error",
                     f"Experiment failed: {exc}",
                     level="ERROR",
                 )

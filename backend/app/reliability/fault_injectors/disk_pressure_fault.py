@@ -1,25 +1,25 @@
 """
 app/reliability/fault_injectors/disk_pressure_fault.py
 --------------------------------------------------------
-Fault injector: ``disk_pressure``
+Fault injector: disk_pressure
 
 Writes a large scratch file inside the target container's writable layer to
 consume disk space and create I/O pressure.
 
-Implementation uses ``dd`` (universally available in Linux containers) to
-write a bounded scratch file to ``/tmp/chaoslab_disk_scratch`` inside the
-container.  This is safer than ``fallocate`` (not always available) and
-simpler than ``stress-ng --fallocate`` (which requires stress-ng).
+Implementation uses dd (universally available in Linux containers) to
+write a bounded scratch file to /tmp/chaoslab_disk_scratch inside the
+container. This is safer than fallocate (not always available) and
+simpler than stress-ng --fallocate (which requires stress-ng).
 
 Safety limits (ENFORCED regardless of configuration)
-    - Maximum scratch file size: **500 MB** — hard-coded, never overridable
+    - Maximum scratch file size: 500 MB -- hard-coded, never overridable
       by experiment YAML.
-    - Always writes to the container's ``/tmp`` directory (writable layer),
+    - Always writes to the container's /tmp directory (writable layer),
       never the host filesystem.
-    - ``rollback()`` always removes the scratch file, even if inject failed.
+    - rollback() always removes the scratch file, even if inject failed.
 
 Requirements
-    ``dd`` — available in virtually all Linux base images (coreutils).
+    dd -- available in virtually all Linux base images (coreutils).
     No additional packages required.
 """
 
@@ -52,25 +52,25 @@ class DiskPressureFault(BaseFaultInjector):
 
     def inject(self, target_service: str, params: dict) -> dict:
         """
-        Write a scratch file of ``disk_size_mb`` MB inside the target container.
+        Write a scratch file of disk_size_mb MB inside the target container.
 
         Parameters
         ----------
         params : dict
-            Key: ``disk_size_mb`` (int, default 200, max 500 — hard-coded ceiling).
+            Key: disk_size_mb (int, default 200, max 500 -- hard-coded ceiling).
 
         Returns
         -------
         dict
-            ``{"scratch_path": str, "size_mb": int, "started_at": str}``
+            {"scratch_path": str, "size_mb": int, "started_at": str}
         """
-        requested_mb = int(params.get("disk_size_mb", _DEFAULT_DISK_MB))
-        # HARD SAFETY LIMIT — never exceed 500 MB regardless of config
+        raw_mb = params.get("disk_size_mb")
+        requested_mb = int(raw_mb) if raw_mb is not None else _DEFAULT_DISK_MB
+        # HARD SAFETY LIMIT -- never exceed 500 MB regardless of config
         size_mb = min(requested_mb, _MAX_DISK_PRESSURE_MB)
         if requested_mb > _MAX_DISK_PRESSURE_MB:
             logger.warning(
-                "DiskPressureFault: requested %dMB exceeds ceiling of %dMB — "
-                "capping at %dMB.",
+                "DiskPressureFault: requested %dMB exceeds ceiling of %dMB -- capping at %dMB.",
                 requested_mb,
                 _MAX_DISK_PRESSURE_MB,
                 _MAX_DISK_PRESSURE_MB,
@@ -101,7 +101,7 @@ class DiskPressureFault(BaseFaultInjector):
         """
         Remove the scratch file from the target container.
 
-        Safe to call even if ``inject()`` never completed — ``rm -f`` on a
+        Safe to call even if inject() never completed -- rm -f on a
         non-existent path is a no-op.
         """
         scratch_path = injection_metadata.get("scratch_path", _SCRATCH_PATH)
@@ -124,8 +124,7 @@ class DiskPressureFault(BaseFaultInjector):
                 )
         except Exception as exc:
             logger.warning(
-                "DiskPressureFault.rollback: failed to remove scratch file "
-                "from '%s': %s",
+                "DiskPressureFault.rollback: failed to remove scratch file from '%s': %s",
                 target_service,
                 exc,
             )
