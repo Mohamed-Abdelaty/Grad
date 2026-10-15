@@ -7,13 +7,32 @@ import Dashboard from '../pages/Dashboard';
 import * as system from '../api/system';
 import * as pipelines from '../api/pipelines';
 import * as experiments from '../api/experiments';
+import * as dashboard from '../api/dashboard';
 
 vi.mock('../api/system');
 vi.mock('../api/pipelines');
 vi.mock('../api/experiments');
+vi.mock('../api/dashboard');
 
 const ok = { connected: true, error: null, latency_ms: 3 };
 const down = { connected: false, error: 'refused', latency_ms: null };
+
+const defaultSummary = {
+  windowHours: 24,
+  runs: { total: 0, active: 0, succeeded: 0, failed: 0, cancelled: 0 },
+  experiments: { total: 0, running: 0, succeeded: 0, failed: 0, cancelled: 0 },
+  kpis: {
+    avgRecoverySeconds: null,
+    totalDataLoss: 0,
+    avgThroughput: null,
+    avgAvailabilityPercent: null,
+    completedExperimentsConsidered: 0,
+  },
+  runsPerHour: [],
+  recoveryTrend: [],
+  throughputTrend: [],
+  recentFailures: [],
+};
 
 function renderDashboard() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -29,12 +48,17 @@ function renderDashboard() {
 describe('Dashboard states', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(dashboard.getDashboardSummary).mockResolvedValue(defaultSummary);
+    vi.mocked(pipelines.listRuns).mockResolvedValue({ items: [], total: 0 } as never);
+    vi.mocked(pipelines.getPipelineRuns).mockResolvedValue([]);
   });
 
   it('shows loading skeletons while queries are pending', () => {
     vi.mocked(system.getSystemStatus).mockReturnValue(new Promise(() => undefined));
+    vi.mocked(pipelines.listRuns).mockReturnValue(new Promise(() => undefined));
     vi.mocked(pipelines.getPipelineRuns).mockReturnValue(new Promise(() => undefined));
     vi.mocked(experiments.listExperiments).mockReturnValue(new Promise(() => undefined));
+    vi.mocked(dashboard.getDashboardSummary).mockReturnValue(new Promise(() => undefined));
     renderDashboard();
     expect(screen.getAllByLabelText('Loading…').length).toBeGreaterThan(0);
   });

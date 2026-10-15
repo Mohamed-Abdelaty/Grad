@@ -16,3 +16,4 @@ export type { Column } from './DataTable';
 export { ProgressBar } from './ProgressBar';
 export { LogViewer } from './LogViewer';
 export { FormField } from './FormField';
+export { ErrorBoundary } from './ErrorBoundary';

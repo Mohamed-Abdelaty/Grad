@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import {
   ArrowUpDownIcon,
   CopyIcon,
@@ -14,6 +14,9 @@ import {
 import { toast } from 'sonner';
 
 import { listRuns, cancelRun } from '../../api/pipelines';
+import { getProgress } from '../../api/runProgress';
+import { activeStageSummary } from '../../lib/format';
+import { RunProgress } from '../../types/runProgress';
 import { PipelineRunListItem, RunStatus } from '../../types/pipeline';
 import { safeFileName } from '../../lib/yaml';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
@@ -32,6 +35,7 @@ const ALL_STATUSES: RunStatus[] = ['pending', 'running', 'succeeded', 'failed', 
 export interface RunsTableProps {
   onRerun?: (yamlContent: string) => void;
   onFocusTemplates?: () => void;
+  compact?: boolean;
 }
 
 function formatRelativeTime(dateStr: string | null): string {
@@ -70,7 +74,7 @@ function formatDuration(
   return `${min}m ${sec}s`;
 }
 
-export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
+export function RunsTable({ onRerun, onFocusTemplates, compact = false }: RunsTableProps) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -132,14 +136,14 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
 
   // Fetch runs
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['pipelineRuns', selectedStatuses, debouncedQ, sort, pageSize, offset],
+    queryKey: ['pipelineRuns', compact ? 'compact' : [selectedStatuses, debouncedQ, sort, pageSize, offset]],
     queryFn: () =>
       listRuns({
-        status: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-        q: debouncedQ || undefined,
-        sort,
-        limit: pageSize,
-        offset,
+        status: compact ? undefined : (selectedStatuses.length > 0 ? selectedStatuses : undefined),
+        q: compact ? undefined : (debouncedQ || undefined),
+        sort: compact ? 'started_at_desc' : sort,
+        limit: compact ? 8 : pageSize,
+        offset: compact ? 0 : offset,
       }),
     refetchInterval: (query) => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
@@ -152,10 +156,39 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
     placeholderData: (prev) => prev,
   });
 
-  const runs = data?.items || [];
+  const runs = useMemo(() => data?.items || [], [data?.items]);
   const totalCount = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const hasRunningRows = runs.some((r) => r.status === 'running');
+
+  // Running run progress queries for compact mode (up to 3 running rows)
+  const runningRunIds = useMemo(() => {
+    if (!compact) return [];
+    return runs.filter((r) => r.status === 'running').slice(0, 3).map((r) => r.id);
+  }, [compact, runs]);
+
+  const progressQueries = useQueries({
+    queries: runningRunIds.map((id) => ({
+      queryKey: ['runProgress', id],
+      queryFn: () => getProgress(id),
+      refetchInterval: () => {
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+          return false;
+        }
+        return 2000;
+      },
+      enabled: compact && Boolean(id),
+    })),
+  });
+
+  const progressMap = useMemo(() => {
+    const map = new Map<string, RunProgress>();
+    runningRunIds.forEach((id, index) => {
+      const pData = progressQueries[index]?.data;
+      if (pData) map.set(id, pData);
+    });
+    return map;
+  }, [runningRunIds, progressQueries]);
 
   // Live ticker effect when running rows exist
   useEffect(() => {
@@ -284,13 +317,39 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
     {
       key: 'status',
       header: 'Status',
-      cell: (run) => (
-        <StatusPill
-          status={run.status}
-          label={run.status}
-          dot={run.status === 'running'}
-        />
-      ),
+      cell: (run) => {
+        const prog = compact ? progressMap.get(run.id) : null;
+        const summary = prog ? activeStageSummary(prog) : null;
+        return (
+          <div className="flex flex-col gap-1.5">
+            <StatusPill
+              status={run.status}
+              label={run.status}
+              dot={run.status === 'running'}
+            />
+            {compact && run.status === 'running' && summary && (
+              <div className="flex flex-col gap-0.5 w-full max-w-[140px]">
+                <div className="flex justify-between text-[10px] text-slate-400">
+                  <span className="truncate">{summary.label}</span>
+                  {summary.ratio !== null && (
+                    <span>{Math.round(summary.ratio * 100)}%</span>
+                  )}
+                </div>
+                <div className="h-1.5 w-full bg-surface-border rounded-full overflow-hidden">
+                  {summary.indeterminate ? (
+                    <div className="h-full bg-brand-light animate-pulse w-full rounded-full" />
+                  ) : (
+                    <div
+                      className="h-full bg-brand-light rounded-full transition-all duration-300"
+                      style={{ width: `${Math.round((summary.ratio ?? 0) * 100)}%` }}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'started',
@@ -419,68 +478,81 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
   ];
 
   return (
-    <Card data-testid="runs-table" padding="none" className="overflow-hidden">
-      <CardHeader className="p-4 border-b border-surface-border mb-0">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
-          <CardTitle>Pipeline runs</CardTitle>
-
-          {/* Search input */}
-          <div className="relative w-full sm:w-64">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              data-testid="runs-search"
-              type="text"
-              placeholder="Search by pipeline name..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full bg-surface-base border border-surface-border rounded-md pl-9 pr-8 py-1.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-            />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={() => setSearchInput('')}
-                aria-label="Clear search"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-              >
-                <XIcon className="h-3.5 w-3.5" />
-              </button>
-            )}
+    <Card data-testid={compact ? 'dash-runs' : 'runs-table'} padding="none" className="overflow-hidden">
+      {compact ? (
+        <CardHeader className="p-4 border-b border-surface-border mb-0">
+          <div className="flex items-center justify-between w-full">
+            <CardTitle>Recent pipeline runs</CardTitle>
+            <Link to="/pipelines" className="text-sm text-brand-light hover:underline">
+              View all
+            </Link>
           </div>
-        </div>
-      </CardHeader>
+        </CardHeader>
+      ) : (
+        <CardHeader className="p-4 border-b border-surface-border mb-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+            <CardTitle>Pipeline runs</CardTitle>
+
+            {/* Search input */}
+            <div className="relative w-full sm:w-64">
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                data-testid="runs-search"
+                type="text"
+                placeholder="Search by pipeline name..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="w-full bg-surface-base border border-surface-border rounded-md pl-9 pr-8 py-1.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => setSearchInput('')}
+                  aria-label="Clear search"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                >
+                  <XIcon className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+      )}
 
       {/* Filter status chips */}
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-surface-base/50 border-b border-surface-border overflow-x-auto">
-        <span className="text-xs font-medium text-slate-400 shrink-0">Status:</span>
-        {ALL_STATUSES.map((st) => {
-          const isSelected = selectedStatuses.includes(st);
-          return (
+      {!compact && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-surface-base/50 border-b border-surface-border overflow-x-auto">
+          <span className="text-xs font-medium text-slate-400 shrink-0">Status:</span>
+          {ALL_STATUSES.map((st) => {
+            const isSelected = selectedStatuses.includes(st);
+            return (
+              <button
+                key={st}
+                type="button"
+                data-testid={`filter-status-${st}`}
+                onClick={() => handleToggleStatus(st)}
+                className={[
+                  'px-2.5 py-1 text-xs font-medium rounded-full border transition-colors shrink-0',
+                  isSelected
+                    ? 'bg-brand text-white border-brand'
+                    : 'bg-surface-raised text-slate-300 border-surface-border hover:bg-surface-border',
+                ].join(' ')}
+              >
+                {st}
+              </button>
+            );
+          })}
+          {hasFilterActive && (
             <button
-              key={st}
               type="button"
-              data-testid={`filter-status-${st}`}
-              onClick={() => handleToggleStatus(st)}
-              className={[
-                'px-2.5 py-1 text-xs font-medium rounded-full border transition-colors shrink-0',
-                isSelected
-                  ? 'bg-brand text-white border-brand'
-                  : 'bg-surface-raised text-slate-300 border-surface-border hover:bg-surface-border',
-              ].join(' ')}
+              onClick={handleClearFilters}
+              className="text-xs text-brand-light hover:underline ml-auto shrink-0"
             >
-              {st}
+              Clear filters
             </button>
-          );
-        })}
-        {hasFilterActive && (
-          <button
-            type="button"
-            onClick={handleClearFilters}
-            className="text-xs text-brand-light hover:underline ml-auto shrink-0"
-          >
-            Clear filters
-          </button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Content state */}
       {isLoading ? (
@@ -529,50 +601,52 @@ export function RunsTable({ onRerun, onFocusTemplates }: RunsTableProps) {
           />
 
           {/* Pagination controls */}
-          <div
-            data-testid="runs-pagination"
-            className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-surface-border text-sm text-slate-400 bg-surface-base/30"
-          >
-            <div className="flex items-center gap-2">
-              <span>Rows per page:</span>
-              <select
-                aria-label="Rows per page"
-                value={pageSize}
-                onChange={(e) => handlePageSizeChange(parseInt(e.target.value, 10))}
-                className="bg-surface-raised border border-surface-border text-slate-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-brand"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-              <span>
-                Showing {Math.min(offset + 1, totalCount)} -{' '}
-                {Math.min(offset + pageSize, totalCount)} of {totalCount}
-              </span>
-            </div>
+          {!compact && (
+            <div
+              data-testid="runs-pagination"
+              className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-surface-border text-sm text-slate-400 bg-surface-base/30"
+            >
+              <div className="flex items-center gap-2">
+                <span>Rows per page:</span>
+                <select
+                  aria-label="Rows per page"
+                  value={pageSize}
+                  onChange={(e) => handlePageSizeChange(parseInt(e.target.value, 10))}
+                  className="bg-surface-raised border border-surface-border text-slate-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-brand"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+                <span>
+                  Showing {Math.min(offset + 1, totalCount)} -{' '}
+                  {Math.min(offset + pageSize, totalCount)} of {totalCount}
+                </span>
+              </div>
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => handlePageChange(page - 1)}
-              >
-                Previous
-              </Button>
-              <span className="text-xs px-2">
-                Page {page} of {totalPages}
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => handlePageChange(page + 1)}
-              >
-                Next
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => handlePageChange(page - 1)}
+                >
+                  Previous
+                </Button>
+                <span className="text-xs px-2">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => handlePageChange(page + 1)}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
 
