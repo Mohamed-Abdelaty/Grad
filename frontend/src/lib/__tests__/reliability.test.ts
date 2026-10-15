@@ -215,6 +215,21 @@ describe('Reliability Pure Helpers', () => {
       expect(results[1].passed).toBe(false);
       expect(results[2].passed).toBe(false);
     });
+
+    it('marks data loss as not measured when null or undefined', () => {
+      const detail = {
+        status: 'succeeded',
+        result: 'PASS',
+        thresholds: { expectedDataLoss: 0, maxRecoverySeconds: 30 },
+        results: { dataLoss: null, recoveryTimeSeconds: 4.5 },
+      } as unknown as ExperimentDetail;
+
+      const results = criterionLabels(detail);
+      expect(results[0].passed).toBe(true);
+      expect(results[1].passed).toBeNull();
+      expect(results[1].actual).toBe('Data loss: not measured');
+      expect(results[2].passed).toBe(true);
+    });
   });
 
   describe('Chart data builders', () => {
@@ -246,7 +261,7 @@ describe('Reliability Pure Helpers', () => {
           throughputBaseline: null,
           throughputDuringFault: null,
           throughputAfter: null,
-        } as any)
+        } as unknown as Parameters<typeof throughputBars>[0])
       ).toBeNull();
     });
 

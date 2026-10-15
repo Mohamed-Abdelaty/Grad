@@ -1,5 +1,4 @@
-import React from 'react';
-import { Clock, Eye, ShieldAlert, Zap } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import { Experiment } from '../../types/experiment';
 
 interface Props {

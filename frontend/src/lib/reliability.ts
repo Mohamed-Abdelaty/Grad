@@ -7,6 +7,7 @@ import {
   ResourceSample,
 } from '../types/experiment';
 import { ReportListItem } from '../types/report';
+import { RunProgress } from '../types/runProgress';
 
 export interface ExperimentFormState {
   name: string;
@@ -22,7 +23,7 @@ export interface CriterionResult {
   name: string;
   threshold: string;
   actual: string;
-  passed: boolean;
+  passed: boolean | null;
 }
 
 /**
@@ -157,10 +158,13 @@ export function criterionLabels(detail: ExperimentDetail): CriterionResult[] {
   const results = detail.results || {};
   const thresholds = detail.thresholds || { expectedDataLoss: 0, maxRecoverySeconds: 30 };
 
-  const lossActual = results.dataLoss ?? 0;
-  const lossPassed = lossActual <= thresholds.expectedDataLoss;
+  const resultsDict = results as unknown as Record<string, unknown>;
+  const rawLoss = results.dataLoss ?? resultsDict.data_loss;
+  const isLossMeasured = rawLoss !== null && rawLoss !== undefined;
+  const lossActual = isLossMeasured ? Number(rawLoss) : null;
+  const lossPassed = isLossMeasured ? (lossActual! <= thresholds.expectedDataLoss) : null;
 
-  const recActual = results.recoveryTimeSeconds;
+  const recActual = results.recoveryTimeSeconds ?? (resultsDict.recovery_time_seconds as number | null | undefined);
   const recPassed = recActual !== null && recActual !== undefined && recActual <= thresholds.maxRecoverySeconds;
 
   const statusPassed = detail.status !== 'failed' && (detail.result === 'PASS' || detail.result === null);
@@ -169,13 +173,13 @@ export function criterionLabels(detail: ExperimentDetail): CriterionResult[] {
     {
       name: 'Recovery Time',
       threshold: `≤ ${thresholds.maxRecoverySeconds} s`,
-      actual: recActual !== null && recActual !== undefined ? `${recActual.toFixed(1)} s` : 'N/A',
+      actual: recActual !== null && recActual !== undefined ? `${Number(recActual).toFixed(1)} s` : 'N/A',
       passed: recPassed,
     },
     {
       name: 'Data Loss',
       threshold: `≤ ${thresholds.expectedDataLoss} records`,
-      actual: `${lossActual} records`,
+      actual: isLossMeasured ? `${lossActual} records` : 'Data loss: not measured',
       passed: lossPassed,
     },
     {
@@ -202,8 +206,8 @@ export function availabilityStepData(
   const endMs = faultWindow?.end ? new Date(faultWindow.end).getTime() : null;
 
   return samples.map((s) => {
-    const rawT = s.t ?? (s as any).timestamp;
-    const sampleMs = typeof rawT === 'number' ? rawT : new Date(rawT).getTime();
+    const rawT = s.t ?? (s as unknown as Record<string, unknown>).timestamp;
+    const sampleMs = typeof rawT === 'number' ? rawT : new Date(String(rawT)).getTime();
     const inWindow =
       startMs !== null && endMs !== null && !isNaN(sampleMs)
         ? sampleMs >= startMs && sampleMs <= endMs
@@ -281,7 +285,7 @@ export function resourceSeries(
 /**
  * Maps ExperimentDetail to a truthful RunProgress snapshot for compact pipeline visualization.
  */
-export function experimentToProgress(detail: ExperimentDetail): any {
+export function experimentToProgress(detail: ExperimentDetail): RunProgress | null {
   if (!detail) return null;
 
   const faultObj =

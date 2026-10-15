@@ -1,24 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
-  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   Bot,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Clock,
   Copy,
   Download,
   ExternalLink,
-  Flame,
+  MinusCircle,
   Printer,
   RefreshCw,
-  ShieldAlert,
-  Sparkles,
   XCircle,
-  Zap,
 } from 'lucide-react';
 import {
   BarChart,
@@ -30,7 +25,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
-  Legend,
 } from 'recharts';
 import { toast } from 'sonner';
 import { getReport } from '../api/reports';
@@ -76,9 +70,9 @@ export default function ReportDetails() {
         } catch {
           // Fall back to detail.logs if events API fails
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!active) return;
-        setError(err.message || 'Failed to load report');
+        setError(err instanceof Error ? err.message : 'Failed to load report');
       } finally {
         if (active) setLoading(false);
       }
@@ -96,21 +90,23 @@ export default function ReportDetails() {
   }, [detail]);
 
   const availabilityData = useMemo(() => {
-    const samples = detail?.results?.availabilitySamples || (detail as any)?.availabilitySamples;
+    if (!detail) return null;
+    const samples = detail.results?.availabilitySamples;
     if (!samples) return null;
     return availabilityStepData(samples, {
-      start: detail?.faultInjectedAt,
-      end: detail?.faultRevertedAt,
+      start: detail.faultInjectedAt,
+      end: detail.faultRevertedAt,
     });
   }, [detail]);
 
   const throughputData = useMemo(() => {
-    const res = detail?.results || (detail as any);
-    return res ? throughputBars(res) : null;
+    if (!detail || !detail.results) return null;
+    return throughputBars(detail.results);
   }, [detail]);
 
   const cpuData = useMemo(() => {
-    const samples = detail?.results?.cpuSamples || (detail as any)?.cpuSamples;
+    if (!detail) return null;
+    const samples = detail.results?.cpuSamples;
     return samples ? resourceSeries(samples) : null;
   }, [detail]);
 
@@ -288,11 +284,21 @@ export default function ReportDetails() {
             </ul>
           </div>
         ) : isPass ? (
-          <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>
-              All resilience acceptance thresholds met. Service successfully self-healed within budget.
-            </span>
+          <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-xs flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 font-medium">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                All evaluated resilience acceptance thresholds met. Service successfully self-healed within budget.
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-300 pl-6 flex flex-wrap gap-x-3 gap-y-1">
+              <span><strong>Evaluated criteria:</strong> Recovery time</span>
+              {results.dataLoss === null || results.dataLoss === undefined ? (
+                <span className="text-amber-300/90"><strong>Unmeasured criteria:</strong> Data loss (standalone fault without associated pipeline)</span>
+              ) : (
+                <span><strong>Evaluated criteria:</strong> Data loss ({results.dataLoss} records lost)</span>
+              )}
+            </div>
           </div>
         ) : null}
 
@@ -316,7 +322,11 @@ export default function ReportDetails() {
                     <td className="py-2.5 px-4 text-slate-400">{c.threshold}</td>
                     <td className="py-2.5 px-4 font-bold">{c.actual}</td>
                     <td className="py-2.5 px-4">
-                      {c.passed ? (
+                      {c.passed === null ? (
+                        <span className="text-slate-400 font-semibold flex items-center gap-1 font-sans">
+                          <MinusCircle className="w-3.5 h-3.5" /> NOT MEASURED
+                        </span>
+                      ) : c.passed ? (
                         <span className="text-emerald-400 font-semibold flex items-center gap-1 font-sans">
                           <CheckCircle2 className="w-3.5 h-3.5" /> PASS
                         </span>

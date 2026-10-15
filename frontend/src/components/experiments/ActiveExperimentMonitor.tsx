@@ -3,17 +3,11 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Activity,
-  AlertCircle,
-  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   Clock,
   Download,
-  Flame,
-  Pause,
-  Play,
-  RotateCcw,
-  ShieldAlert,
+  MinusCircle,
   StopCircle,
   XCircle,
   Zap,
@@ -73,7 +67,7 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
         } else {
           timerId = setTimeout(fetchDetail, 1000);
         }
-      } catch (err) {
+      } catch {
         if (!active) return;
         timerId = setTimeout(fetchDetail, 2000);
       }
@@ -130,7 +124,7 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
         if (!isTerminal) {
           timerId = setTimeout(fetchEvents, 1500);
         }
-      } catch (err) {
+      } catch {
         if (!active) return;
         timerId = setTimeout(fetchEvents, 3000);
       }
@@ -163,8 +157,8 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
       // Re-fetch detail
       const updated = await getExperiment(experimentId);
       setDetail(updated);
-    } catch (err: any) {
-      toast.error(`Cancel failed: ${err.message || 'Unknown error'}`);
+    } catch (err: unknown) {
+      toast.error(`Cancel failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsCancelling(false);
     }
@@ -446,7 +440,11 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
                     <td className="py-2 px-3 text-slate-400">{c.threshold}</td>
                     <td className="py-2 px-3">{c.actual}</td>
                     <td className="py-2 px-3">
-                      {c.passed ? (
+                      {c.passed === null ? (
+                        <span className="text-slate-400 font-semibold flex items-center gap-1 font-sans">
+                          <MinusCircle className="w-3.5 h-3.5" /> NOT MEASURED
+                        </span>
+                      ) : c.passed ? (
                         <span className="text-emerald-400 font-semibold flex items-center gap-1 font-sans">
                           <CheckCircle2 className="w-3.5 h-3.5" /> PASS
                         </span>

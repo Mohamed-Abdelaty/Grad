@@ -6,6 +6,7 @@ import {
   ExperimentEvent,
   ExperimentListItem,
   ExperimentOptions,
+  ExperimentResults,
   FaultPhase,
   FaultType,
   LifecyclePhase,
@@ -22,8 +23,56 @@ export interface ReliabilityAnalysis {
   limitations: string;
 }
 
+interface RawExperimentRecord {
+  id?: string;
+  experiment_id?: string;
+  name?: string;
+  experiment_name?: string;
+  target?: AllowedService;
+  target_service?: AllowedService;
+  targetService?: AllowedService;
+  faultType?: FaultType;
+  fault_type?: FaultType;
+  faultParams?: Record<string, unknown>;
+  durationSeconds?: number;
+  duration?: number;
+  thresholds?: {
+    expectedDataLoss?: number;
+    expected_data_loss?: number;
+    maxRecoverySeconds?: number;
+    max_recovery_time?: number;
+  };
+  status?: 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  latest_run_status?: 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  latest_run_id?: string;
+  latestRunId?: string;
+  currentPhase?: string;
+  lifecycleStage?: string;
+  phases?: LifecyclePhase[];
+  runId?: string;
+  runStartedAt?: string | null;
+  runFinishedAt?: string | null;
+  faultInjectedAt?: string | null;
+  faultRevertedAt?: string | null;
+  recoveredAt?: string | null;
+  faultPhase?: FaultPhase;
+  serverTime?: string;
+  pipelineRunId?: string;
+  result?: string;
+  failedCriteria?: string[];
+  results?: Partial<ExperimentResults>;
+  description?: string;
+  experimentYaml?: string;
+  experiment_yaml?: string;
+  pipelineYaml?: string;
+  pipeline_yaml?: string;
+  createdAt?: string;
+  created_at?: string;
+  logs?: string[];
+}
+
 // Converts the raw API list item to the canonical Experiment type.
-export function mapToExperiment(item: any): Experiment {
+export function mapToExperiment(item: ExperimentListItem | Record<string, unknown>): Experiment {
   if (!item || typeof item !== 'object') {
     return {
       id: '',
@@ -35,14 +84,15 @@ export function mapToExperiment(item: any): Experiment {
       latestRunId: null,
     };
   }
+  const r = item as RawExperimentRecord;
   return {
-    id: item.experiment_id || item.id || '',
-    name: item.name || item.experiment_name || '',
-    target: item.target_service || item.target || null,
-    faultType: item.fault_type || item.faultType || null,
-    status: item.latest_run_status || item.status || null,
-    createdAt: item.created_at || item.createdAt || '',
-    latestRunId: item.latest_run_id || item.latestRunId || null,
+    id: String(r.experiment_id || r.id || ''),
+    name: String(r.name || r.experiment_name || ''),
+    target: r.target_service || r.target || null,
+    faultType: r.fault_type || r.faultType || null,
+    status: r.latest_run_status || r.status || null,
+    createdAt: String(r.created_at || r.createdAt || ''),
+    latestRunId: r.latest_run_id || r.latestRunId || null,
   };
 }
 
@@ -61,12 +111,13 @@ const DEFAULT_PHASES = [
   'generating_report',
 ];
 
-export function mapToExperimentDetail(raw: any): ExperimentDetail {
+export function mapToExperimentDetail(raw: Record<string, unknown>): ExperimentDetail {
   if (!raw || typeof raw !== 'object') {
     throw new Error('Invalid experiment detail payload');
   }
 
-  const rawPhases = Array.isArray(raw.phases) ? raw.phases : [];
+  const r = raw as RawExperimentRecord;
+  const rawPhases = Array.isArray(r.phases) ? r.phases : [];
   const phaseMap = new Map<string, LifecyclePhase>();
   for (const p of rawPhases) {
     if (p && typeof p.name === 'string') {
@@ -90,52 +141,52 @@ export function mapToExperimentDetail(raw: any): ExperimentDetail {
     );
   });
 
-  const thresholds = raw.thresholds || {};
-  const results = raw.results || {};
+  const thresholds = r.thresholds || {};
+  const results = r.results || {};
 
   const validFaultPhases: FaultPhase[] = ['not_injected', 'injected', 'recovering', 'recovered'];
-  const faultPhase: FaultPhase = validFaultPhases.includes(raw.faultPhase)
-    ? raw.faultPhase
+  const faultPhase: FaultPhase = (r.faultPhase && validFaultPhases.includes(r.faultPhase))
+    ? r.faultPhase
     : 'not_injected';
 
   return {
-    id: String(raw.id || raw.experiment_id || ''),
-    name: String(raw.name || ''),
-    targetService: String(raw.targetService || raw.target || ''),
-    faultType: String(raw.faultType || raw.fault_type || ''),
-    faultParams: typeof raw.faultParams === 'object' && raw.faultParams !== null ? raw.faultParams : {},
-    durationSeconds: Number(raw.durationSeconds ?? raw.duration ?? 20),
+    id: String(r.id || r.experiment_id || ''),
+    name: String(r.name || ''),
+    targetService: String(r.targetService || r.target || ''),
+    faultType: String(r.faultType || r.fault_type || ''),
+    faultParams: typeof r.faultParams === 'object' && r.faultParams !== null ? r.faultParams : {},
+    durationSeconds: Number(r.durationSeconds ?? r.duration ?? 20),
     thresholds: {
       expectedDataLoss: Number(thresholds.expectedDataLoss ?? thresholds.expected_data_loss ?? 0),
       maxRecoverySeconds: Number(thresholds.maxRecoverySeconds ?? thresholds.max_recovery_time ?? 60),
     },
-    status: ['pending', 'running', 'succeeded', 'failed', 'cancelled'].includes(raw.status)
-      ? raw.status
+    status: r.status && ['pending', 'running', 'succeeded', 'failed', 'cancelled'].includes(r.status)
+      ? r.status
       : 'pending',
-    currentPhase: String(raw.currentPhase || raw.lifecycleStage || 'pending'),
+    currentPhase: String(r.currentPhase || r.lifecycleStage || 'pending'),
     phases,
-    runId: raw.runId ? String(raw.runId) : null,
-    runStartedAt: raw.runStartedAt || null,
-    runFinishedAt: raw.runFinishedAt || null,
-    faultInjectedAt: raw.faultInjectedAt || null,
-    faultRevertedAt: raw.faultRevertedAt || null,
-    recoveredAt: raw.recoveredAt || null,
+    runId: r.runId ? String(r.runId) : null,
+    runStartedAt: r.runStartedAt || null,
+    runFinishedAt: r.runFinishedAt || null,
+    faultInjectedAt: r.faultInjectedAt || null,
+    faultRevertedAt: r.faultRevertedAt || null,
+    recoveredAt: r.recoveredAt || null,
     faultPhase,
-    serverTime: raw.serverTime || new Date().toISOString(),
-    pipelineRunId: raw.pipelineRunId ? String(raw.pipelineRunId) : null,
-    result: raw.result === 'PASS' || raw.result === 'FAIL' ? raw.result : null,
-    failedCriteria: Array.isArray(raw.failedCriteria) ? raw.failedCriteria.map(String) : [],
+    serverTime: r.serverTime || new Date().toISOString(),
+    pipelineRunId: r.pipelineRunId ? String(r.pipelineRunId) : null,
+    result: r.result === 'PASS' || r.result === 'FAIL' ? r.result : null,
+    failedCriteria: Array.isArray(r.failedCriteria) ? r.failedCriteria.map(String) : [],
     results: {
       recoveryTimeSeconds: results.recoveryTimeSeconds ?? results.recovery_time_seconds ?? null,
       dataLoss: Number(results.dataLoss ?? results.data_loss ?? 0),
-      duplicates: Number(results.duplicates ?? results.duplicate_ids_found ?? 0),
-      expectedRecords: Number(results.expectedRecords ?? results.expected_record_count ?? 0),
-      processedRecords: Number(results.processedRecords ?? results.actual_records ?? 0),
-      throughputBaseline: results.throughputBaseline ?? results.throughput_baseline ?? null,
+      duplicates: Number(results.duplicates ?? (results['duplicate_ids_found'] as number | undefined) ?? 0),
+      expectedRecords: Number(results.expectedRecords ?? (results['expected_record_count'] as number | undefined) ?? 0),
+      processedRecords: Number(results.processedRecords ?? (results['actual_records'] as number | undefined) ?? 0),
+      throughputBaseline: (results.throughputBaseline ?? results.throughput_baseline ?? null) as number | null,
       throughputDuringFault: results.throughputDuringFault ?? null,
-      throughputAfter: results.throughputAfter ?? results.throughput_records_per_sec ?? null,
-      throughputDegradationPercent: results.throughputDegradationPercent ?? results.throughput_degradation_percent ?? null,
-      availabilityPercentage: results.availabilityPercentage ?? results.availability_percentage ?? null,
+      throughputAfter: (results.throughputAfter ?? results.throughput_records_per_sec ?? null) as number | null,
+      throughputDegradationPercent: (results.throughputDegradationPercent ?? results.throughput_degradation_percent ?? null) as number | null,
+      availabilityPercentage: (results.availabilityPercentage ?? results.availability_percentage ?? null) as number | null,
       errorRate: results.errorRate ?? null,
       errorCount: results.errorCount ?? null,
       totalOperations: results.totalOperations ?? null,
@@ -147,15 +198,15 @@ export function mapToExperimentDetail(raw: any): ExperimentDetail {
       availability_percentage: results.availability_percentage,
       throughput_records_per_sec: results.throughput_records_per_sec,
       data_loss_percentage: results.data_loss_percentage,
-      logs: Array.isArray(raw.logs) ? raw.logs : (Array.isArray(results.logs) ? results.logs : []),
+      logs: Array.isArray(r.logs) ? r.logs : (Array.isArray(results.logs) ? results.logs : []),
     },
-    description: raw.description ?? null,
-    experimentYaml: raw.experimentYaml || raw.experiment_yaml || '',
-    pipelineYaml: raw.pipelineYaml || raw.pipeline_yaml || null,
-    target: raw.target || raw.targetService,
-    lifecycleStage: raw.lifecycleStage || raw.currentPhase,
-    createdAt: raw.createdAt || raw.created_at || '',
-    logs: Array.isArray(raw.logs) ? raw.logs : [],
+    description: r.description ?? null,
+    experimentYaml: r.experimentYaml || r.experiment_yaml || '',
+    pipelineYaml: r.pipelineYaml || r.pipeline_yaml || null,
+    target: r.target || (r.targetService as AllowedService),
+    lifecycleStage: String(r.lifecycleStage || r.currentPhase || 'pending'),
+    createdAt: r.createdAt || r.created_at || '',
+    logs: Array.isArray(r.logs) ? r.logs : [],
   };
 }
 
@@ -187,7 +238,7 @@ export async function runExperiment(experimentId: string): Promise<void> {
 }
 
 export async function getExperiment(experimentId: string): Promise<ExperimentDetail> {
-  const res = await apiClient.get<any>(`/api/experiments/${experimentId}`);
+  const res = await apiClient.get<Record<string, unknown>>(`/api/experiments/${experimentId}`);
   return mapToExperimentDetail(res.data);
 }
 

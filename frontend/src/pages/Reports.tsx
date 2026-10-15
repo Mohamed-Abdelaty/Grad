@@ -4,17 +4,13 @@ import {
   ArrowDownAZ,
   ArrowUpAZ,
   BarChart2,
-  Calendar,
   CheckCircle2,
-  Clock,
   ExternalLink,
   Filter,
   Grid,
   List,
   RefreshCw,
   RotateCcw,
-  SlidersHorizontal,
-  X,
   XCircle,
 } from 'lucide-react';
 import {
@@ -113,9 +109,9 @@ export default function Reports() {
         if (!active) return;
         setReports(res.items);
         setTotalCount(res.total);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!active) return;
-        setError(err.message || 'Failed to load reports');
+        setError(err instanceof Error ? err.message : 'Failed to load reports');
       } finally {
         if (active) setLoading(false);
       }

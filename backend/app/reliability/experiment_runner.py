@@ -109,6 +109,8 @@ class ExperimentRunner:
 
         self._event_seq += 1
         try:
+            from app.models.experiment_event import ExperimentEvent
+
             event = ExperimentEvent(
                 experiment_id=exp_uuid,
                 experiment_run_id=run_uuid,
@@ -120,8 +122,9 @@ class ExperimentRunner:
             )
             self._db.add(event)
             self._db.flush()
-        except Exception:
-            pass
+            self._db.commit()
+        except Exception as exc:
+            logger.warning("Failed to emit event: %s", exc)
 
     def run_experiment(
         self,
@@ -184,6 +187,7 @@ class ExperimentRunner:
             )
             self._db.add(run)
             self._db.flush()
+        self._db.commit()
         run_id = run.id
         self._safety.reap_stale_experiments(self._db)
         self._safety.enforce_max_concurrent_experiments(
@@ -357,9 +361,13 @@ class ExperimentRunner:
                 )
 
                 availability_data = self._metrics.capture_during_experiment(
-                    target_service, self._docker, fault_duration
+                    target_service,
+                    self._docker,
+                    fault_duration,
+                    is_cancelled_fn=lambda: self._cancelled,
                 )
                 self._merge_results(run, availability_data)
+                self._check_cancelled(run, experiment.id)
                 self._emit_event(
                     experiment.id,
                     run_id,
@@ -371,6 +379,7 @@ class ExperimentRunner:
                 # ── ROLLBACK (unconditional) ───────────────────────────────────
                 self._update_status(run, "rolling_back")
                 reverted_at = datetime.now(tz=timezone.utc).isoformat()
+                fault_revert_monotonic = time.monotonic()
                 self._merge_results(run, {"fault_reverted_at": reverted_at})
                 fault_state_registry.set_recovering(str(experiment.id))
                 self._emit_event(
@@ -417,6 +426,26 @@ class ExperimentRunner:
             if remaining_timeout <= 0:
                 self._check_timeout(experiment_start, global_timeout)
 
+            health_check_fn = None
+            if "kafka" in target_service:
+                try:
+                    from app.api.routes.health import check_kafka_connectivity
+                    health_check_fn = check_kafka_connectivity
+                except Exception:
+                    pass
+            elif "spark" in target_service:
+                try:
+                    from app.api.routes.health import check_spark_connectivity
+                    health_check_fn = check_spark_connectivity
+                except Exception:
+                    pass
+            elif "hdfs" in target_service:
+                try:
+                    from app.api.routes.health import check_hdfs_connectivity
+                    health_check_fn = check_hdfs_connectivity
+                except Exception:
+                    pass
+
             recovery_time = self._metrics.measure_recovery_time(
                 target_service,
                 self._docker,
@@ -425,6 +454,9 @@ class ExperimentRunner:
                     experiment_config.validation.max_recovery_time + 30,
                     remaining_timeout,
                 ),
+                health_check_fn=health_check_fn,
+                start_time=fault_revert_monotonic,
+                is_cancelled_fn=lambda: self._cancelled,
             )
             recovered_at = datetime.now(tz=timezone.utc).isoformat() if recovery_time is not None else None
             self._merge_results(
@@ -512,12 +544,29 @@ class ExperimentRunner:
                 "analyzing",
                 "Evaluating criteria against configured validation thresholds.",
             )
+            data_loss_val = consistency.get("data_loss")
             result, failed_criteria = self._analyze(
                 experiment_config=experiment_config,
                 recovery_time=recovery_time,
-                data_loss=consistency.get("data_loss") or 0,
+                data_loss=data_loss_val,
             )
-            self._merge_results(run, {"result": result, "failed_criteria": failed_criteria})
+            evaluated = ["recovery_time"] + (["data_loss"] if data_loss_val is not None else [])
+            unmeasured = ["data_loss"] if data_loss_val is None else []
+            verdict_text = (
+                f"Evaluated criteria: {', '.join(evaluated)}. "
+                + (f"Unmeasured criteria: {', '.join(unmeasured)}. " if unmeasured else "")
+                + (f"Failed: {'; '.join(failed_criteria)}." if failed_criteria else "All evaluated criteria passed.")
+            )
+            self._merge_results(
+                run,
+                {
+                    "result": result,
+                    "failed_criteria": failed_criteria,
+                    "evaluated_criteria": evaluated,
+                    "unmeasured_criteria": unmeasured,
+                    "verdict_text": verdict_text,
+                },
+            )
             self._emit_event(
                 experiment.id,
                 run_id,
@@ -679,22 +728,38 @@ class ExperimentRunner:
         self,
         experiment_config: ExperimentModel,
         recovery_time: float | None,
-        data_loss: int,
+        data_loss: int | None,
     ) -> tuple[str, list[str]]:
         """
-        Compare results against validation criteria and return (PASS/FAIL, failed_criteria).
+        Compare evaluated results against configured acceptance criteria.
+
+        PASS Rule:
+        1. All evaluated criteria must satisfy their configured thresholds.
+        2. Unmeasured criteria (e.g. data_loss when no pipeline was run) are recorded
+           as unmeasured and do NOT count as satisfied data loss validations.
+        3. At least one operational criterion (e.g. recovery_time) must be evaluated and met.
+        4. If any evaluated criterion is violated or recovery timed out, result is FAIL.
         """
         criteria = experiment_config.validation
         max_allowed_loss = criteria.expected_data_loss
         max_allowed_recovery = criteria.max_recovery_time
 
         failed_criteria: list[str] = []
+        evaluated_criteria: list[str] = []
+        unmeasured_criteria: list[str] = []
 
-        if data_loss > max_allowed_loss:
-            failed_criteria.append(
-                f"Data loss of {data_loss} records exceeded the maximum allowed of {max_allowed_loss}."
-            )
+        # Data loss evaluation: evaluated only if measured
+        if data_loss is not None:
+            evaluated_criteria.append("data_loss")
+            if data_loss > max_allowed_loss:
+                failed_criteria.append(
+                    f"Data loss of {data_loss} records exceeded the maximum allowed of {max_allowed_loss}."
+                )
+        else:
+            unmeasured_criteria.append("data_loss")
 
+        # Recovery time evaluation: must be measured and within threshold
+        evaluated_criteria.append("recovery_time")
         if recovery_time is None:
             failed_criteria.append(
                 f"Service did not recover within {max_allowed_recovery:.1f} s."
@@ -710,7 +775,11 @@ class ExperimentRunner:
             )
             return "FAIL", failed_criteria
 
-        logger.info("ExperimentRunner._analyze: PASS — all criteria met.")
+        logger.info(
+            "ExperimentRunner._analyze: PASS — evaluated criteria met: %s (unmeasured: %s)",
+            evaluated_criteria,
+            unmeasured_criteria,
+        )
         return "PASS", []
 
     def _persist_fault_injection(
@@ -759,19 +828,27 @@ class ExperimentRunner:
             else:
                 p["state"] = "pending"
 
+        from sqlalchemy.orm.attributes import flag_modified
+
         results["phases"] = phases
         run.results = results
+        flag_modified(run, "results")
         self._db.add(run)
         self._db.flush()
+        self._db.commit()
         logger.debug("ExperimentRunner: run %s → status='%s'.", run.id, status)
 
     def _merge_results(self, run: Any, data: dict) -> None:
         """Merge ``data`` into ``run.results`` and flush to the DB."""
+        from sqlalchemy.orm.attributes import flag_modified
+
         existing = dict(run.results or {})
         existing.update(data)
         run.results = existing
+        flag_modified(run, "results")
         self._db.add(run)
         self._db.flush()
+        self._db.commit()
 
     def _check_cancelled(self, run: Any, experiment_id: Any = None) -> None:
         """Raise RuntimeError if cancellation has been requested."""

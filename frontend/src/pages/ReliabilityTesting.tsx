@@ -25,11 +25,11 @@ export default function ReliabilityTesting() {
       const runningExp = exps.find((e) => e.status === 'running' || e.status === 'pending');
       if (runningExp) {
         setActiveExperimentId(runningExp.id);
-      } else if (!activeExperimentId && exps.length > 0) {
-        setActiveExperimentId(exps[0].id);
+      } else if (exps.length > 0) {
+        setActiveExperimentId((prev) => prev || exps[0].id);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load reliability testing options.');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to load reliability testing options.');
     } finally {
       setLoading(false);
     }

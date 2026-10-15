@@ -73,6 +73,7 @@ class MetricsCollector:
         target_service: str,
         docker_controller: DockerController,
         duration_seconds: int,
+        is_cancelled_fn: Callable[[], bool] | None = None,
     ) -> dict:
         """
         Poll ``is_container_running`` every second and build an availability timeline.
@@ -85,6 +86,8 @@ class MetricsCollector:
             Used to check container status (already safety-gated).
         duration_seconds : int
             How many seconds to monitor (normally equals ``fault.duration``).
+        is_cancelled_fn : Callable[[], bool] | None
+            Optional cancellation check callback.
 
         Returns
         -------
@@ -96,6 +99,9 @@ class MetricsCollector:
         end_time = time.monotonic() + duration_seconds
 
         while time.monotonic() < end_time:
+            if is_cancelled_fn is not None and is_cancelled_fn():
+                logger.info("MetricsCollector: monitoring aborted due to cancellation.")
+                break
             ts = datetime.now(tz=timezone.utc).isoformat()
             try:
                 available = docker_controller.is_container_running(target_service)
@@ -129,6 +135,8 @@ class MetricsCollector:
         poll_interval: float = 1.0,
         max_wait: float = 120.0,
         health_check_fn: Callable | None = None,
+        start_time: float | None = None,
+        is_cancelled_fn: Callable[[], bool] | None = None,
     ) -> float | None:
         """
         Poll until the service recovers and measure elapsed time.
@@ -150,16 +158,24 @@ class MetricsCollector:
             Give up after this many seconds (default 120s).
         health_check_fn : Callable | None
             Optional additional health check (e.g. ``check_kafka_connectivity``).
+        start_time : float | None
+            Monotonic timestamp when recovery window began (e.g. fault revert).
+            If None, starts at invocation time.
+        is_cancelled_fn : Callable[[], bool] | None
+            Optional cancellation check callback.
 
         Returns
         -------
         float | None
             Elapsed seconds to recovery, or ``None`` if ``max_wait`` exceeded.
         """
-        start = time.monotonic()
-        deadline = start + max_wait
+        start = start_time if start_time is not None else time.monotonic()
+        deadline = time.monotonic() + max_wait
 
         while time.monotonic() < deadline:
+            if is_cancelled_fn is not None and is_cancelled_fn():
+                logger.info("MetricsCollector: recovery polling aborted due to cancellation.")
+                return None
             try:
                 container_ok = docker_controller.is_container_running(target_service)
             except Exception:
@@ -170,14 +186,14 @@ class MetricsCollector:
                 if health_check_fn is not None:
                     try:
                         health = health_check_fn()
-                        service_ok = health.get("connected", False)
+                        service_ok = bool(health.get("connected", False))
                     except Exception:
                         service_ok = False
                 else:
                     service_ok = True
 
                 if service_ok:
-                    elapsed = time.monotonic() - start
+                    elapsed = round(time.monotonic() - start, 2)
                     logger.info(
                         "MetricsCollector: '%s' recovered in %.2fs.",
                         target_service,

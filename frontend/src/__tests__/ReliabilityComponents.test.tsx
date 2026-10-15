@@ -15,10 +15,10 @@ import * as reportsApi from '../api/reports';
 
 // Mock Recharts to avoid jsdom zero dimension warnings
 vi.mock('recharts', async () => {
-  const original = await vi.importActual<any>('recharts');
+  const original = await vi.importActual<Record<string, unknown>>('recharts');
   return {
     ...original,
-    ResponsiveContainer: ({ children }: any) => <div style={{ width: 800, height: 300 }}>{children}</div>,
+    ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => <div style={{ width: 800, height: 300 }}>{children}</div>,
   };
 });
 
@@ -154,20 +154,20 @@ describe('Reliability UI Components & Accessibility', () => {
 
       // Step 1: Target
       expect(screen.getByTestId('exp-wizard')).toBeInTheDocument();
-      expect(screen.getByTestId('target-kafka')).toBeInTheDocument();
-      expect(screen.getByTestId('target-spark-master')).toBeInTheDocument();
+      expect(screen.getByTestId('target-opt-kafka')).toBeInTheDocument();
+      expect(screen.getByTestId('target-opt-spark-master')).toBeInTheDocument();
 
-      // Click target-spark-master
-      fireEvent.click(screen.getByTestId('target-spark-master'));
+      // Click target-opt-spark-master
+      fireEvent.click(screen.getByTestId('target-opt-spark-master'));
 
       // Click Next to Step 2
       fireEvent.click(screen.getByText('Next'));
 
       // Step 2: Fault
-      expect(screen.getByTestId('fault-container_stop')).toBeInTheDocument();
-      expect(screen.getByTestId('fault-service_delay')).toBeInTheDocument();
+      expect(screen.getByTestId('fault-opt-container_stop')).toBeInTheDocument();
+      expect(screen.getByTestId('fault-opt-service_delay')).toBeInTheDocument();
 
-      fireEvent.click(screen.getByTestId('fault-container_stop'));
+      fireEvent.click(screen.getByTestId('fault-opt-container_stop'));
       fireEvent.click(screen.getByText('Next'));
 
       // Step 3: Parameters
@@ -178,7 +178,7 @@ describe('Reliability UI Components & Accessibility', () => {
 
       // Step 4: Review
       expect(screen.getByText(/Generated Experiment YAML/i)).toBeInTheDocument();
-      const startBtn = screen.getByTestId('btn-start-experiment');
+      const startBtn = screen.getByTestId('btn-start-exp');
       expect(startBtn).toBeDisabled();
 
       // Check confirmation box
@@ -224,13 +224,13 @@ describe('Reliability UI Components & Accessibility', () => {
       });
 
       // 12-phase stepper
-      expect(screen.getByTestId('lifecycle')).toBeInTheDocument();
+      expect(screen.getByTestId('exp-lifecycle')).toBeInTheDocument();
       expect(screen.getByTestId('phase-validating')).toBeInTheDocument();
       expect(screen.getByTestId('phase-injecting')).toBeInTheDocument();
       expect(screen.getByTestId('phase-generating_report')).toBeInTheDocument();
 
       // Fault phase badge
-      const badge = screen.getByTestId('fault-phase');
+      const badge = screen.getByTestId('exp-fault-badge');
       expect(badge).toHaveTextContent(/Fault Phase: Injected/i);
 
       // Cancel button triggers confirm dialog

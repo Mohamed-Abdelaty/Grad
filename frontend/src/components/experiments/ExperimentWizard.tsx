@@ -12,7 +12,7 @@ import {
   ShieldAlert,
   Zap,
 } from 'lucide-react';
-import { ExperimentOptions, TargetOption, FaultOption } from '../../types/experiment';
+import { ExperimentOptions } from '../../types/experiment';
 import { createExperiment, runExperiment } from '../../api/experiments';
 import {
   ExperimentFormState,
@@ -150,8 +150,9 @@ export function ExperimentWizard({
       setConfirmed(false);
       if (options.targets[0]) setSelectedTarget(options.targets[0].id);
       if (options.faults[0]) setSelectedFault(options.faults[0].id);
-    } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message || 'Failed to start experiment';
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
+      const msg = axiosErr.response?.data?.detail || axiosErr.message || 'Failed to start experiment';
       setServerError(String(msg));
       toast.error(`Experiment failed: ${msg}`);
     } finally {
