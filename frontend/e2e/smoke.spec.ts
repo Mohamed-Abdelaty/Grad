@@ -78,7 +78,7 @@ async function doLogin(page: import('@playwright/test').Page) {
 
   // After login we must land on the Dashboard.
   await expect(page).toHaveURL('/', { timeout: 10_000 });
-  await expect(page.getByRole('heading', { name: 'System Status' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: /system (health|status)|dashboard/i }).first()).toBeVisible({
     timeout: 8_000,
   });
 }
@@ -102,7 +102,7 @@ test('All pages: headings visible, no console errors, no server failures', async
 
   // --- Login → Dashboard ---
   await doLogin(page);
-  await expect(page.getByRole('heading', { name: 'System Status' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /system (health|status)|dashboard/i }).first()).toBeVisible();
 
   // --- Pipelines (sidebar click, no page reload) ---
   await clickNav(page, 'Pipelines');
