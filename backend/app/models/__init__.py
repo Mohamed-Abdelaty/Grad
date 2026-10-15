@@ -13,6 +13,7 @@ from app.models.fault_injection import FaultInjection
 from app.models.metric import Metric
 from app.models.pipeline import Pipeline
 from app.models.pipeline_run import PipelineRun
+from app.models.pipeline_run_event import PipelineRunEvent
 from app.models.pipeline_version import PipelineVersion
 from app.models.report import Report
 from app.models.user import User
@@ -26,6 +27,7 @@ __all__ = [
     "Metric",
     "Pipeline",
     "PipelineRun",
+    "PipelineRunEvent",
     "PipelineVersion",
     "Report",
     "User",

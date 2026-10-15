@@ -19,6 +19,7 @@ import asyncio
 import logging
 import time
 import uuid
+import yaml
 from datetime import datetime, timezone
 from typing import Any
 
@@ -151,6 +152,8 @@ class ExperimentRunner:
                     f"ChaosLab experiment: {fault_type} on {target_service} "
                     f"for {fault_duration}s"
                 ),
+                experiment_yaml=yaml.dump(experiment_config.model_dump()),
+                pipeline_yaml=associated_pipeline_yaml or "",
             )
             self._db.add(experiment)
             self._db.flush()
@@ -279,7 +282,39 @@ class ExperimentRunner:
                     f"Applying fault '{fault_type}' to '{target_service}' for {fault_duration}s.",
                 )
                 params = experiment_config.fault.model_dump()
-                injection_metadata = injector.inject(target_service, params)
+                try:
+                    injection_metadata = injector.inject(target_service, params)
+                except Exception as exc:
+                    logger.error("Fault injection failed for '%s': %s", target_service, exc)
+                    self._emit_event(
+                        experiment.id,
+                        run_id,
+                        "injecting",
+                        f"Fault injection failed: {exc}",
+                        level="ERROR",
+                    )
+                    failed_criteria = [f"fault_injection_failed: {exc}"]
+                    result = "FAIL"
+                    self._merge_results(run, {
+                        "result": result,
+                        "failed_criteria": failed_criteria,
+                        "error": str(exc),
+                    })
+                    self._update_status(run, "cleaning_up")
+                    self._update_status(run, "generating_report")
+                    run.finished_at = datetime.now(tz=timezone.utc)
+                    run.status = "failed"
+                    fin_iso = run.finished_at.isoformat()
+                    phases = list(run.results.get("phases") or [])
+                    for p in phases:
+                        p["state"] = "done"
+                        if not p.get("finishedAt"):
+                            p["finishedAt"] = fin_iso
+                    self._merge_results(run, {"phases": phases})
+                    self._db.flush()
+                    report = self._reporter.generate(run_id, self._db)
+                    self._db.commit()
+                    return report
                 injected_at = (
                     injection_metadata.get("stopped_at")
                     or injection_metadata.get("started_at")
