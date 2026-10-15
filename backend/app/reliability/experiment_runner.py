@@ -378,7 +378,7 @@ class ExperimentRunner:
                     f"Fault active. Sampling availability for {fault_duration}s.",
                 )
 
-                health_check_fn = self._get_health_check_fn(target_service)
+                health_check_fn = self._get_health_check_fn(target_service, timeout_seconds=0.5)
                 availability_data = self._metrics.capture_during_experiment(
                     target_service,
                     self._docker,
@@ -912,11 +912,22 @@ class ExperimentRunner:
             raise RuntimeError("Experiment cancelled by operator.")
 
     @staticmethod
-    def _get_health_check_fn(target_service: str) -> Callable | None:
+    def _get_health_check_fn(
+        target_service: str,
+        timeout_seconds: float | None = None,
+    ) -> Callable | None:
         """Resolve deeper connectivity probe for the given target service."""
+        import functools
+
         if "kafka" in target_service:
             try:
                 from app.api.routes.health import check_kafka_connectivity
+
+                if timeout_seconds is not None:
+                    return functools.partial(
+                        check_kafka_connectivity,
+                        timeout_seconds=timeout_seconds,
+                    )
                 return check_kafka_connectivity
             except Exception:
                 return None

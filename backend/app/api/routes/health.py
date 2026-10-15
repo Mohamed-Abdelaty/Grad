@@ -54,7 +54,7 @@ async def check_database_connectivity(db: AsyncSession) -> dict:
         return {"connected": False, "latency_ms": None, "error": str(exc)}
 
 
-def check_kafka_connectivity(timeout: float = 0.5) -> dict:
+def check_kafka_connectivity(timeout_seconds: float = 5.0) -> dict:
     """
     Check Kafka broker connectivity via AdminClient list_topics probe.
 
@@ -67,7 +67,7 @@ def check_kafka_connectivity(timeout: float = 0.5) -> dict:
         from app.messaging.kafka_admin import KafkaAdminClient
 
         admin = KafkaAdminClient()
-        return admin.health_check(timeout=timeout)
+        return admin.health_check(timeout=timeout_seconds)
     except Exception as exc:
         logger.warning("Kafka connectivity check failed: %s", exc)
         return {
@@ -165,6 +165,11 @@ async def health_check() -> dict:
     return {"status": "ok"}
 
 
+@router.get(
+    "/api/health",
+    summary="Services status endpoint alias",
+    include_in_schema=False,
+)
 @router.get(
     "/api/system/status",
     summary="Readiness probe — database, Kafka, Spark, and HDFS connectivity",

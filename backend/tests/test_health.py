@@ -228,3 +228,44 @@ class TestSystemStatus:
             assert body["status"] == "degraded"
         finally:
             app.dependency_overrides.clear()
+
+
+class TestKafkaConnectivityTimeout:
+    """Verify check_kafka_connectivity default timeout unchanged and monitor probe passes 0.5."""
+
+    def test_default_timeout_unchanged(self) -> None:
+        """check_kafka_connectivity() default timeout must remain 5.0 seconds."""
+        from app.api.routes.health import check_kafka_connectivity
+        from unittest.mock import MagicMock, patch
+
+        mock_admin = MagicMock()
+        mock_admin.health_check.return_value = {"connected": True}
+        with patch("app.messaging.kafka_admin.KafkaAdminClient", return_value=mock_admin):
+            res = check_kafka_connectivity()
+            mock_admin.health_check.assert_called_once_with(timeout=5.0)
+            assert res == {"connected": True}
+
+    def test_monitor_passes_point_five(self) -> None:
+        """ExperimentRunner._get_health_check_fn with timeout_seconds=0.5 scopes 0.5s to check_kafka_connectivity."""
+        from app.reliability.experiment_runner import ExperimentRunner
+        from unittest.mock import patch
+
+        with patch("app.api.routes.health.check_kafka_connectivity") as mock_check:
+            mock_check.return_value = {"connected": True}
+            probe = ExperimentRunner._get_health_check_fn("kafka", timeout_seconds=0.5)
+            assert probe is not None
+            probe()
+            mock_check.assert_called_once_with(timeout_seconds=0.5)
+
+    def test_recovery_keeps_default_timeout(self) -> None:
+        """ExperimentRunner._get_health_check_fn for recovery leaves default timeout unchanged."""
+        from app.reliability.experiment_runner import ExperimentRunner
+        from unittest.mock import patch
+
+        with patch("app.api.routes.health.check_kafka_connectivity") as mock_check:
+            mock_check.return_value = {"connected": True}
+            probe = ExperimentRunner._get_health_check_fn("kafka")
+            assert probe is not None
+            probe()
+            mock_check.assert_called_once_with()
+

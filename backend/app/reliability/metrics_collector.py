@@ -120,8 +120,6 @@ class MetricsCollector:
             if container_ok:
                 if health_check_fn is not None:
                     try:
-                        health = health_check_fn(timeout=0.5)
-                    except TypeError:
                         health = health_check_fn()
                     except Exception:
                         health = {"connected": False}
