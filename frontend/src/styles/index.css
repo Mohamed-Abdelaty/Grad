@@ -156,3 +156,9 @@
   }
 }
 
+/* ── CodeMirror Placeholder Contrast ─────────────────────────────────────── */
+.cm-placeholder {
+  color: #94a3b8 !important; /* slate-400 meets 4.5:1 ratio */
+}
+
+

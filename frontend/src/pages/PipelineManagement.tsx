@@ -605,7 +605,7 @@ export default function PipelineManagement() {
                   <span className="text-brand-light animate-pulse">Validating...</span>
                 )}
                 {validationStatus === 'idle' && (
-                  <span className="text-slate-500">Not validated</span>
+                  <span className="text-slate-400">Not validated</span>
                 )}
               </div>
             </div>
@@ -645,7 +645,12 @@ export default function PipelineManagement() {
               </div>
             </CardHeader>
 
-            <div className="p-4 space-y-4 max-h-[500px] overflow-y-auto">
+            <div
+              tabIndex={0}
+              role="region"
+              aria-label="Validation diagnostics"
+              className="p-4 space-y-4 max-h-[500px] overflow-y-auto focus:outline-none focus:ring-1 focus:ring-brand"
+            >
               {validationError ? (
                 <ErrorState
                   title="Validation error"
@@ -653,7 +658,7 @@ export default function PipelineManagement() {
                   onRetry={() => performValidation(yamlContent)}
                 />
               ) : validationStatus === 'idle' ? (
-                <div className="text-center py-10 text-slate-500 text-sm">
+                <div className="text-center py-10 text-slate-400 text-sm">
                   Click <strong className="text-slate-300">Validate</strong> or edit YAML to inspect configuration diagnostics.
                 </div>
               ) : validationStatus === 'validating' ? (

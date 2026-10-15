@@ -199,7 +199,7 @@ function KPITile({
         <p className={`text-2xl lg:text-3xl font-bold font-mono tabular-nums ${accentClass}`}>
           {value !== null && value !== undefined ? value : '—'}
         </p>
-        <p className="text-xs text-slate-500 mt-1 truncate">{caption}</p>
+        <p className="text-xs text-slate-400 mt-1 truncate">{caption}</p>
       </div>
     </div>
   );
@@ -419,7 +419,7 @@ function RecentFailuresSection() {
         <div className="p-8 text-center text-slate-400 text-sm">
           <CheckCircle2Icon className="h-8 w-8 text-status-success mx-auto mb-2 opacity-80" />
           <p className="font-medium text-slate-300">No failures in the last 7 days</p>
-          <p className="text-xs text-slate-500 mt-1">All pipelines and experiments executed successfully.</p>
+          <p className="text-xs text-slate-400 mt-1">All pipelines and experiments executed successfully.</p>
         </div>
       ) : (
         <ul className="divide-y divide-surface-border">
@@ -438,11 +438,11 @@ function RecentFailuresSection() {
                       </span>
                     </div>
                     <p className="text-xs text-status-error/90 mt-1 line-clamp-1">{f.message}</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
+                    <p className="text-[10px] text-slate-400 mt-0.5">
                       {f.at ? new Date(f.at).toLocaleString() : '—'}
                     </p>
                   </div>
-                  <ArrowRightIcon className="h-4 w-4 text-slate-500 group-hover:text-slate-300 shrink-0 mt-1" />
+                  <ArrowRightIcon className="h-4 w-4 text-slate-400 group-hover:text-slate-300 shrink-0 mt-1" />
                 </Link>
               </li>
             );
