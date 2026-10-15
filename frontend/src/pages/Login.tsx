@@ -14,6 +14,10 @@ export default function Login() {
   const location = useLocation();
   const sessionExpired = (location.state as { sessionExpired?: boolean } | null)?.sessionExpired;
 
+  React.useEffect(() => {
+    document.title = 'Login · ChaosFlow';
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -36,7 +40,7 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-xl">
-        <h2 className="text-2xl font-bold text-slate-100 text-center mb-6">Platform Login</h2>
+        <h1 className="text-2xl font-bold text-slate-100 text-center mb-6">Platform Login</h1>
 
         {sessionExpired && (
           <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-3 rounded mb-4 text-sm">

@@ -423,6 +423,16 @@ export default function PipelineManagement() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Page Header */}
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Pipelines</h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Author, validate, and execute resilient big data pipeline definitions.
+          </p>
+        </div>
+      </header>
+
       {/* Hidden file input */}
       <input
         ref={fileInputRef}

@@ -43,6 +43,14 @@ export function CardHeader({ children, className = '' }: { children: React.React
   );
 }
 
-export function CardTitle({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <h3 className={['text-base font-semibold text-slate-100', className].join(' ')}>{children}</h3>;
+export function CardTitle({
+  children,
+  className = '',
+  as: Tag = 'h2',
+}: {
+  children: React.ReactNode;
+  className?: string;
+  as?: 'h2' | 'h3' | 'h4';
+}) {
+  return <Tag className={['text-base font-semibold text-slate-100', className].join(' ')}>{children}</Tag>;
 }

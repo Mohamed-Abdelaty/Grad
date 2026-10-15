@@ -6,9 +6,9 @@ interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
 }
 
 const sizeClasses = {
-  sm: 'h-7 w-7 text-sm',
-  md: 'h-9 w-9 text-base',
-  lg: 'h-11 w-11 text-lg',
+  sm: 'h-8 w-8 text-sm min-h-[40px] min-w-[40px]',
+  md: 'h-9 w-9 text-base min-h-[40px] min-w-[40px]',
+  lg: 'h-11 w-11 text-lg min-h-[44px] min-w-[44px]',
 };
 
 export function IconButton({

@@ -54,7 +54,7 @@ export default function Sidebar() {
         'bg-surface-raised border-r border-surface-border sidebar-transition',
         collapsed ? 'w-sidebar-sm' : 'w-sidebar',
       ].join(' ')}
-      aria-label="Main navigation"
+      aria-label="Sidebar"
     >
       {/* Wordmark / logo */}
       <div className="flex items-center gap-3 px-4 h-topbar border-b border-surface-border shrink-0 overflow-hidden">
@@ -67,7 +67,7 @@ export default function Sidebar() {
       </div>
 
       {/* Nav links */}
-      <nav className="flex-1 py-4 space-y-1 px-2 overflow-y-auto" aria-label="Sidebar navigation">
+      <nav className="flex-1 py-4 space-y-1 px-2 overflow-y-auto" aria-label="Primary">
         {LINKS.map(({ to, label, Icon, end }) => {
           const isActive = end
             ? location.pathname === to

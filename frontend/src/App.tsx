@@ -14,6 +14,7 @@ const PipelineDetails = lazy(() => import('./pages/PipelineDetails'));
 const ReliabilityTesting = lazy(() => import('./pages/ReliabilityTesting'));
 const Reports = lazy(() => import('./pages/Reports'));
 const ReportDetails = lazy(() => import('./pages/ReportDetails'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 const DevVizPlayground = import.meta.env.DEV
   ? lazy(() => import('./features/viz/Playground'))
   : null;
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/reports/:id" element={<ReportDetails />} />
           </Route>
         </Route>
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
   );
