@@ -16,8 +16,8 @@ import puppeteer from 'puppeteer';
 import { startFlow, desktopConfig } from 'lighthouse';
 
 const envPath = path.resolve('../.env');
-let username = 'admin';
-let password = 'password';
+let username = process.env.ADMIN_USERNAME || '';
+let password = process.env.ADMIN_PASSWORD || '';
 
 if (fs.existsSync(envPath)) {
   const content = fs.readFileSync(envPath, 'utf-8');
