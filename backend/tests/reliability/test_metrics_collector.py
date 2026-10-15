@@ -154,3 +154,71 @@ class TestCaptureBaseline:
         baseline = collector.capture_baseline({})
         assert "baseline_captured_at" in baseline
         assert "T" in baseline["baseline_captured_at"]  # ISO format check
+
+
+class TestCaptureDuringExperiment:
+    """capture_during_experiment tests."""
+
+    def test_probe_is_false_while_health_check_fails(self) -> None:
+        """Probe must be false if health check fails, even when container is running."""
+        collector = MetricsCollector()
+        mock_docker = MagicMock()
+        mock_docker.is_container_running.return_value = True
+
+        health_fn = MagicMock(return_value={"connected": False})
+
+        with patch.object(collector, "AVAILABILITY_POLL_INTERVAL", 0.01):
+            res = collector.capture_during_experiment(
+                target_service="kafka",
+                docker_controller=mock_docker,
+                duration_seconds=0.03,
+                health_check_fn=health_fn,
+            )
+
+        assert res["total_samples"] >= 1
+        assert res["available_samples"] == 0
+        assert res["availability_percentage"] == 0.0
+        assert all(s["available"] is False for s in res["samples"])
+
+    def test_probe_is_true_when_container_and_health_check_succeed(self) -> None:
+        """Probe is true when container is running and health_check_fn reports connected."""
+        collector = MetricsCollector()
+        mock_docker = MagicMock()
+        mock_docker.is_container_running.return_value = True
+
+        health_fn = MagicMock(return_value={"connected": True})
+
+        with patch.object(collector, "AVAILABILITY_POLL_INTERVAL", 0.01):
+            res = collector.capture_during_experiment(
+                target_service="kafka",
+                docker_controller=mock_docker,
+                duration_seconds=0.03,
+                health_check_fn=health_fn,
+            )
+
+        assert res["total_samples"] >= 1
+        assert res["available_samples"] == res["total_samples"]
+        assert res["availability_percentage"] == 100.0
+        assert all(s["available"] is True for s in res["samples"])
+
+    def test_failing_probe_samples_across_entire_duration_window(self) -> None:
+        """A failing or slow probe must not cause the loop to exit early; 5s window yields 5 samples."""
+        collector = MetricsCollector()
+        mock_docker = MagicMock()
+        mock_docker.is_container_running.return_value = True
+
+        health_fn = MagicMock(return_value={"connected": False})
+
+        with patch.object(collector, "AVAILABILITY_POLL_INTERVAL", 0.005):
+            res = collector.capture_during_experiment(
+                target_service="kafka",
+                docker_controller=mock_docker,
+                duration_seconds=0.025,
+                health_check_fn=health_fn,
+            )
+
+        assert res["total_samples"] == 5
+        assert len(res["samples"]) == 5
+        assert res["available_samples"] == 0
+        assert res["availability_percentage"] == 0.0
+

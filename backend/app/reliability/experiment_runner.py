@@ -378,11 +378,13 @@ class ExperimentRunner:
                     f"Fault active. Sampling availability for {fault_duration}s.",
                 )
 
+                health_check_fn = self._get_health_check_fn(target_service)
                 availability_data = self._metrics.capture_during_experiment(
                     target_service,
                     self._docker,
                     fault_duration,
                     is_cancelled_fn=lambda: self._cancelled,
+                    health_check_fn=health_check_fn,
                 )
                 self._merge_results(run, availability_data)
                 self._check_cancelled(run, experiment.id)
@@ -444,25 +446,7 @@ class ExperimentRunner:
             if remaining_timeout <= 0:
                 self._check_timeout(experiment_start, global_timeout)
 
-            health_check_fn = None
-            if "kafka" in target_service:
-                try:
-                    from app.api.routes.health import check_kafka_connectivity
-                    health_check_fn = check_kafka_connectivity
-                except Exception:
-                    pass
-            elif "spark" in target_service:
-                try:
-                    from app.api.routes.health import check_spark_connectivity
-                    health_check_fn = check_spark_connectivity
-                except Exception:
-                    pass
-            elif "hdfs" in target_service:
-                try:
-                    from app.api.routes.health import check_hdfs_connectivity
-                    health_check_fn = check_hdfs_connectivity
-                except Exception:
-                    pass
+            health_check_fn = self._get_health_check_fn(target_service)
 
             recovery_time = self._metrics.measure_recovery_time(
                 target_service,
@@ -926,6 +910,29 @@ class ExperimentRunner:
                 except Exception:
                     pass
             raise RuntimeError("Experiment cancelled by operator.")
+
+    @staticmethod
+    def _get_health_check_fn(target_service: str) -> Callable | None:
+        """Resolve deeper connectivity probe for the given target service."""
+        if "kafka" in target_service:
+            try:
+                from app.api.routes.health import check_kafka_connectivity
+                return check_kafka_connectivity
+            except Exception:
+                return None
+        elif "spark" in target_service:
+            try:
+                from app.api.routes.health import check_spark_connectivity
+                return check_spark_connectivity
+            except Exception:
+                return None
+        elif "hdfs" in target_service or "namenode" in target_service or "datanode" in target_service:
+            try:
+                from app.api.routes.health import check_hdfs_connectivity
+                return check_hdfs_connectivity
+            except Exception:
+                return None
+        return None
 
     def _check_timeout(self, start: float, timeout: float) -> None:
         """Raise ExperimentTimeoutError if the global timeout has elapsed."""

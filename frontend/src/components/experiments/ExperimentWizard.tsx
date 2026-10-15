@@ -190,6 +190,8 @@ export function ExperimentWizard({
                 key={s.n}
                 type="button"
                 data-testid={`exp-step-${s.n}`}
+                disabled={s.n > currentStep && !(s.n === 2 && isStep1Valid) && !(s.n === 3 && isStep1Valid && isStep2Valid)}
+                aria-disabled={s.n > currentStep && !(s.n === 2 && isStep1Valid) && !(s.n === 3 && isStep1Valid && isStep2Valid)}
                 onClick={() => {
                   if (s.n < currentStep || (s.n === 2 && isStep1Valid) || (s.n === 3 && isStep1Valid && isStep2Valid)) {
                     setCurrentStep(s.n);
@@ -200,7 +202,7 @@ export function ExperimentWizard({
                     ? 'bg-brand/20 border border-brand text-brand-light'
                     : isCompleted
                     ? 'bg-slate-800/80 border border-slate-700 text-slate-300 hover:bg-slate-800'
-                    : 'bg-slate-900 border border-slate-800 text-slate-500 cursor-not-allowed'
+                    : 'bg-slate-900 border border-slate-800 text-slate-400 cursor-not-allowed'
                 }`}
               >
                 <span
@@ -562,7 +564,7 @@ export function ExperimentWizard({
             disabled={!canProceed}
             className={`px-5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all ${
               canProceed
-                ? 'bg-brand text-white hover:bg-brand-dark shadow-md'
+                ? 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-md'
                 : 'opacity-40 cursor-not-allowed bg-slate-800 text-slate-500'
             }`}
           >

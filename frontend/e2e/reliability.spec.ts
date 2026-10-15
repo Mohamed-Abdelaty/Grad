@@ -425,6 +425,20 @@ test.describe('UI-8 ChaosLab Reliability and Reports E2E', () => {
     const yamlPath = path.resolve('..', 'backend', 'sample-configs', 'sales_large.yaml');
     const salesLargeYaml = fs.readFileSync(yamlPath, 'utf-8');
 
+    // Ensure cluster and Kafka are ready before launching 1M-row pipeline
+    for (let i = 0; i < 30; i++) {
+      try {
+        const hRes = await request.get('http://localhost:8000/health');
+        if (hRes.ok()) {
+          const hJson = (await hRes.json()) as { status?: string };
+          if (hJson.status === 'ok') break;
+        }
+      } catch {
+        // ignore and retry
+      }
+      await page.waitForTimeout(1000);
+    }
+
     // 1. Start the 1M-row pipeline
     const runRes = await request.post('http://localhost:8000/api/pipelines/run', {
       headers: authHeaders,
@@ -590,26 +604,75 @@ validation:
     console.log(`[overlay compare] Overlay reported X=${X}s, Report reported Y=${Y}s, |X - Y|=${Math.abs(X - Y).toFixed(2)}s`);
     expect(Math.abs(X - Y)).toBeLessThanOrEqual(1.0);
 
-    // Wait for the pipeline run to reach a terminal status (succeeded or failed)
+    interface PipelineRunResponse {
+      status?: string;
+      started_at?: string;
+      finished_at?: string;
+    }
+    interface ProgressStage {
+      key?: string;
+      startedAt?: string;
+      finishedAt?: string;
+    }
+    interface ProgressResponse {
+      stages?: ProgressStage[];
+      kafka?: { published?: number };
+      spark?: { recordsOut?: number };
+      hdfs?: { rowsWritten?: number };
+    }
+
     let finalPipelineStatus = 'unknown';
-    let finalRecordsProcessed = 0;
-    let finalDuration = 0;
+    let pRunData: PipelineRunResponse = {};
+    let progData: ProgressResponse = {};
     for (let i = 0; i < 180; i++) {
       const pRes = await request.get(`http://localhost:8000/api/pipeline-runs/${pipelineRunId}`, {
         headers: authHeaders,
       });
       if (pRes.ok()) {
-        const pData = await pRes.json();
+        const pData = (await pRes.json()) as PipelineRunResponse;
         if (pData.status === 'succeeded' || pData.status === 'failed') {
+          pRunData = pData;
           finalPipelineStatus = pData.status;
-          finalRecordsProcessed = pData.records_processed ?? pData.recordsProcessed ?? 0;
-          finalDuration = pData.duration_seconds ?? pData.durationSeconds ?? 0;
+          const progRes = await request.get(`http://localhost:8000/api/pipeline-runs/${pipelineRunId}/progress`, {
+            headers: authHeaders,
+          });
+          if (progRes.ok()) {
+            progData = (await progRes.json()) as ProgressResponse;
+          }
           break;
         }
       }
       await page.waitForTimeout(1000);
     }
-    console.log(`[pipeline outcome] status=${finalPipelineStatus}, recordsProcessed=${finalRecordsProcessed}, duration=${finalDuration}s`);
+
+    const runStartMs = pRunData.started_at ? new Date(pRunData.started_at).getTime() : 0;
+    const runEndMs = pRunData.finished_at ? new Date(pRunData.finished_at).getTime() : 0;
+    const computedDuration = (runStartMs && runEndMs) ? ((runEndMs - runStartMs) / 1000).toFixed(2) : '0';
+
+    const kafkaStage = (progData.stages || []).find((s: { key?: string }) => s.key === 'kafka') || {};
+    const kafkaStartMs = kafkaStage.startedAt ? new Date(kafkaStage.startedAt).getTime() : 0;
+    const kafkaEndMs = kafkaStage.finishedAt ? new Date(kafkaStage.finishedAt).getTime() : 0;
+    const kafkaStageDuration = (kafkaStartMs && kafkaEndMs) ? ((kafkaEndMs - kafkaStartMs) / 1000).toFixed(2) : '0';
+
+    const kafkaPublished = progData.kafka?.published ?? 0;
+    const sparkRecordsOut = progData.spark?.recordsOut ?? 0;
+    const hdfsRowsWritten = progData.hdfs?.rowsWritten ?? 0;
+
+    let expFaultInjectedAt: string | null = null;
+    let expFaultRevertedAt: string | null = null;
+    let expRecoveredAt: string | null = null;
+    const expDetailRes = await request.get(`http://localhost:8000/api/experiments/${expId}`, {
+      headers: authHeaders,
+    });
+    if (expDetailRes.ok()) {
+      const expJson = await expDetailRes.json();
+      expFaultInjectedAt = expJson.faultInjectedAt || expJson.results?.fault_injected_at || null;
+      expFaultRevertedAt = expJson.faultRevertedAt || expJson.results?.fault_reverted_at || null;
+      expRecoveredAt = expJson.recoveredAt || expJson.results?.recovered_at || null;
+    }
+
+    console.log(`[pipeline outcome] status=${finalPipelineStatus}, kafka.published=${kafkaPublished}, spark.recordsOut=${sparkRecordsOut}, hdfs.rowsWritten=${hdfsRowsWritten}, duration=${computedDuration}s, kafkaStageDuration=${kafkaStageDuration}s`);
+    console.log(`[timeline overlap] faultInjectedAt=${expFaultInjectedAt}, faultRevertedAt=${expFaultRevertedAt}, recoveredAt=${expRecoveredAt}, kafkaStageStartedAt=${kafkaStage.startedAt}, kafkaStageFinishedAt=${kafkaStage.finishedAt}`);
     expect(['succeeded', 'failed']).toContain(finalPipelineStatus);
   });
 
@@ -844,5 +907,82 @@ validation:
     expect(uiDetailValues).toEqual(apiExpValues);
     expect(uiListValues).toEqual(apiExpValues);
     expect(jsonValues).toEqual(apiExpValues);
+  });
+
+  test('11. Accessibility: axe reports zero serious or critical violations on /reliability, /reports, and /reports/:id', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const AxeBuilder = (await import('@axe-core/playwright')).default;
+    await doLogin(page);
+
+    // 1. /reliability
+    await clickNav(page, 'Reliability Testing');
+    await expect(page).toHaveURL(/reliability/, { timeout: 10_000 });
+    await expect(page.getByTestId('page-reliability')).toBeVisible({ timeout: 10_000 });
+
+    const axeReliability = await new AxeBuilder({ page }).analyze();
+    const badReliability = axeReliability.violations.filter(
+      (v) => v.impact === 'serious' || v.impact === 'critical'
+    );
+    expect(badReliability, 'Axe violations on /reliability').toHaveLength(0);
+
+    // 2. /reports
+    await clickNav(page, 'Reports');
+    await expect(page).toHaveURL(/reports/, { timeout: 10_000 });
+    await expect(page.getByTestId('page-reports')).toBeVisible({ timeout: 10_000 });
+
+    const axeReports = await new AxeBuilder({ page }).analyze();
+    const badReports = axeReports.violations.filter(
+      (v) => v.impact === 'serious' || v.impact === 'critical'
+    );
+    expect(badReports, 'Axe violations on /reports').toHaveLength(0);
+
+    // 3. /reports/:id
+    const viewLink = page.locator('a:has-text("View")').first();
+    await expect(viewLink).toBeVisible({ timeout: 10_000 });
+    await viewLink.click();
+    await expect(page).toHaveURL(/\/reports\/[a-f0-9-]+/, { timeout: 10_000 });
+    await expect(page.getByTestId('page-report-details')).toBeVisible({ timeout: 10_000 });
+
+    const axeDetail = await new AxeBuilder({ page }).analyze();
+    const badDetail = axeDetail.violations.filter(
+      (v) => v.impact === 'serious' || v.impact === 'critical'
+    );
+    expect(badDetail, 'Axe violations on /reports/:id').toHaveLength(0);
+  });
+
+  test('12. Export and print: page.emulateMedia print hides navigation and page.pdf produces PDF > 10 KB', async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await doLogin(page);
+    await clickNav(page, 'Reports');
+    await expect(page).toHaveURL(/reports/, { timeout: 10_000 });
+    await expect(page.getByTestId('page-reports')).toBeVisible({ timeout: 10_000 });
+
+    const viewLink = page.locator('a:has-text("View")').first();
+    await expect(viewLink).toBeVisible({ timeout: 10_000 });
+    await viewLink.click();
+    await expect(page).toHaveURL(/\/reports\/[a-f0-9-]+/, { timeout: 10_000 });
+    await expect(page.getByTestId('page-report-details')).toBeVisible({ timeout: 10_000 });
+
+    // Emulate print media
+    await page.emulateMedia({ media: 'print' });
+
+    // Check sidebar / navigation has print:hidden or is hidden
+    const sidebar = page.locator('aside');
+    const isHidden = await sidebar.evaluate((el) => {
+      const win = el.ownerDocument.defaultView;
+      if (!win) return true;
+      const comp = win.getComputedStyle(el);
+      return comp.display === 'none' || comp.visibility === 'hidden' || el.classList.contains('print:hidden');
+    });
+    expect(isHidden).toBe(true);
+
+    // Generate PDF
+    const pdfBuffer = await page.pdf();
+    console.log(`[print evidence] PDF size: ${pdfBuffer.length} bytes`);
+    expect(pdfBuffer.length).toBeGreaterThan(10 * 1024);
   });
 });

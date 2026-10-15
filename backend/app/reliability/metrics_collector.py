@@ -74,9 +74,13 @@ class MetricsCollector:
         docker_controller: DockerController,
         duration_seconds: int,
         is_cancelled_fn: Callable[[], bool] | None = None,
+        health_check_fn: Callable | None = None,
     ) -> dict:
         """
-        Poll ``is_container_running`` every second and build an availability timeline.
+        Poll availability every second and build an availability timeline.
+
+        Checks that the container is running and, if ``health_check_fn`` is provided,
+        that the deep health probe returns ``{"connected": True}``.
 
         Parameters
         ----------
@@ -88,6 +92,8 @@ class MetricsCollector:
             How many seconds to monitor (normally equals ``fault.duration``).
         is_cancelled_fn : Callable[[], bool] | None
             Optional cancellation check callback.
+        health_check_fn : Callable | None
+            Optional deeper health probe (e.g. ``check_kafka_connectivity``).
 
         Returns
         -------
@@ -96,19 +102,40 @@ class MetricsCollector:
             "total_samples": int, "available_samples": int}``
         """
         samples: list[dict[str, Any]] = []
-        end_time = time.monotonic() + duration_seconds
+        interval = self.AVAILABILITY_POLL_INTERVAL
+        num_ticks = max(1, int(round(duration_seconds / interval))) if interval > 0 else 1
+        start_time = time.monotonic()
 
-        while time.monotonic() < end_time:
+        for i in range(num_ticks):
             if is_cancelled_fn is not None and is_cancelled_fn():
                 logger.info("MetricsCollector: monitoring aborted due to cancellation.")
                 break
+            tick_start = time.monotonic()
             ts = datetime.now(tz=timezone.utc).isoformat()
             try:
-                available = docker_controller.is_container_running(target_service)
+                container_ok = docker_controller.is_container_running(target_service)
             except Exception:
+                container_ok = False
+
+            if container_ok:
+                if health_check_fn is not None:
+                    try:
+                        health = health_check_fn(timeout=0.5)
+                    except TypeError:
+                        health = health_check_fn()
+                    except Exception:
+                        health = {"connected": False}
+                    available = bool(health.get("connected", False))
+                else:
+                    available = True
+            else:
                 available = False
+
             samples.append({"timestamp": ts, "available": available})
-            time.sleep(self.AVAILABILITY_POLL_INTERVAL)
+            elapsed = time.monotonic() - tick_start
+            sleep_time = interval - elapsed
+            if sleep_time > 0 and (i < num_ticks - 1 or time.monotonic() < start_time + duration_seconds):
+                time.sleep(sleep_time)
 
         total = len(samples)
         available_count = sum(1 for s in samples if s["available"])

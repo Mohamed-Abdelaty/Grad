@@ -286,6 +286,7 @@ export default function Reports() {
         {/* Target Filter */}
         <select
           data-testid="filter-target"
+          aria-label="Filter by Target"
           value={targetFilter}
           onChange={(e) => updateQueryParam('target', e.target.value)}
           className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand"
@@ -301,6 +302,7 @@ export default function Reports() {
         {/* Fault Filter */}
         <select
           data-testid="filter-fault"
+          aria-label="Filter by Fault"
           value={faultFilter}
           onChange={(e) => updateQueryParam('fault', e.target.value)}
           className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand"
@@ -316,6 +318,7 @@ export default function Reports() {
         {/* Result Filter */}
         <select
           data-testid="filter-result"
+          aria-label="Filter by Result"
           value={resultFilter}
           onChange={(e) => updateQueryParam('result', e.target.value)}
           className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand"
@@ -394,12 +397,13 @@ export default function Reports() {
                       onChange={() => handleToggleSelect(report.id)}
                       className="w-4 h-4 rounded border-slate-700 text-brand focus:ring-brand accent-brand cursor-pointer"
                       title="Select for comparison"
+                      aria-label="Select report for comparison"
                     />
                     <div>
                       <h3 className="font-bold text-sm text-slate-100 font-mono truncate max-w-[180px]">
                         {report.title || report.id}
                       </h3>
-                      <span className="text-[11px] text-slate-500">
+                      <span className="text-[11px] text-slate-400">
                         {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : ''}
                       </span>
                     </div>
@@ -540,6 +544,7 @@ export default function Reports() {
                           checked={isChecked}
                           onChange={() => handleToggleSelect(report.id)}
                           className="w-4 h-4 rounded border-slate-700 text-brand focus:ring-brand accent-brand cursor-pointer"
+                          aria-label="Select report for comparison"
                         />
                       </td>
                       <td className="py-2.5 px-4">

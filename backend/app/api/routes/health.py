@@ -54,7 +54,7 @@ async def check_database_connectivity(db: AsyncSession) -> dict:
         return {"connected": False, "latency_ms": None, "error": str(exc)}
 
 
-def check_kafka_connectivity() -> dict:
+def check_kafka_connectivity(timeout: float = 0.5) -> dict:
     """
     Check Kafka broker connectivity via AdminClient list_topics probe.
 
@@ -67,7 +67,7 @@ def check_kafka_connectivity() -> dict:
         from app.messaging.kafka_admin import KafkaAdminClient
 
         admin = KafkaAdminClient()
-        return admin.health_check()
+        return admin.health_check(timeout=timeout)
     except Exception as exc:
         logger.warning("Kafka connectivity check failed: %s", exc)
         return {
