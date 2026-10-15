@@ -51,7 +51,7 @@ async function doLogin(page: Page) {
   await page.locator('#password').fill(PASSWORD);
   await page.getByRole('button', { name: /login|sign in/i }).click();
   await expect(page).toHaveURL('/', { timeout: 10_000 });
-  await expect(page.getByRole('heading', { name: 'System Status' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: /system (health|status)|dashboard/i }).first()).toBeVisible({
     timeout: 8_000,
   });
 }

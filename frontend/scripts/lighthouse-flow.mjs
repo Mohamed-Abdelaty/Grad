@@ -15,7 +15,9 @@ import path from 'path';
 import puppeteer from 'puppeteer';
 import { startFlow, desktopConfig } from 'lighthouse';
 
-const envPath = path.resolve('../.env');
+const envPath = fs.existsSync(path.resolve('.env'))
+  ? path.resolve('.env')
+  : path.resolve('../.env');
 let username = process.env.ADMIN_USERNAME || '';
 let password = process.env.ADMIN_PASSWORD || '';
 
