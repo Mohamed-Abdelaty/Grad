@@ -27,11 +27,20 @@ async function doLogin(page: Page) {
   });
 }
 
+interface CspViolationItem {
+  blockedURI: string;
+  violatedDirective: string;
+}
+
+interface CspWindow {
+  __cspViolations?: CspViolationItem[];
+}
+
 async function attachCspListener(page: Page) {
   await page.addInitScript(() => {
-    (window as any).__cspViolations = [];
+    (window as unknown as CspWindow).__cspViolations = [];
     window.addEventListener('securitypolicyviolation', (e) => {
-      (window as any).__cspViolations.push({
+      (window as unknown as CspWindow).__cspViolations?.push({
         blockedURI: e.blockedURI,
         violatedDirective: e.violatedDirective,
       });
@@ -40,7 +49,9 @@ async function attachCspListener(page: Page) {
 }
 
 async function assertNoCspViolations(page: Page, label: string) {
-  const violations = await page.evaluate(() => (window as any).__cspViolations || []);
+  const violations = await page.evaluate(
+    () => (window as unknown as CspWindow).__cspViolations || []
+  );
   expect(violations, `CSP violations on ${label}`).toHaveLength(0);
 }
 
