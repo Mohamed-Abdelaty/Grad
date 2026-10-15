@@ -32,6 +32,7 @@ from app.api.routes.pipelines import router as pipelines_router
 from app.api.routes.spark import router as spark_router
 from app.api.routes.storage import router as storage_router
 from app.api.routes.experiments import router as experiments_router
+from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.ai import router as ai_router
 from app.api.routes.metrics import router as metrics_router
 from app.core.config import get_settings
@@ -219,6 +220,7 @@ def create_app() -> FastAPI:
     app.include_router(spark_router)
     app.include_router(storage_router)   # Phase 6 — HDFS storage health
     app.include_router(experiments_router)  # Phase 7 — ChaosLab reliability
+    app.include_router(dashboard_router)    # UI-9 — Dashboard summary
 
     app.include_router(ai_router)
     app.include_router(metrics_router)
