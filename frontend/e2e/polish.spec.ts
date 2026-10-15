@@ -290,3 +290,79 @@ test('7. Accessibility: axe reports zero serious or critical violations at 1440x
     }
   }
 });
+
+// ── 8. Page Sweep: Zero CSP Violations, Zero Console Errors, Zero Failed Requests ──────────
+test('8. Full page-sweep: zero CSP violations, zero console errors, zero failed requests', async ({
+  page,
+}) => {
+  const consoleErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  const failedRequests: string[] = [];
+  page.on('requestfailed', (req) => {
+    const failure = req.failure();
+    if (failure?.errorText !== 'net::ERR_ABORTED') {
+      failedRequests.push(`${req.method()} ${req.url()} (${failure?.errorText})`);
+    }
+  });
+
+  await attachCspListener(page);
+
+  // 1. /login
+  await page.goto('/login');
+  await page.waitForLoadState('networkidle');
+  await assertNoCspViolations(page, '/login');
+
+  // 2. Login to Dashboard
+  await doLogin(page);
+  await assertNoCspViolations(page, 'Dashboard');
+
+  // 3. /pipelines (YAML editor is present here)
+  await page.locator('aside nav a', { hasText: 'Pipelines' }).first().click();
+  await expect(page).toHaveURL(/pipelines/);
+  await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 10_000 });
+  await assertNoCspViolations(page, 'Pipelines (YAML Editor)');
+
+  // 4. /pipelines/:runId (3D scene is present here)
+  const runRow = page.locator('table tbody tr').first();
+  if (await runRow.isVisible({ timeout: 5_000 })) {
+    const runLink = runRow.locator('a').first();
+    if (await runLink.isVisible()) {
+      await runLink.click();
+      await expect(page).toHaveURL(/\/pipelines\/.+/, { timeout: 10_000 });
+      await expect(page.locator('[data-testid="viz-canvas"], canvas').first()).toBeVisible({ timeout: 15_000 });
+      await assertNoCspViolations(page, 'PipelineDetails (3D Scene)');
+    }
+  }
+
+  // 5. /reliability (Experiment Wizard)
+  await page.locator('aside nav a', { hasText: 'Reliability' }).first().click();
+  await expect(page).toHaveURL(/reliability/);
+  await expect(page.locator('[data-testid="exp-wizard"]')).toBeVisible({ timeout: 10_000 });
+  await assertNoCspViolations(page, 'Reliability');
+
+  // 6. /reports
+  await page.locator('aside nav a', { hasText: 'Reports' }).first().click();
+  await expect(page).toHaveURL(/reports/);
+  await assertNoCspViolations(page, 'Reports');
+
+  // 7. /reports/:id
+  const reportLink = page.locator('table tbody tr a, [data-testid="report-card"] a').first();
+  if (await reportLink.isVisible({ timeout: 5_000 })) {
+    await reportLink.click();
+    await expect(page).toHaveURL(/\/reports\/.+/, { timeout: 10_000 });
+    await assertNoCspViolations(page, 'ReportDetails');
+  }
+
+  // 8. 404 page
+  await page.goto('/unknown-page-sweep-404');
+  await expect(page.getByRole('heading', { name: 'Page Not Found' })).toBeVisible({ timeout: 5_000 });
+  await assertNoCspViolations(page, '404 Page');
+
+  expect(consoleErrors, `Console errors during page sweep: ${JSON.stringify(consoleErrors, null, 2)}`).toHaveLength(0);
+  expect(failedRequests, `Failed requests during page sweep: ${JSON.stringify(failedRequests, null, 2)}`).toHaveLength(0);
+});

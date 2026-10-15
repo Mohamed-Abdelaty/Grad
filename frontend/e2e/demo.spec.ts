@@ -137,16 +137,20 @@ test.describe('@demo ChaosFlow 9-Stage Demonstration Scenario', () => {
     await expect(wizard).toBeVisible({ timeout: 8_000 });
 
     // Step 1: Target selection -> kafka
+    const kafkaOpt = wizard.locator('[data-testid="target-opt-kafka"]');
+    await expect(kafkaOpt).toBeVisible({ timeout: 5_000 });
+    await kafkaOpt.click();
+
     const nextBtn = page.locator('[data-testid="wizard-next"]');
     await expect(nextBtn).toBeEnabled();
     await nextBtn.click();
 
     // Step 2: Fault selection -> container_stop
     await expect(wizard.getByText(/step 2 of 4/i)).toBeVisible();
-    const stopFaultOption = wizard.locator('label, div').filter({ hasText: /container_stop/i }).first();
-    if (await stopFaultOption.isVisible()) {
-      await stopFaultOption.click();
-    }
+    const stopFaultOption = wizard.locator('[data-testid="fault-opt-container_stop"]');
+    await expect(stopFaultOption).toBeVisible({ timeout: 5_000 });
+    await stopFaultOption.click();
+
     await expect(nextBtn).toBeEnabled();
     await nextBtn.click();
 
@@ -196,9 +200,15 @@ test.describe('@demo ChaosFlow 9-Stage Demonstration Scenario', () => {
       const resp = await page.request.get(`/api/reports/${expId}`);
       if (resp.ok()) {
         const body = await resp.json();
-        recoverySec = body.results?.recoveryTimeSeconds !== undefined && body.results?.recoveryTimeSeconds !== null
-          ? String(body.results.recoveryTimeSeconds)
-          : '0.0';
+        const rVal = body.recoveryTimeSeconds ?? body.results?.recoveryTimeSeconds ?? body.recovery_time_seconds;
+        recoverySec = rVal !== undefined && rVal !== null ? String(rVal) : '0.0';
+      } else {
+        const expResp = await page.request.get(`/api/experiments/${expId}`);
+        if (expResp.ok()) {
+          const expBody = await expResp.json();
+          const rVal = expBody.recoveryTimeSeconds ?? expBody.results?.recoveryTimeSeconds ?? expBody.recovery_time_seconds;
+          recoverySec = rVal !== undefined && rVal !== null ? String(rVal) : '0.0';
+        }
       }
     } catch {
       // fallback
@@ -207,6 +217,7 @@ test.describe('@demo ChaosFlow 9-Stage Demonstration Scenario', () => {
     console.log('[DEMO-EVIDENCE] Chaos experiment id:', expId);
     console.log('[DEMO-EVIDENCE] Chaos experiment result:', expResult);
     console.log('[DEMO-EVIDENCE] Chaos experiment recoveryTimeSeconds:', recoverySec);
+    expect(Number(recoverySec), 'recoveryTimeSeconds must be > 0 for container_stop').toBeGreaterThan(0);
 
     // ── STAGE 9: Generic Adaptation (iot-json run) & Sign Out ────────────────
     await clickNav(page, 'Pipelines');
@@ -252,13 +263,29 @@ test.describe('@demo ChaosFlow 9-Stage Demonstration Scenario', () => {
     await expect(page).toHaveURL('/', { timeout: 8_000 });
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => undefined);
 
-    const finalKpis = {
-      activeRuns: (await page.locator('[data-testid="kpi-active-runs"] p').first().textContent())?.trim(),
-      runningExperiments: (await page.locator('[data-testid="kpi-running-experiments"] p').first().textContent())?.trim(),
-      runs24h: (await page.locator('[data-testid="kpi-runs-24h"] p').first().textContent())?.trim(),
-      avgRecoveryTime: (await page.locator('[data-testid="kpi-avg-recovery-time"] p').first().textContent())?.trim(),
-    };
+    const initialRunsNum = parseInt(initialKpis.runs24h || '0', 10);
+    const deadline = Date.now() + 70_000;
+    let currentRunsNum = initialRunsNum;
+    let finalKpis = initialKpis;
+
+    while (Date.now() < deadline) {
+      await page.waitForTimeout(5000);
+      finalKpis = {
+        activeRuns: (await page.locator('[data-testid="kpi-active-runs"] p').first().textContent())?.trim(),
+        runningExperiments: (await page.locator('[data-testid="kpi-running-experiments"] p').first().textContent())?.trim(),
+        runs24h: (await page.locator('[data-testid="kpi-runs-24h"] p').first().textContent())?.trim(),
+        avgRecoveryTime: (await page.locator('[data-testid="kpi-avg-recovery-time"] p').first().textContent())?.trim(),
+      };
+      currentRunsNum = parseInt(finalKpis.runs24h || '0', 10);
+      if (currentRunsNum >= initialRunsNum + 2) {
+        break;
+      }
+    }
+
+    console.log('[DEMO-EVIDENCE] Before Dashboard runs24h:', initialRunsNum);
+    console.log('[DEMO-EVIDENCE] After Dashboard runs24h:', currentRunsNum);
     console.log('[DEMO-EVIDENCE] Final Dashboard KPIs:', JSON.stringify(finalKpis));
+    expect(currentRunsNum, `runs24h must increase by at least 2 (before: ${initialRunsNum}, after: ${currentRunsNum})`).toBeGreaterThanOrEqual(initialRunsNum + 2);
 
     // Sign out
     const signOutBtn = page.locator('button[aria-label="Sign out"]');

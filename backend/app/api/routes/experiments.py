@@ -739,6 +739,15 @@ async def get_report(
 
     report = await db.get(Report, report_id)
     if report is None:
+        from sqlalchemy import select
+        stmt = select(Report).where(
+            (Report.metadata_["experiment_id"].as_string() == str(report_id))
+            | (Report.metadata_["experimentId"].as_string() == str(report_id))
+            | (Report.metadata_["experiment_run_id"].as_string() == str(report_id))
+        )
+        report = (await db.execute(stmt)).scalars().first()
+
+    if report is None:
         raise HTTPException(status_code=404, detail="Report not found.")
 
     meta = dict(report.metadata_ or {})
