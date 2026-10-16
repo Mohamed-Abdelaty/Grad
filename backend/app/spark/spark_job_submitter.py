@@ -218,6 +218,15 @@ class SparkJobSubmitter:
             run_id,
         )
 
+        timeout = float(self._settings.SPARK_SUBMIT_TIMEOUT_SECONDS)
+        try:
+            cfg = json.loads(config_json)
+            max_rt = float(cfg.get("streaming", {}).get("max_runtime_seconds", 0))
+            if max_rt > 0:
+                timeout = max(timeout, max_rt + 60.0)
+        except Exception:
+            pass
+
         stdout, stderr = await self._run_subprocess(
             cmd,
             run_id=run_id,
@@ -225,6 +234,7 @@ class SparkJobSubmitter:
             on_stream_progress=on_stream_progress,
             stop_event=stop_event,
             stop_file=stop_file,
+            timeout=timeout,
         )
         return self._parse_result(stdout, stderr)
 
@@ -282,6 +292,7 @@ class SparkJobSubmitter:
         on_stream_progress: Callable[[dict[str, Any]], None] | None = None,
         stop_event: asyncio.Event | None = None,
         stop_file: str | None = None,
+        timeout: float | None = None,
     ) -> tuple[str, str]:
         """
         Execute *cmd* asynchronously, enforcing the configured timeout.
@@ -318,12 +329,13 @@ class SparkJobSubmitter:
         """
         from app.pipeline.progress import tracker  # avoid circular import at module level
 
-        timeout = self._settings.SPARK_SUBMIT_TIMEOUT_SECONDS
+        if timeout is None:
+            timeout = float(self._settings.SPARK_SUBMIT_TIMEOUT_SECONDS)
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "HADOOP_USER_NAME": self._settings.HDFS_USER},
+            env={**os.environ, "HADOOP_USER_NAME": self._settings.HDFS_USER, "PYTHONUNBUFFERED": "1"},
             start_new_session=True,
         )
 
@@ -372,12 +384,10 @@ class SparkJobSubmitter:
                 while "\n" in buffer:
                     line, buffer = buffer.split("\n", 1)
                     target_deque.append(line)
-                    if is_stdout:
-                        _dispatch_stdout(line)
+                    _dispatch_stdout(line)
             if buffer:
                 target_deque.append(buffer)
-                if is_stdout:
-                    _dispatch_stdout(buffer)
+                _dispatch_stdout(buffer)
 
         async def _watch_stop_event() -> None:
             if stop_event is None:

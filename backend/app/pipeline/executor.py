@@ -910,7 +910,11 @@ class PipelineExecutor:
         import json
         from app.messaging.kafka_admin import KafkaAdminClient
         from app.messaging.kafka_producer import KafkaProducerClient, get_topic_end_offsets
-        from app.pipeline.stream_progress import StreamingCompletionDetector, compute_lag
+        from app.pipeline.stream_progress import (
+            StreamingCompletionDetector,
+            compute_lag,
+            extract_spark_offset_sum,
+        )
         from app.spark.exceptions import SparkJobFailedError, SparkJobTimeoutError
 
         _progress_tracker.emit(tracker_run_id, "spark_start", {})
@@ -978,6 +982,11 @@ class PipelineExecutor:
         latest_spark_offset: Any = None
         total_input_rows = 0
         latest_proc_rate = 0.0
+        cancelled_by_user = False
+        timed_out = False
+
+        last_calc_time = time.perf_counter()
+        last_calc_rows = 0
 
         def _on_stream_started(started_data: dict[str, Any]) -> None:
             ctx.log_info("spark_streaming", f"Spark Structured Streaming query started: {started_data}")
@@ -986,8 +995,22 @@ class PipelineExecutor:
         def _on_stream_progress(prog_data: dict[str, Any]) -> None:
             nonlocal latest_spark_offset, total_input_rows, latest_proc_rate
             latest_spark_offset = prog_data.get("endOffset")
-            total_input_rows = prog_data.get("totalInputRows", total_input_rows)
-            latest_proc_rate = prog_data.get("processedRowsPerSecond", 0.0)
+            prog_total = prog_data.get("totalInputRows")
+            if prog_total is not None and int(prog_total) > 0:
+                total_input_rows = max(total_input_rows, int(prog_total))
+            elif latest_spark_offset is not None:
+                offset_sum = extract_spark_offset_sum(latest_spark_offset)
+                if offset_sum > total_input_rows:
+                    total_input_rows = offset_sum
+            proc_rate = float(prog_data.get("processedRowsPerSecond", 0.0))
+            latest_proc_rate = proc_rate
+            if tracker_run_id:
+                _progress_tracker.update_spark(
+                    tracker_run_id,
+                    records_in=total_input_rows,
+                    records_out=total_input_rows,
+                    processed_rows_per_second=latest_proc_rate,
+                )
 
         published_count = 0
         producer_done = False
@@ -1043,23 +1066,46 @@ class PipelineExecutor:
 
         # Monitoring loop coroutine
         async def _monitor_loop() -> None:
-            nonlocal latest_spark_offset, total_input_rows
+            nonlocal latest_spark_offset, total_input_rows, latest_proc_rate, cancelled_by_user, timed_out, last_calc_time, last_calc_rows
             while not stop_event.is_set():
                 await asyncio.sleep(1.0)
 
                 # Check if cancel requested
                 if tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id):
                     ctx.log_info("spark_streaming", "Cancellation requested; stopping stream.")
+                    cancelled_by_user = True
                     stop_event.set()
                     break
+
+                if latest_spark_offset is not None:
+                    offset_sum = extract_spark_offset_sum(latest_spark_offset)
+                    if offset_sum > total_input_rows:
+                        total_input_rows = offset_sum
+
+                now = time.perf_counter()
+                dt = now - last_calc_time
+                if dt >= 1.0:
+                    if total_input_rows > last_calc_rows:
+                        calc_rate = round((total_input_rows - last_calc_rows) / dt, 2)
+                        last_calc_rows = total_input_rows
+                        last_calc_time = now
+                        if latest_proc_rate <= 0:
+                            latest_proc_rate = calc_rate
 
                 end_offsets = get_topic_end_offsets(topic)
                 lag = compute_lag(end_offsets, latest_spark_offset)
 
+                import math
+                eta = (
+                    math.ceil(lag / latest_proc_rate)
+                    if (lag is not None and lag > 0 and latest_proc_rate > 0)
+                    else None
+                )
+
                 if tracker_run_id:
                     _progress_tracker.update_kafka(
                         tracker_run_id,
-                        published=published_count,
+                        published=published_count if not producer_done else None,
                         end_offsets=end_offsets,
                         consumer_lag=lag,
                     )
@@ -1067,6 +1113,8 @@ class PipelineExecutor:
                         tracker_run_id,
                         records_in=total_input_rows,
                         records_out=total_input_rows,
+                        processed_rows_per_second=latest_proc_rate,
+                        eta_seconds=eta,
                     )
                     _progress_tracker.emit(
                         tracker_run_id,
@@ -1077,6 +1125,8 @@ class PipelineExecutor:
                             "consumer_lag": lag,
                             "consumerLag": lag,
                             "processedRowsPerSecond": latest_proc_rate,
+                            "recordsPerSecond": latest_proc_rate,
+                            "etaSeconds": eta,
                         },
                     )
 
@@ -1095,6 +1145,7 @@ class PipelineExecutor:
 
                 if detector.is_timed_out():
                     ctx.log_info("spark_streaming", "Stream reached max runtime; stopping.")
+                    timed_out = True
                     stop_event.set()
                     break
 
@@ -1110,79 +1161,93 @@ class PipelineExecutor:
                     on_stream_progress=_on_stream_progress,
                     stop_event=stop_event,
                 )
+                if cancelled_by_user:
+                    raise RuntimeError("Cancelled by user request")
+                if timed_out:
+                    raise TimeoutError(f"Stream exceeded max_runtime_seconds ({max_runtime}s)")
                 return job_result
             finally:
                 if not monitor_task.done():
                     monitor_task.cancel()
 
         try:
-            result = asyncio.run(_execute_streaming())
-        except Exception as exc:
-            if tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id):
-                ctx.status = "failed"
-                raise PipelineExecutionError(
-                    message="Cancelled",
-                    step_name="spark_streaming",
-                    context=ctx,
-                    cause=RuntimeError("Cancelled by user request"),
-                ) from exc
-            spark_step = ExecutionStep(
-                name="spark_streaming",
-                step_type="spark",
-                plugin_type="spark",
-                plugin=None,
-                config={},
-            )
-            self._handle_failure(spark_step, ctx, exc)
+            try:
+                result = asyncio.run(_execute_streaming())
+            except Exception as exc:
+                if (tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id)) or cancelled_by_user:
+                    ctx.status = "failed"
+                    raise PipelineExecutionError(
+                        message="Cancelled",
+                        step_name="spark_streaming",
+                        context=ctx,
+                        cause=RuntimeError("Cancelled by user request"),
+                    ) from exc
+                spark_step = ExecutionStep(
+                    name="spark_streaming",
+                    step_type="spark",
+                    plugin_type="spark",
+                    plugin=None,
+                    config={},
+                )
+                self._handle_failure(spark_step, ctx, exc)
 
-        duration_ms = round((time.perf_counter() - t0) * 1000, 2)
-        total_rows = result.get("output_rows") or total_input_rows or published_count
-        ctx.record_stage(
-            "spark_streaming",
-            {
-                **result,
-                "output_path": output_path,
-                "actual_output_path": output_path,
-                "duration_ms": duration_ms,
-            },
-        )
-        if tracker_run_id:
-            _progress_tracker.update_spark(
-                tracker_run_id,
-                records_in=total_rows,
-                records_out=total_rows,
-                duration_ms=duration_ms,
-            )
-            _progress_tracker.emit(
-                tracker_run_id,
-                "spark_done",
+            duration_ms = round((time.perf_counter() - t0) * 1000, 2)
+            total_rows = result.get("output_rows") or total_input_rows or published_count
+            ctx.record_stage(
+                "spark_streaming",
                 {
-                    "input_rows": total_rows,
-                    "output_rows": total_rows,
+                    **result,
+                    "output_path": output_path,
+                    "actual_output_path": output_path,
                     "duration_ms": duration_ms,
-                    "duration_seconds": round(duration_ms / 1000.0, 2),
-                    "status": "success",
                 },
             )
+            if tracker_run_id:
+                _progress_tracker.update_spark(
+                    tracker_run_id,
+                    records_in=total_rows,
+                    records_out=total_rows,
+                    duration_ms=duration_ms,
+                )
+                _progress_tracker.emit(
+                    tracker_run_id,
+                    "spark_done",
+                    {
+                        "input_rows": total_rows,
+                        "output_rows": total_rows,
+                        "duration_ms": duration_ms,
+                        "duration_seconds": round(duration_ms / 1000.0, 2),
+                        "status": "success",
+                    },
+                )
 
-        # Verification of HDFS Parquet output
-        hdfs_client = HdfsStorageClient()
-        hdfs_rows = total_rows
-        try:
-            hdfs_rows = hdfs_client.count_rows(raw_path) or total_rows
-        except Exception:
-            pass
+            # Verification of HDFS Parquet output
+            hdfs_client = HdfsStorageClient()
+            hdfs_rows = total_rows
+            try:
+                hdfs_rows = hdfs_client.count_rows(raw_path) or total_rows
+            except Exception:
+                pass
 
-        if tracker_run_id:
-            _progress_tracker.emit(
-                tracker_run_id,
-                "hdfs_done",
-                {"rows": hdfs_rows, "verified": True, "path": output_path},
+            if tracker_run_id:
+                _progress_tracker.emit(
+                    tracker_run_id,
+                    "hdfs_done",
+                    {"rows": hdfs_rows, "verified": True, "path": output_path},
+                )
+            ctx.log_info(
+                "spark_streaming",
+                f"Streaming job finished successfully: {total_rows} rows processed in {duration_ms}ms.",
             )
-        ctx.log_info(
-            "spark_streaming",
-            f"Streaming job finished successfully: {total_rows} rows processed in {duration_ms}ms.",
-        )
+        finally:
+            from app.core.config import get_settings
+            app_settings = get_settings()
+            if not getattr(app_settings, "KEEP_STREAMING_CHECKPOINTS", False):
+                try:
+                    HdfsStorageClient().delete_path(checkpoint_path, recursive=True)
+                    ctx.log_info("spark_streaming", f"Cleaned up checkpoint path: {checkpoint_path}")
+                except Exception as del_exc:
+                    ctx.log_warning("spark_streaming", f"Failed to delete checkpoint dir {checkpoint_path}: {del_exc}")
 
 
     # ── Error handling ─────────────────────────────────────────────────────────

@@ -66,6 +66,8 @@ class ExperimentCreateRequest(BaseModel):
 
     yaml_content: str = ""
     pipeline_yaml: str = ""
+    pipeline_run_id: str | None = None
+    pipelineRunId: str | None = None
 
 
 class ExperimentCreateResponse(BaseModel):
@@ -526,10 +528,40 @@ async def run_experiment(
         ]
     ]
 
+    target_pipeline_run_id = None
+    if request:
+        req_p_id = request.pipeline_run_id or request.pipelineRunId
+        if req_p_id:
+            try:
+                target_pipeline_run_id = uuid.UUID(req_p_id)
+            except Exception:
+                pass
+    if not target_pipeline_run_id and hasattr(db, "execute"):
+        try:
+            from app.models.pipeline_run import PipelineRun
+            from sqlalchemy import select
+            ten_mins_ago = datetime.now(tz=timezone.utc) - timedelta(minutes=10)
+            active_p_stmt = (
+                select(PipelineRun)
+                .where(
+                    PipelineRun.status == "running",
+                    PipelineRun.started_at >= ten_mins_ago,
+                )
+                .order_by(PipelineRun.started_at.desc())
+                .limit(1)
+            )
+            active_p_res = await db.execute(active_p_stmt)
+            active_p = active_p_res.scalar_one_or_none()
+            if active_p:
+                target_pipeline_run_id = active_p.id
+        except Exception:
+            pass
+
     run = ExperimentRun(
         experiment_id=experiment.id,
         status="pending",
         stage="validating",
+        pipeline_run_id=target_pipeline_run_id,
         params={
             "target_service": experiment_config.target.service,
             "fault_type": experiment_config.fault.type,

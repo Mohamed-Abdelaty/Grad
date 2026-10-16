@@ -88,6 +88,20 @@ async def test_streaming_pipeline_survives_kafka_restart(
     async_client: AsyncClient, token_headers: dict
 ):
     """Test streaming pipeline end-to-end resilience under Kafka container restart."""
+    # Clean topic and HDFS output path before starting
+    from app.messaging.kafka_admin import KafkaAdminClient
+    from app.storage.hdfs_client import HdfsStorageClient
+    try:
+        admin = KafkaAdminClient()
+        admin.delete_topic("streaming-chaos-events")
+    except Exception:
+        pass
+    try:
+        hdfs = HdfsStorageClient()
+        hdfs.delete("/data/output/streaming_chaos_test", recursive=True)
+    except Exception:
+        pass
+
     # 1. Start streaming pipeline run
     resp = await async_client.post(
         "/api/pipelines/run?wait=false",

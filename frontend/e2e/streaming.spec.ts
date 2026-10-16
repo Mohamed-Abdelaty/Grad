@@ -183,6 +183,8 @@ test.describe('UI-10 Structured Streaming E2E', () => {
     let startTime = Date.now();
     let terminalReached = false;
     let finalStatus = 'running';
+    let prevSparkIn = 0;
+    let sawSparkInIncreasingWhileLagging = false;
 
     const tokenRes = await request.post('http://localhost:8000/api/auth/login', {
       form: { username: USERNAME, password: PASSWORD },
@@ -231,6 +233,15 @@ test.describe('UI-10 Structured Streaming E2E', () => {
         peakLag = effectiveLag;
       }
 
+      if (sparkIn !== null && sparkIn > 0 && effectiveLag > 0) {
+        if (sparkIn > prevSparkIn) {
+          sawSparkInIncreasingWhileLagging = true;
+        }
+      }
+      if (sparkIn !== null && sparkIn > prevSparkIn) {
+        prevSparkIn = sparkIn;
+      }
+
       // Screenshot 1: Rising lag (> 100,000)
       if (!tookRisingShot && effectiveLag >= 50_000) {
         await page.screenshot({ path: path.join(screenshotDir, 'rising_lag.png'), fullPage: false });
@@ -258,6 +269,7 @@ test.describe('UI-10 Structured Streaming E2E', () => {
 
     // Assert lag peaked and reached 0
     expect(peakLag, 'Peak consumer lag must be observable (> 100,000)').toBeGreaterThan(100_000);
+    expect(sawSparkInIncreasingWhileLagging, 'recordsIn must be greater than 0 and increasing while lag > 0').toBe(true);
     const finalProgRes = await request.get(`http://localhost:8000/api/pipeline-runs/${runId}/progress`, {
       headers: authHeaders,
     });

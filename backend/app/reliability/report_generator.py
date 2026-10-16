@@ -103,8 +103,16 @@ class ReportGenerator:
             err_count = None
 
         # ── Extract metrics from results dict ──────────────────────────────────
-        expected_recs = results.get("expected_record_count") if has_pipeline else None
-        processed_recs = results.get("actual_records") if has_pipeline else None
+        expected_recs = (
+            results.get("expected_records")
+            if results.get("expected_records") is not None
+            else results.get("expected_record_count")
+        ) if has_pipeline else None
+        processed_recs = (
+            results.get("processed_records")
+            if results.get("processed_records") is not None
+            else results.get("actual_records")
+        ) if has_pipeline else None
         data_loss_val = results.get("data_loss") if has_pipeline else None
         duplicates_val = results.get("duplicate_ids_found") if has_pipeline else None
         avg_throughput = results.get("throughput_records_per_sec") if has_pipeline else None
@@ -124,6 +132,9 @@ class ReportGenerator:
             "failure_duration_seconds": fault_duration,
             "durationSeconds": fault_duration,
             "faultParams": exp_config.get("fault", {}),
+            "faultInjectedAt": results.get("fault_injected_at"),
+            "faultRevertedAt": results.get("fault_reverted_at"),
+            "recoveredAt": results.get("recovered_at"),
             "thresholds": {
                 "expectedDataLoss": validation_cfg.get("expected_data_loss", 0),
                 "maxRecoverySeconds": validation_cfg.get("max_recovery_time", 60.0),

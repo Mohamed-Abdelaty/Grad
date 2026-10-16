@@ -188,3 +188,36 @@ class TestDuplicateIdDetection:
         assert result["actual_records"] == 3
         assert result["data_loss"] == 1
         assert result["validation_passed"] is False
+
+
+class TestStreamingDataConsistencyValidation:
+    """Step 8.3: Data consistency validation for streaming runs."""
+
+    def test_streaming_consistency_expected_equals_kafka_published_and_processed_equals_output_rows(
+        self, validator, tmp_path: Path
+    ) -> None:
+        """
+        Step 8.3 requirement:
+        For streaming runs, expectedRecords equals kafka.published and
+        processedRecords equals rows read back from the output directory.
+        """
+        kafka_published = 100_000
+        # Simulate Spark Parquet output written to directory
+        df1 = pd.DataFrame({"transaction_id": [f"T{i}" for i in range(50_000)], "amount": [10.0] * 50_000})
+        df2 = pd.DataFrame({"transaction_id": [f"T{i}" for i in range(50_000, 100_000)], "amount": [20.0] * 50_000})
+        df1.to_parquet(tmp_path / "part-00000.parquet", index=False)
+        df2.to_parquet(tmp_path / "part-00001.parquet", index=False)
+
+        result = validator.validate(
+            expected_records=kafka_published,
+            output_location={"storage_type": "local", "path": str(tmp_path)},
+        )
+
+        assert result["expected_records"] == kafka_published
+        assert result["actual_records"] == 100_000
+        assert result["expected_records"] == result["actual_records"]
+        assert result["data_loss"] == 0
+        assert result["data_loss_percentage"] == 0.0
+        assert result["duplicate_ids_found"] == 0
+        assert result["validation_passed"] is True
+

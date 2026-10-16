@@ -51,7 +51,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # ── Non-root user ──────────────────────────────────────────────────────────────
 # Running as root inside a container is a security anti-pattern.
 RUN groupadd --gid 1001 appgroup \
- && useradd --uid 1001 --gid appgroup --no-create-home appuser
+ && useradd --uid 1001 --gid appgroup --create-home appuser \
+ && mkdir -p /home/appuser/.ivy2/cache \
+ && chown -R appuser:appgroup /home/appuser
 
 # Copy application source
 COPY --chown=appuser:appgroup . .

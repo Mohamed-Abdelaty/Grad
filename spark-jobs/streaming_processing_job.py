@@ -276,29 +276,46 @@ class StreamingProcessingJob(BaseSparkJob):
 
         def _collect_progress() -> None:
             nonlocal last_seen_batch_id, total_input_rows
-            progress_list = list(query.recentProgress or [])
-            if not progress_list and query.lastProgress is not None:
-                progress_list = [query.lastProgress]
-            for p in progress_list:
-                if not p:
-                    continue
-                bid = p.get("batchId", -1)
-                if bid > last_seen_batch_id:
-                    last_seen_batch_id = bid
-                    num_rows = p.get("numInputRows", 0)
-                    total_input_rows += num_rows
-                    sources = p.get("sources", [])
-                    end_offset = sources[0].get("endOffset") if sources else {}
-                    progress_payload = {
-                        "batchId": bid,
-                        "numInputRows": num_rows,
-                        "inputRowsPerSecond": round(p.get("inputRowsPerSecond", 0.0), 2),
-                        "processedRowsPerSecond": round(p.get("processedRowsPerSecond", 0.0), 2),
-                        "endOffset": end_offset,
-                        "totalInputRows": total_input_rows,
-                        "timestamp": p.get("timestamp"),
-                    }
-                    print(f"STREAM_PROGRESS:{json.dumps(progress_payload)}", flush=True)
+            try:
+                progress_list = list(query.recentProgress or [])
+                if not progress_list and query.lastProgress is not None:
+                    progress_list = [query.lastProgress]
+                for p in progress_list:
+                    if not p:
+                        continue
+                    bid = p.get("batchId", -1)
+                    if bid > last_seen_batch_id:
+                        last_seen_batch_id = bid
+                        sources = p.get("sources") or []
+                        num_rows = p.get("numInputRows")
+                        if (num_rows is None or num_rows == 0) and sources:
+                            num_rows = sources[0].get("numInputRows")
+                        num_rows = int(num_rows or 0)
+                        total_input_rows += num_rows
+
+                        end_offset = sources[0].get("endOffset") if sources else {}
+                        in_rate = p.get("inputRowsPerSecond")
+                        if in_rate is None and sources:
+                            in_rate = sources[0].get("inputRowsPerSecond")
+                        proc_rate = p.get("processedRowsPerSecond")
+                        if (proc_rate is None or proc_rate == 0.0) and sources:
+                            proc_rate = sources[0].get("processedRowsPerSecond")
+                        progress_payload = {
+                            "batchId": bid,
+                            "numInputRows": num_rows,
+                            "inputRowsPerSecond": round(float(in_rate), 2) if in_rate is not None else 0.0,
+                            "processedRowsPerSecond": round(float(proc_rate), 2) if proc_rate is not None else 0.0,
+                            "endOffset": end_offset,
+                            "totalInputRows": total_input_rows,
+                            "timestamp": p.get("timestamp"),
+                        }
+                        line = f"STREAM_PROGRESS:{json.dumps(progress_payload)}"
+                        print(line, flush=True)
+                        sys.stdout.flush()
+                        sys.stderr.write(f"{line}\n")
+                        sys.stderr.flush()
+            except Exception as coll_exc:
+                self.logger.warning("Error in _collect_progress: %s", coll_exc)
 
         # Monitor loop: poll progress every 1s
         while query.isActive and not stop_event.is_set():

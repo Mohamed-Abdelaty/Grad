@@ -227,10 +227,11 @@ class HdfsStorageClient:
                             local_path,
                             overwrite=True,
                         )
-                        frames.append(pd.read_parquet(local_path))
+                        if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
+                            frames.append(pd.read_parquet(local_path))
                     if not frames:
                         raise HdfsReadError(
-                            f"No Spark Parquet part files found at '{hdfs_path}'.",
+                            f"No valid Spark Parquet part files found at '{hdfs_path}'.",
                             hdfs_path=hdfs_path,
                         )
                     return pd.concat(frames, ignore_index=True)

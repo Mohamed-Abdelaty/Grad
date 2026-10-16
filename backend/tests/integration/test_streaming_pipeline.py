@@ -132,3 +132,11 @@ async def test_streaming_pipeline_end_to_end(
     contents = hdfs_client.list_directory("/data/output/streaming_integration_test")
     assert len(contents) > 0, "No files written to HDFS output directory"
     assert terminal_run.get("output_path") is not None, "output_path is None in run"
+
+    # 4. Assert checkpoint cleanup: no entry in /checkpoints contains run_id
+    if hdfs_client.path_exists("/checkpoints"):
+        checkpoint_entries = hdfs_client.list_directory("/checkpoints")
+        matching = [e for e in checkpoint_entries if run_id in e]
+        assert not matching, f"Found leftover checkpoint directories for run {run_id}: {matching}"
+        assert not hdfs_client.path_exists(f"/checkpoints/streaming-{run_id}")
+

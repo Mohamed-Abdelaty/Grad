@@ -737,3 +737,173 @@ class TestSparkBranchWithMockedSubmitter:
         assert ctx.status == "success"
         mock_client_instance.delete.assert_not_called()
 
+    @pytest.mark.parametrize("outcome", ["success", "failure", "timeout", "cancel"])
+    def test_streaming_checkpoint_deleted_on_all_outcomes(
+        self, tmp_path: Path, executor: PipelineExecutor, outcome: str
+    ) -> None:
+        """
+        Verify that created checkpoint path == deleted checkpoint path
+        across success, failure, timeout, and cancellation outcomes.
+        """
+        from unittest.mock import AsyncMock, patch, MagicMock
+        from app.spark.exceptions import SparkJobFailedError, SparkJobTimeoutError
+        from app.pipeline.progress import tracker
+
+        plan = self._make_streaming_plan(tmp_path)
+        created_paths: list[str] = []
+        deleted_paths: list[str] = []
+
+        fake_hdfs = MagicMock()
+        def record_delete(p, recursive=False):
+            deleted_paths.append(p)
+            return True
+        fake_hdfs.delete_path.side_effect = record_delete
+        fake_hdfs.count_rows.return_value = 20
+
+        with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+             patch("app.pipeline.executor.HdfsStorageClient", return_value=fake_hdfs), \
+             patch("app.messaging.kafka_admin.KafkaAdminClient"), \
+             patch("app.messaging.kafka_producer.KafkaProducerClient"):
+
+            inst = MockSubmitter.return_value
+
+            async def fake_submit_streaming(config, output_path, checkpoint_path, run_id, on_stream_started=None, on_stream_progress=None, stop_event=None):
+                created_paths.append(checkpoint_path)
+                if outcome == "success":
+                    if on_stream_started:
+                        on_stream_started({"query_id": "q1"})
+                    return {"status": "success", "input_rows": 20, "output_rows": 20}
+                elif outcome == "failure":
+                    raise SparkJobFailedError("Spark worker crashed", stderr="Spark worker crashed")
+                elif outcome == "timeout":
+                    raise SparkJobTimeoutError("Spark job timed out", stderr="timed out")
+                elif outcome == "cancel":
+                    tracker.request_cancel(run_id)
+                    raise RuntimeError("Cancelled")
+
+            inst.submit_streaming_job = AsyncMock(side_effect=fake_submit_streaming)
+
+            if outcome == "success":
+                ctx = executor.execute(plan, tracker_run_id="test-run-1")
+                assert ctx.status == "success"
+            else:
+                with pytest.raises(PipelineExecutionError):
+                    executor.execute(plan, tracker_run_id="test-run-1")
+
+        assert len(created_paths) == 1, "Expected exactly 1 checkpoint path created"
+        assert len(deleted_paths) == 1, "Expected exactly 1 checkpoint path deleted"
+        assert created_paths[0] == deleted_paths[0], f"Created path {created_paths[0]} != deleted path {deleted_paths[0]}"
+
+    def test_streaming_checkpoint_kept_when_flag_enabled(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """Verify that checkpoint is NOT deleted when KEEP_STREAMING_CHECKPOINTS is True."""
+        from unittest.mock import AsyncMock, patch, MagicMock
+        from app.core.config import get_settings
+
+        plan = self._make_streaming_plan(tmp_path)
+        fake_hdfs = MagicMock()
+        fake_hdfs.count_rows.return_value = 20
+
+        with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+             patch("app.pipeline.executor.HdfsStorageClient", return_value=fake_hdfs), \
+             patch("app.messaging.kafka_admin.KafkaAdminClient"), \
+             patch("app.messaging.kafka_producer.KafkaProducerClient"), \
+             patch.object(get_settings(), "KEEP_STREAMING_CHECKPOINTS", True):
+
+            inst = MockSubmitter.return_value
+            inst.submit_streaming_job = AsyncMock(return_value={"status": "success", "input_rows": 20, "output_rows": 20})
+
+            ctx = executor.execute(plan, tracker_run_id="test-run-keep")
+            assert ctx.status == "success"
+
+        fake_hdfs.delete_path.assert_not_called()
+
+    def test_streaming_drain_counters_replaying_progress_lines(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """
+        Unit test verifying executor streaming progress tracking:
+        recordsIn grows, rate > 0, and ETA is null when rate drops to 0.
+        """
+        from unittest.mock import AsyncMock, patch, MagicMock
+        from app.pipeline.progress import tracker
+
+        plan = self._make_streaming_plan(tmp_path)
+        fake_hdfs = MagicMock()
+        fake_hdfs.count_rows.return_value = 20
+
+        with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+             patch("app.pipeline.executor.HdfsStorageClient", return_value=fake_hdfs), \
+             patch("app.messaging.kafka_admin.KafkaAdminClient"), \
+             patch("app.messaging.kafka_producer.KafkaProducerClient"), \
+             patch("app.messaging.kafka_producer.get_topic_end_offsets", return_value={0: 50}):
+
+            inst = MockSubmitter.return_value
+            test_run_id = "test-drain-run-1"
+            tracker.start(test_run_id, "streaming-test", mode="streaming")
+
+            async def fake_submit_streaming(config, output_path, checkpoint_path, run_id, on_stream_started=None, on_stream_progress=None, stop_event=None):
+                if on_stream_started:
+                    on_stream_started({"query_id": "q1"})
+                # Replay batch 0: rate > 0, recordsIn = 25
+                on_stream_progress({
+                    "batchId": 0,
+                    "numInputRows": 25,
+                    "totalInputRows": 25,
+                    "processedRowsPerSecond": 100.0,
+                    "endOffset": {0: 25},
+                })
+                # Check progress snapshot in tracker
+                p1 = tracker.get_progress(test_run_id)
+                assert p1["spark"]["recordsIn"] == 25
+                assert p1["throughput"]["recordsPerSecond"] == 100.0
+
+                # Replay batch 1: rate drops to 0, recordsIn grows to 50
+                on_stream_progress({
+                    "batchId": 1,
+                    "numInputRows": 25,
+                    "totalInputRows": 50,
+                    "processedRowsPerSecond": 0.0,
+                    "endOffset": {0: 50},
+                })
+                p2 = tracker.get_progress(test_run_id)
+                assert p2["spark"]["recordsIn"] == 50
+                assert p2["throughput"]["recordsPerSecond"] == 0.0
+                return {"status": "success", "input_rows": 50, "output_rows": 50}
+
+            inst.submit_streaming_job = AsyncMock(side_effect=fake_submit_streaming)
+            ctx = executor.execute(plan, tracker_run_id=test_run_id)
+            assert ctx.status == "success"
+            tracker.finish(test_run_id)
+
+    def _make_streaming_plan(self, tmp_path: Path) -> ExecutionPlan:
+        cfg = PipelineConfig.model_validate({
+            "pipeline": {"name": "streaming-unit-test", "version": "1.0"},
+            "source": {"type": "csv", "path": str(SAMPLE_DATA_DIR / "sales_sample.csv")},
+            "schema": [
+                {"name": "transaction_id", "type": "string"},
+                {"name": "amount", "type": "double"},
+                {"name": "customer_id", "type": "string"},
+                {"name": "product_id", "type": "string"},
+                {"name": "sale_date", "type": "string"},
+            ],
+            "processing": {"operations": [{"type": "remove_nulls"}]},
+            "streaming": {
+                "enabled": True,
+                "trigger_interval_seconds": 2,
+                "idle_timeout_seconds": 5,
+                "max_runtime_seconds": 60,
+                "starting_offsets": "earliest",
+            },
+            "messaging": {
+                "broker": "kafka",
+                "topic": "test-stream-topic",
+                "partitions": 3,
+                "replication_factor": 1,
+            },
+            "processing_engine": {"type": "spark"},
+            "storage": {"type": "hdfs", "path": "/data/output/streaming_unit_test"},
+        })
+        return PipelineGenerator().generate(cfg)
+

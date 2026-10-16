@@ -455,9 +455,13 @@ class RunProgressTracker:
                 state["spark_records_out"] = payload["records_out"]
             elif "totalInputRows" in payload:
                 state["spark_records_out"] = payload["totalInputRows"]
-            rps = payload.get("processed_rows_per_second", payload.get("processedRowsPerSecond"))
+            rps = payload.get("processed_rows_per_second", payload.get("processedRowsPerSecond", payload.get("recordsPerSecond")))
             if rps is not None:
                 state["throughput_rps"] = float(rps)
+            if "etaSeconds" in payload:
+                state["eta_seconds"] = payload["etaSeconds"]
+            elif "eta_seconds" in payload:
+                state["eta_seconds"] = payload["eta_seconds"]
         elif event_type == "spark_done":
             st = stages["spark"]
             st["state"] = "done"
@@ -617,10 +621,11 @@ class RunProgressTracker:
                 if estimator is not None:
                     estimator.update(published, time.time())
                     if estimator.records_per_second is not None:
-                        state["throughput_rps"] = estimator.records_per_second
-                        state["throughput_samples"] = estimator.samples
-                        tot = state.get("source_rows_total")
-                        state["eta_seconds"] = estimator.eta_seconds(tot, published)
+                        if state.get("stages", {}).get("spark", {}).get("state") != "active":
+                            state["throughput_rps"] = estimator.records_per_second
+                            state["throughput_samples"] = estimator.samples
+                            tot = state.get("source_rows_total")
+                            state["eta_seconds"] = estimator.eta_seconds(tot, published)
             if failed is not None:
                 state["kafka_failed"] = failed
             if end_offsets is not None:
@@ -642,6 +647,8 @@ class RunProgressTracker:
         records_in: int | None = None,
         records_out: int | None = None,
         duration_ms: float | None = None,
+        processed_rows_per_second: float | None = None,
+        eta_seconds: int | None = None,
     ) -> None:
         """Update spark stage counters."""
         with self._lock:
@@ -662,6 +669,10 @@ class RunProgressTracker:
                 state["spark_records_out"] = records_out
             if duration_ms is not None:
                 state["spark_duration_ms"] = duration_ms
+            if processed_rows_per_second is not None:
+                state["throughput_rps"] = processed_rows_per_second
+            if eta_seconds is not None or "eta_seconds" in state:
+                state["eta_seconds"] = eta_seconds
 
     def update_hdfs(
         self,

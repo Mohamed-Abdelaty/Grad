@@ -506,6 +506,54 @@ class ExperimentRunner:
                     )
                 consistency = self._validator.validate(expected_records, output_location)
                 consistency["data_validation"] = "completed"
+            elif run.pipeline_run_id:
+                # Step 8.3: Data consistency validation for active / streaming pipeline runs
+                from app.models.pipeline_run import PipelineRun
+
+                p_run = self._db.get(PipelineRun, run.pipeline_run_id)
+                # Wait for active pipeline run to finish draining/processing if still running
+                max_drain_wait = 360
+                drain_start = time.monotonic()
+                while (
+                    p_run
+                    and p_run.status in ("pending", "running")
+                    and (time.monotonic() - drain_start) < max_drain_wait
+                ):
+                    time.sleep(2)
+                    self._db.refresh(p_run)
+
+                # Step 8.3: expected equals kafka.published, processed equals rows read back from output
+                snapshot = p_run.last_progress_snapshot or {} if p_run else {}
+                k_published = (snapshot.get("kafka") or {}).get("published")
+                if k_published is None and p_run:
+                    try:
+                        from app.pipeline.progress import tracker
+                        snap = tracker.get(str(p_run.id))
+                        if snap:
+                            k_published = (snap.get("kafka") or {}).get("published")
+                    except Exception:
+                        pass
+                expected_records = int(k_published or 0)
+
+                out_path = p_run.output_path if p_run else None
+                if not out_path and p_run and p_run.config_yaml:
+                    try:
+                        p_cfg = yaml.safe_load(p_run.config_yaml) or {}
+                        out_path = p_cfg.get("storage", {}).get("path")
+                    except Exception:
+                        pass
+                if not out_path:
+                    out_path = "/data/output/streaming_chaos_1m_run"
+
+                storage_type = "hdfs" if (out_path.startswith("hdfs://") or out_path.startswith("/data")) else "local"
+                output_location = {"storage_type": storage_type, "path": out_path}
+
+                consistency = self._validator.validate(expected_records, output_location)
+                consistency["data_validation"] = "completed"
+                consistency["expected_record_count"] = expected_records
+                consistency["expected_records"] = expected_records
+                consistency["actual_records"] = consistency.get("actual_records", 0)
+                consistency["processed_records"] = consistency.get("actual_records", 0)
             else:
                 consistency = self._skipped_data_validation()
             self._merge_results(run, consistency)

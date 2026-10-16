@@ -116,13 +116,15 @@ class DataConsistencyValidator:
         import app.plugins  # noqa: F401 — ensure all plugins registered
         from app.plugins.registry import registry
 
+        if storage_type == "hdfs" or path.startswith("hdfs://") or path.startswith("/data"):
+            from app.storage.hdfs_client import HdfsStorageClient
+            client = HdfsStorageClient()
+            return client.read_dataframe(path)
+
         try:
             plugin = registry.get_storage(storage_type)
             if hasattr(plugin, "read_dataframe"):
-                # HDFS storage client exposes read_dataframe
-                from app.storage.hdfs_client import HdfsStorageClient
-                client = HdfsStorageClient()
-                return client.read_dataframe(path)
+                return plugin.read_dataframe(path)
         except Exception:
             pass
 
@@ -133,9 +135,9 @@ class DataConsistencyValidator:
 
         if os.path.isdir(path):
             # LocalStorage writes data.parquet; Spark writes part-*.parquet.
-            parquet_files = glob.glob(os.path.join(path, "*.parquet"))
+            parquet_files = [f for f in glob.glob(os.path.join(path, "*.parquet")) if os.path.getsize(f) > 0]
             if not parquet_files:
-                raise FileNotFoundError(f"No Parquet output found in '{path}'.")
+                raise FileNotFoundError(f"No valid Parquet output found in '{path}'.")
             if len(parquet_files) == 1:
                 return pd.read_parquet(parquet_files[0])
             return pd.concat(

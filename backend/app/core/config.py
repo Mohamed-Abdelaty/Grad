@@ -109,6 +109,7 @@ class Settings(BaseSettings):
     HDFS_NAMENODE_URL: str = "http://namenode:9870"
     HDFS_USER: str = "root"
     HDFS_DEFAULT_REPLICATION: int = 1  # single-datanode local dev default
+    KEEP_STREAMING_CHECKPOINTS: bool = False
 
     # ── ChaosLab Reliability Engine (Phase 7) ──────────────────────────────────
     compose_project_name: str = "resilient-big-data-platform"

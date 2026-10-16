@@ -138,8 +138,9 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
     };
   }, [experimentId, detail?.status]);
 
-  // Live pipeline hook if pipelineRunId exists
-  const livePipeline = useRunLive(detail?.pipelineRunId || undefined);
+  // Live pipeline hook if pipelineRunId exists and experiment is active
+  const isExperimentActive = detail?.status === 'running' || detail?.status === 'pending';
+  const livePipeline = useRunLive(isExperimentActive ? (detail?.pipelineRunId || undefined) : undefined);
 
   const effectiveProgress = useMemo(() => {
     if (detail?.pipelineRunId && livePipeline.progress) {
