@@ -25,7 +25,7 @@ This script outlines the official end-to-end live demonstration scenario for rev
    - Login & Dashboard render: ~1 second.
    - Pipeline YAML validation: ~300 ms.
    - 50k-row batch execution (Source -> Kafka -> Spark -> HDFS): 12–20 seconds.
-   - ChaosLab container fault injection & recovery: ~25 seconds.
+   - ChaosLab container fault injection & recovery: ~21–40 seconds (Run 1 measured: 40.47 s, Run 2 measured: 21.00 s; target `kafka`, fault `container_stop`, duration `20s`, expected data loss `0`, max recovery time `60s`). Kafka recovery on a single-node development stack is typically 12 to 35 s.
    - Backup plan if Spark is slower on low-memory VMs: Use the default 10,000-row `sales-csv` template which finishes in under 8 seconds.
 
 ---
@@ -46,7 +46,7 @@ This script outlines the official end-to-end live demonstration scenario for rev
 | 10 | **Data Parity & Preview**| Click **Output** tab | "The platform verifies cryptographic HDFS row count parity and renders an immediate sample preview." | First 500 rows render in tabular preview matching verified count. |
 | 11 | **Export Output** | Click **Download Full CSV** | "Processed outputs can be downloaded directly through a secure, time-limited token." | CSV file downloads with filename matching the run ID. |
 | 12 | **ChaosLab Wizard** | Click **Reliability** in sidebar | "ChaosLab enables controlled failure injection against live cluster nodes to test recovery SLAs." | Experiment wizard displays target services and fault options. |
-| 13 | **Configure Fault** | Select `kafka`, `container_stop`, duration `20s`, thresholds `0` loss, `30s` MTTR | "We configure a severe infrastructure fault: stopping the Kafka broker during active workloads." | Step review displays target, fault duration, and recovery rules. |
+| 13 | **Configure Fault** | Select `kafka`, `container_stop`, duration `20s`, thresholds `0` loss, `60s` MTTR | "We configure a severe infrastructure fault: stopping the Kafka broker during active workloads." | Step review displays target, fault duration, and recovery rules. |
 | 14 | **Execute Chaos Test**| Click **Confirm & Start Experiment** | "The safety validator checks container boundaries and initiates the automated fault injection." | Live monitor displays fault phase countdown and red pulsing aura. |
-| 15 | **Audit Resilience** | Wait for recovery; click **View Full Report** | "ChaosFlow measures exact time to recovery, verifying that the cluster healed within our 30-second SLA." | Report details page displays PASS badge, MTTR, and throughput comparison. |
+| 15 | **Audit Resilience** | Wait for recovery; click **View Full Report** | "ChaosFlow measures exact time to recovery, verifying that the cluster healed within our 60-second SLA." | Report details page displays PASS badge, MTTR, and throughput comparison. |
 | 16 | **Generic Adaptation**| Return to **Pipelines**, load `iot-json` template and run | "The platform handles arbitrary streaming and batch schemas with zero custom code changes." | `iot-json` pipeline validates, executes, and displays IoT telemetry metrics. |

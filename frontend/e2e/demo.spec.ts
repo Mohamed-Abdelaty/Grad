@@ -154,11 +154,19 @@ test.describe('@demo ChaosFlow 9-Stage Demonstration Scenario', () => {
     await expect(nextBtn).toBeEnabled();
     await nextBtn.click();
 
-    // Step 3: Duration 20s
+    // Step 3: Duration 20s & Thresholds (max_recovery_time 60s, expected_data_loss 0)
     await expect(wizard.getByText(/step 3 of 4/i)).toBeVisible();
     const durationInput = page.locator('[data-testid="fault-duration-input"]');
     if (await durationInput.isVisible()) {
       await durationInput.fill('20');
+    }
+    const maxRecoveryInput = page.locator('#exp-max-recovery');
+    if (await maxRecoveryInput.isVisible()) {
+      await maxRecoveryInput.fill('60');
+    }
+    const lossInput = page.locator('#exp-data-loss');
+    if (await lossInput.isVisible()) {
+      await lossInput.fill('0');
     }
     await expect(nextBtn).toBeEnabled();
     await nextBtn.click();
@@ -196,28 +204,60 @@ test.describe('@demo ChaosFlow 9-Stage Demonstration Scenario', () => {
 
     // Fetch recoveryTimeSeconds from API for accurate measurement
     let recoverySec = '0.0';
+    let reportResult = expResult;
+    let target = 'kafka';
+    let fault = 'container_stop';
+    let duration = 20;
+    let thresholds = { expected_data_loss: 0, max_recovery_time: 60 };
+    let availabilityPercentage: number | null = null;
+    let failedCriteria: string[] = [];
+
     try {
       const resp = await page.request.get(`/api/reports/${expId}`);
       if (resp.ok()) {
         const body = await resp.json();
         const rVal = body.recoveryTimeSeconds ?? body.results?.recoveryTimeSeconds ?? body.recovery_time_seconds;
         recoverySec = rVal !== undefined && rVal !== null ? String(rVal) : '0.0';
+        reportResult = body.result || reportResult;
+        target = body.targetService || target;
+        fault = body.faultType || fault;
+        duration = body.durationSeconds ?? duration;
+        thresholds = body.thresholds || thresholds;
+        availabilityPercentage = body.availabilityPercentage ?? body.metrics?.availabilityPercentage ?? null;
+        failedCriteria = body.failedCriteria || [];
       } else {
         const expResp = await page.request.get(`/api/experiments/${expId}`);
         if (expResp.ok()) {
           const expBody = await expResp.json();
           const rVal = expBody.recoveryTimeSeconds ?? expBody.results?.recoveryTimeSeconds ?? expBody.recovery_time_seconds;
           recoverySec = rVal !== undefined && rVal !== null ? String(rVal) : '0.0';
+          reportResult = expBody.result || reportResult;
+          target = expBody.targetService || target;
+          fault = expBody.faultType || fault;
+          duration = expBody.durationSeconds ?? duration;
+          thresholds = expBody.thresholds || thresholds;
+          availabilityPercentage = expBody.availabilityPercentage ?? null;
+          failedCriteria = expBody.failedCriteria || [];
         }
       }
     } catch {
       // fallback
     }
 
-    console.log('[DEMO-EVIDENCE] Chaos experiment id:', expId);
-    console.log('[DEMO-EVIDENCE] Chaos experiment result:', expResult);
+    console.log('[DEMO-EVIDENCE] Chaos experiment target:', target);
+    console.log('[DEMO-EVIDENCE] Chaos experiment fault:', fault);
+    console.log('[DEMO-EVIDENCE] Chaos experiment duration:', duration);
+    console.log('[DEMO-EVIDENCE] Chaos experiment thresholds:', JSON.stringify(thresholds));
+    console.log('[DEMO-EVIDENCE] Chaos experiment result:', reportResult);
     console.log('[DEMO-EVIDENCE] Chaos experiment recoveryTimeSeconds:', recoverySec);
-    expect(Number(recoverySec), 'recoveryTimeSeconds must be > 0 for container_stop').toBeGreaterThan(0);
+    console.log('[DEMO-EVIDENCE] Chaos experiment availabilityPercentage:', availabilityPercentage);
+    console.log('[DEMO-EVIDENCE] Chaos experiment failedCriteria:', JSON.stringify(failedCriteria));
+    console.log('[DEMO-EVIDENCE] Chaos report id:', expId);
+
+    expect(reportResult, 'Chaos experiment result must be PASS').toBe('PASS');
+    const recNum = Number(recoverySec);
+    expect(recNum, 'recoveryTimeSeconds must be > 1').toBeGreaterThan(1);
+    expect(recNum, 'recoveryTimeSeconds must be <= 60').toBeLessThanOrEqual(60);
 
     // ── STAGE 9: Generic Adaptation (iot-json run) & Sign Out ────────────────
     await clickNav(page, 'Pipelines');
