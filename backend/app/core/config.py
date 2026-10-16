@@ -8,7 +8,7 @@ Hard-coding secrets or environment-specific values here is forbidden.
 """
 
 from functools import lru_cache
-from typing import List
+from typing import List, Union
 
 from pydantic import AnyUrl, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -90,7 +90,7 @@ class Settings(BaseSettings):
         return v
 
     # ── CORS ───────────────────────────────────────────────────────────────────
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
+    CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://localhost:8000"]
 
     # ── Spark ──────────────────────────────────────────────────────────────────
     SPARK_MASTER_URL: str = "spark://spark-master:7077"
