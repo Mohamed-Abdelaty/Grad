@@ -665,6 +665,17 @@ async def cancel_pipeline_run(
         )
 
     accepted = tracker.request_cancel(run_id)
+    if not accepted:
+        run.status = "cancelled"
+        run.finished_at = datetime.now(timezone.utc)
+        run.error_message = "Cancelled via API (no active in-memory tracker)"
+        await db.commit()
+        logger.info("Marked orphaned run %s as cancelled in DB", run_id)
+        return JSONResponse(
+            content={"accepted": True, "run_id": run_id, "detail": "Marked cancelled in DB"},
+            status_code=200,
+        )
+
     logger.info("Cancel requested for run %s: accepted=%s", run_id, accepted)
     return JSONResponse(
         content={"accepted": accepted, "run_id": run_id},

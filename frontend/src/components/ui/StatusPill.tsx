@@ -41,6 +41,7 @@ export function StatusPill({ status, label, dot = false }: StatusPillProps) {
 
   return (
     <span
+      data-testid="status-pill"
       className={[
         'inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full border',
         cls,

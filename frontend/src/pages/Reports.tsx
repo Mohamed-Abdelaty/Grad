@@ -97,7 +97,7 @@ export default function Reports() {
       setLoading(true);
       setError(null);
       try {
-        const params: ReportFilterParams = {};
+        const params: ReportFilterParams = { limit: 100 };
         if (targetFilter) params.target = targetFilter;
         if (faultFilter) params.fault = faultFilter;
         if (resultFilter) params.result = resultFilter;

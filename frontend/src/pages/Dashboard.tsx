@@ -210,12 +210,7 @@ function KPIRowSection() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['dashboardSummary', 24],
     queryFn: () => getDashboardSummary(24),
-    refetchInterval: () => {
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
-        return false;
-      }
-      return 10000;
-    },
+    refetchInterval: 5000,
   });
 
   const runsPerHourSpark = useMemo(() => {

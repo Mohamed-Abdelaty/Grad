@@ -649,6 +649,112 @@ class TestStreamingValidatorRules:
         errors = validator.validate(config)
         assert errors == []
 
+    def test_streaming_aggregate_rejected_with_exact_message(
+        self, validator: PipelineBusinessValidator
+    ) -> None:
+        config = make_config(
+            {
+                "streaming": {"enabled": True},
+                "messaging": {"broker": "kafka", "topic": "events"},
+                "processing": {
+                    "operations": [
+                        {
+                            "type": "aggregate",
+                            "group_by": "category",
+                            "operation": "sum",
+                            "field": "value",
+                        }
+                    ]
+                },
+            }
+        )
+        errors = validator.validate(config)
+        expected_msg = (
+            "Aggregate operations are not supported in streaming mode yet; "
+            "remove the aggregate operation or set streaming.enabled to false."
+        )
+        assert any(
+            err["field"] == "processing.operations.0" and err["message"] == expected_msg
+            for err in errors
+        )
+
+    def test_streaming_trigger_interval_valid_range_1_to_60(self) -> None:
+        from pydantic import ValidationError
+        from app.pipeline.config_models import StreamingConfig
+        import pytest
+
+        # Valid boundaries: 1 and 60
+        cfg1 = StreamingConfig(enabled=True, trigger_interval_seconds=1)
+        assert cfg1.trigger_interval_seconds == 1
+        cfg60 = StreamingConfig(enabled=True, trigger_interval_seconds=60)
+        assert cfg60.trigger_interval_seconds == 60
+
+        # Out of bounds: 0 and 61
+        with pytest.raises(ValidationError):
+            StreamingConfig(enabled=True, trigger_interval_seconds=0)
+        with pytest.raises(ValidationError):
+            StreamingConfig(enabled=True, trigger_interval_seconds=61)
+
+    def test_streaming_idle_timeout_valid_range_5_to_600(self) -> None:
+        from pydantic import ValidationError
+        from app.pipeline.config_models import StreamingConfig
+        import pytest
+
+        # Valid boundaries: 5 and 600
+        cfg5 = StreamingConfig(enabled=True, idle_timeout_seconds=5)
+        assert cfg5.idle_timeout_seconds == 5
+        cfg600 = StreamingConfig(enabled=True, idle_timeout_seconds=600)
+        assert cfg600.idle_timeout_seconds == 600
+
+        # Out of bounds: 4 and 601
+        with pytest.raises(ValidationError):
+            StreamingConfig(enabled=True, idle_timeout_seconds=4)
+        with pytest.raises(ValidationError):
+            StreamingConfig(enabled=True, idle_timeout_seconds=601)
+
+    def test_streaming_max_runtime_valid_range_30_to_3600(self) -> None:
+        from pydantic import ValidationError
+        from app.pipeline.config_models import StreamingConfig
+        import pytest
+
+        # Valid boundaries: 30 and 3600
+        cfg30 = StreamingConfig(enabled=True, max_runtime_seconds=30)
+        assert cfg30.max_runtime_seconds == 30
+        cfg3600 = StreamingConfig(enabled=True, max_runtime_seconds=3600)
+        assert cfg3600.max_runtime_seconds == 3600
+
+        # Out of bounds: 29 and 3601
+        with pytest.raises(ValidationError):
+            StreamingConfig(enabled=True, max_runtime_seconds=29)
+        with pytest.raises(ValidationError):
+            StreamingConfig(enabled=True, max_runtime_seconds=3601)
+
+    def test_streaming_starting_offsets_valid_and_invalid(self) -> None:
+        from pydantic import ValidationError
+        from app.pipeline.config_models import StreamingConfig
+        import pytest
+
+        cfg_earliest = StreamingConfig(enabled=True, starting_offsets="earliest")
+        assert cfg_earliest.starting_offsets == "earliest"
+        cfg_latest = StreamingConfig(enabled=True, starting_offsets="latest")
+        assert cfg_latest.starting_offsets == "latest"
+
+        with pytest.raises(ValidationError):
+            StreamingConfig(enabled=True, starting_offsets="invalid_offset")
+
+    def test_streaming_max_offsets_per_trigger_valid_and_invalid(self) -> None:
+        from pydantic import ValidationError
+        from app.pipeline.config_models import StreamingConfig
+        import pytest
+
+        cfg_none = StreamingConfig(enabled=True, max_offsets_per_trigger=None)
+        assert cfg_none.max_offsets_per_trigger is None
+        cfg_val = StreamingConfig(enabled=True, max_offsets_per_trigger=5000)
+        assert cfg_val.max_offsets_per_trigger == 5000
+
+        with pytest.raises(ValidationError):
+            StreamingConfig(enabled=True, max_offsets_per_trigger=0)
+
 
     def test_unique_column_names_pass(
         self, validator: PipelineBusinessValidator
