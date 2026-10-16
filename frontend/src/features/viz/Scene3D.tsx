@@ -505,7 +505,8 @@ export const PipelineScene3D: React.FC<PipelineScene3DProps> = ({
           powerPreference: 'low-power',
         }}
         onCreated={({ gl }) => {
-          const dom = gl.domElement;
+          const dom = gl?.domElement;
+          if (!dom) return;
           const handleContextLost = (e: Event) => {
             e.preventDefault();
             onContextLost?.();

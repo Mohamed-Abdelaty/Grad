@@ -274,6 +274,32 @@ class StreamingProcessingJob(BaseSparkJob):
         total_output_rows = 0
         stop_file = getattr(self.args, "stop_file", None)
 
+        def _collect_progress() -> None:
+            nonlocal last_seen_batch_id, total_input_rows
+            progress_list = list(query.recentProgress or [])
+            if not progress_list and query.lastProgress is not None:
+                progress_list = [query.lastProgress]
+            for p in progress_list:
+                if not p:
+                    continue
+                bid = p.get("batchId", -1)
+                if bid > last_seen_batch_id:
+                    last_seen_batch_id = bid
+                    num_rows = p.get("numInputRows", 0)
+                    total_input_rows += num_rows
+                    sources = p.get("sources", [])
+                    end_offset = sources[0].get("endOffset") if sources else {}
+                    progress_payload = {
+                        "batchId": bid,
+                        "numInputRows": num_rows,
+                        "inputRowsPerSecond": round(p.get("inputRowsPerSecond", 0.0), 2),
+                        "processedRowsPerSecond": round(p.get("processedRowsPerSecond", 0.0), 2),
+                        "endOffset": end_offset,
+                        "totalInputRows": total_input_rows,
+                        "timestamp": p.get("timestamp"),
+                    }
+                    print(f"STREAM_PROGRESS:{json.dumps(progress_payload)}", flush=True)
+
         # Monitor loop: poll progress every 1s
         while query.isActive and not stop_event.is_set():
             time.sleep(1.0)
@@ -281,25 +307,7 @@ class StreamingProcessingJob(BaseSparkJob):
                 self.logger.info("Stop file %s detected; stopping query cleanly...", stop_file)
                 stop_event.set()
                 break
-            lp = query.lastProgress
-            if lp is not None:
-                bid = lp.get("batchId", -1)
-                if bid > last_seen_batch_id:
-                    last_seen_batch_id = bid
-                    num_rows = lp.get("numInputRows", 0)
-                    total_input_rows += num_rows
-                    sources = lp.get("sources", [])
-                    end_offset = sources[0].get("endOffset") if sources else {}
-                    progress_payload = {
-                        "batchId": bid,
-                        "numInputRows": num_rows,
-                        "inputRowsPerSecond": round(lp.get("inputRowsPerSecond", 0.0), 2),
-                        "processedRowsPerSecond": round(lp.get("processedRowsPerSecond", 0.0), 2),
-                        "endOffset": end_offset,
-                        "totalInputRows": total_input_rows,
-                        "timestamp": lp.get("timestamp"),
-                    }
-                    print(f"STREAM_PROGRESS:{json.dumps(progress_payload)}", flush=True)
+            _collect_progress()
 
         if stop_event.is_set():
             self.logger.info("Stopping streaming query gracefully...")
@@ -311,23 +319,7 @@ class StreamingProcessingJob(BaseSparkJob):
             self.logger.warning("Query termination timeout/exception: %s", exc)
 
         # Capture final progress if any completed during stop
-        lp = query.lastProgress
-        if lp is not None and lp.get("batchId", -1) > last_seen_batch_id:
-            bid = lp.get("batchId")
-            num_rows = lp.get("numInputRows", 0)
-            total_input_rows += num_rows
-            sources = lp.get("sources", [])
-            end_offset = sources[0].get("endOffset") if sources else {}
-            progress_payload = {
-                "batchId": bid,
-                "numInputRows": num_rows,
-                "inputRowsPerSecond": round(lp.get("inputRowsPerSecond", 0.0), 2),
-                "processedRowsPerSecond": round(lp.get("processedRowsPerSecond", 0.0), 2),
-                "endOffset": end_offset,
-                "totalInputRows": total_input_rows,
-                "timestamp": lp.get("timestamp"),
-            }
-            print(f"STREAM_PROGRESS:{json.dumps(progress_payload)}", flush=True)
+        _collect_progress()
 
         duration = round(time.perf_counter() - start_time, 3)
         exc = query.exception()

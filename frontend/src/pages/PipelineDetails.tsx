@@ -64,10 +64,13 @@ export default function PipelineDetails() {
     const isFail = run.status === 'failed';
     const st = isDone ? 'done' : isFail ? 'error' : 'pending';
     const count = run.recordsProcessed ?? null;
+    const isStreaming = Boolean(
+      run.yamlContent && /streaming:\s*(\n\s+.*)*enabled:\s*true/i.test(run.yamlContent)
+    );
     return {
       runId: run.id,
       status: run.status,
-      mode: 'batch',
+      mode: isStreaming ? 'streaming' : 'batch',
       startedAt: run.startedAt || new Date().toISOString(),
       updatedAt: run.finishedAt || run.startedAt || new Date().toISOString(),
       completedAt: run.finishedAt || null,
@@ -210,7 +213,7 @@ export default function PipelineDetails() {
       {/* Run Header */}
       <RunHeader
         run={run || null}
-        progress={progress}
+        progress={progress || effectiveProgress}
         connection={connection}
         lastUpdatedAt={lastUpdatedAt}
         elapsedMs={currentElapsedMs}

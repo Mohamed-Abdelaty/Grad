@@ -139,7 +139,7 @@ export const RunHeader = React.memo(function RunHeader({
 
           <StatusPill status={status} label={status} dot={isRunning} />
 
-          {progress?.mode === 'streaming' && (
+          {(progress?.mode === 'streaming' || (run?.yamlContent && /streaming:\s*(\n\s+.*)*enabled:\s*true/i.test(run.yamlContent))) && (
             <span
               data-testid="streaming-badge"
               className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand/20 text-brand-light border border-brand/40 uppercase tracking-wide"

@@ -1136,7 +1136,7 @@ class PipelineExecutor:
             self._handle_failure(spark_step, ctx, exc)
 
         duration_ms = round((time.perf_counter() - t0) * 1000, 2)
-        total_rows = result.get("output_rows", total_input_rows)
+        total_rows = result.get("output_rows") or total_input_rows or published_count
         ctx.record_stage(
             "spark_streaming",
             {
