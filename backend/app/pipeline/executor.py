@@ -1192,11 +1192,15 @@ class PipelineExecutor:
                 self._handle_failure(spark_step, ctx, exc)
 
             duration_ms = round((time.perf_counter() - t0) * 1000, 2)
-            total_rows = result.get("output_rows") or total_input_rows or published_count
+            input_rows = published_count or total_input_rows or result.get("input_rows", 0)
+            output_rows = result.get("output_rows") or total_input_rows or published_count
+            total_rows = output_rows
             ctx.record_stage(
                 "spark_streaming",
                 {
                     **result,
+                    "input_rows": input_rows,
+                    "output_rows": output_rows,
                     "output_path": output_path,
                     "actual_output_path": output_path,
                     "duration_ms": duration_ms,
@@ -1205,16 +1209,16 @@ class PipelineExecutor:
             if tracker_run_id:
                 _progress_tracker.update_spark(
                     tracker_run_id,
-                    records_in=total_rows,
-                    records_out=total_rows,
+                    records_in=input_rows,
+                    records_out=output_rows,
                     duration_ms=duration_ms,
                 )
                 _progress_tracker.emit(
                     tracker_run_id,
                     "spark_done",
                     {
-                        "input_rows": total_rows,
-                        "output_rows": total_rows,
+                        "input_rows": input_rows,
+                        "output_rows": output_rows,
                         "duration_ms": duration_ms,
                         "duration_seconds": round(duration_ms / 1000.0, 2),
                         "status": "success",

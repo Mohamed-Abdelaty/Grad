@@ -424,7 +424,7 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
           </div>
 
           {/* Criteria Evaluation Table */}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Criteria evaluation">
             <table className="w-full text-left text-xs border border-slate-800 rounded-lg overflow-hidden">
               <thead className="bg-slate-900 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                 <tr>

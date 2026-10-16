@@ -15,7 +15,7 @@ This document provides an honest, transparent breakdown of the known boundaries,
 ## 2. Single-Node Virtual Cluster Topology
 
 The platform orchestrates 13 containerized services (Kafka, Spark Master, Spark Worker, HDFS NameNode, HDFS DataNode, PostgreSQL, Airflow, Prometheus, Grafana, Nginx, FastAPI) on a single Docker host.
-- **Why it matters**: All network traffic between services is routed over a single Docker bridge network (`chaosflow_network`). Network faults (such as `network_delay` or `network_loss`) injected via `tc` or `iptables` affect container-level virtual interfaces rather than physical switches or fiber optic interconnects.
+- **Why it matters**: All network traffic between services is routed over a single Docker bridge network (`platform-network`). Network faults (such as `network_delay` or `network_loss`) injected via `tc` or `iptables` affect container-level virtual interfaces rather than physical switches or fiber optic interconnects.
 - **Trade-off**: Provides reproducible, zero-cost chaos testing on commodity developer hardware without requiring expensive multi-rack cloud infrastructure.
 
 ---
@@ -49,3 +49,18 @@ The reliability analysis service (`POST /api/ai/reliability-analysis`) provides 
 The 3D cluster topology visualizer (`Scene3D.tsx`) is built with Three.js and WebGL.
 - **Why it matters**: In modern GPU-equipped browsers, the scene renders at a smooth 60 FPS. In virtualized environments, CI runners, or headless Chromium sessions without hardware acceleration (such as GitHub Actions or headless Linux containers), WebGL defaults to software rasterization (SwiftShader / Mesa).
 - **Fallback**: The platform includes automatic WebGL feature detection and gracefully provides an accessible, lightweight 2D canvas / text-equivalent representation (`data-testid="viz-text-equivalent"`).
+
+---
+
+## 7. Streaming Checkpoint Cleanup Requires NameNode Reachability
+
+- Structured Streaming micro-batch state is persisted to HDFS under `/checkpoints/streaming-<run_id>`.
+- The platform executor guarantees automated deletion in its `finally` block upon `success`, `failure`, `timeout`, or `cancellation`.
+- However, if the HDFS NameNode container is halted or uncontactable during cleanup, deletion is logged as a non-fatal warning to avoid masking primary job diagnostics, leaving orphaned checkpoints to be removed when HDFS connectivity resumes.
+
+---
+
+## 8. Client Memory During Long-Running Large Stream Monitoring
+
+- High-throughput streaming runs (e.g. 1,000,000 records) emit fine-grained telemetry samples every 2 seconds.
+- While the frontend employs virtualized list rendering, caps SSE buffer sizes, and limits DOM nodes, keeping client browser tabs open across millions of stream events relies on client JavaScript garbage collection to manage heap memory under 50 MB growth.

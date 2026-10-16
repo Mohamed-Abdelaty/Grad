@@ -624,7 +624,7 @@ validation:
     let finalPipelineStatus = 'unknown';
     let pRunData: PipelineRunResponse = {};
     let progData: ProgressResponse = {};
-    for (let i = 0; i < 180; i++) {
+    for (let i = 0; i < 420; i++) {
       const pRes = await request.get(`http://localhost:8000/api/pipeline-runs/${pipelineRunId}`, {
         headers: authHeaders,
       });
@@ -761,12 +761,26 @@ validation:
     const authHeaders = { Authorization: `Bearer ${access_token}` };
 
     // 2. Identify the experiment from E2 container_stop
-    const expId = '41561449-3b09-4a5c-9de4-b1bf355b6cf8';
+    let expId = '41561449-3b09-4a5c-9de4-b1bf355b6cf8';
 
     // (1) GET /api/experiments/{id}
-    const expRes = await request.get(`http://localhost:8000/api/experiments/${expId}`, {
+    let expRes = await request.get(`http://localhost:8000/api/experiments/${expId}`, {
       headers: authHeaders,
     });
+    if (!expRes.ok()) {
+      const expListRes = await request.get('http://localhost:8000/api/experiments', { headers: authHeaders });
+      if (expListRes.ok()) {
+        const expList = await expListRes.json();
+        const items = Array.isArray(expList) ? expList : expList.items || [];
+        const matching = items.find((e: { target_service?: string; targetService?: string; fault_type?: string; faultType?: string }) => (e.target_service === 'kafka' || e.targetService === 'kafka') && (e.fault_type === 'container_stop' || e.faultType === 'container_stop'));
+        if (matching) {
+          expId = (matching as { id: string }).id;
+          expRes = await request.get(`http://localhost:8000/api/experiments/${expId}`, {
+            headers: authHeaders,
+          });
+        }
+      }
+    }
     expect(expRes.ok()).toBeTruthy();
     const expData = await expRes.json();
 

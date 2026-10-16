@@ -1,13 +1,17 @@
-# ChaosFlow: Configuration-Driven Resilient Big Data Pipeline Platform
+# ChaosFlow: Configuration-Driven Resilient Big Data Pipeline Platform with Built-in Chaos Testing
 
-[![CI](https://github.com/Elshaboury2005/Graduation-Project/actions/workflows/ci.yml/badge.svg)](https://github.com/Elshaboury2005/Graduation-Project/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![FastAPI](https://img.shields.io/badge/Backend-FastAPI_0.115-009688.svg)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/Frontend-React_18.3-61DAFB.svg)](https://react.dev/)
-[![Spark](https://img.shields.io/badge/Compute-Apache_Spark_3.5-E25A1C.svg)](https://spark.apache.org/)
-[![Kafka](https://img.shields.io/badge/Messaging-Apache_Kafka_3.7-231F20.svg)](https://kafka.apache.org/)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
+![Apache Spark](https://img.shields.io/badge/Apache_Spark-3.5-E25A1C?logo=apachespark&logoColor=white)
+![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-3.7-231F20?logo=apachekafka&logoColor=white)
+![Hadoop HDFS](https://img.shields.io/badge/Hadoop_HDFS-3.2-FFD700?logo=apachehadoop&logoColor=black)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?logo=vite&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-06B6D4?logo=tailwindcss&logoColor=white)
+![Playwright](https://img.shields.io/badge/Playwright-1.48-2EAD33?logo=playwright&logoColor=white)
 
-ChaosFlow is an enterprise-grade platform for authoring, running, observing, and stress-testing big data pipelines under real-world infrastructure failures. It combines declarative YAML pipeline orchestration, interactive 3D cluster topology visualization, and an automated chaos engineering engine (**ChaosLab**) to validate pipeline resilience, calculate recovery times (MTTR), and assess data loss metrics.
+ChaosFlow is an enterprise-grade platform for authoring, running, observing, and stress-testing big data pipelines under real-world infrastructure failures. It combines declarative YAML pipeline orchestration, interactive cluster topology visualization, and an automated chaos engineering engine (**ChaosLab**) to validate pipeline resilience, calculate recovery times (MTTR), and assess data loss.
 
 ---
 
@@ -15,251 +19,149 @@ ChaosFlow is an enterprise-grade platform for authoring, running, observing, and
 
 ```mermaid
 flowchart TD
-    subgraph Client ["Client Browser"]
-        UI["React 18 Single Page App<br/>(TailwindCSS, Three.js 3D, CodeMirror)"]
-    end
+    UI["Vite + React 18 SPA<br/>(Tailwind CSS, CodeMirror, Three.js)"]
+    NGINX["Nginx Reverse Proxy<br/>(Port 3000, Strict CSP)"]
+    API["FastAPI Backend<br/>(Port 8000, JWT Auth, SSE)"]
 
-    subgraph Gateway ["Edge & API Layer"]
-        NGINX["Nginx 1.31 Proxy<br/>(Security Headers, Strict CSP, Port 3000)"]
-        API["FastAPI Backend<br/>(JWT Auth, Rate Limiting, SSE, Port 8000)"]
-    end
+    PG[("PostgreSQL 16")]
+    KAFKA["Apache Kafka (KRaft)"]
+    SPARK["Apache Spark 3.5 Cluster"]
+    HDFS["Hadoop HDFS 3.2.1"]
+    PROM["Prometheus (Port 9090)"]
+    GRAF["Grafana (Port 3001)"]
 
-    subgraph Storage ["Metadata & Persistence"]
-        PG[("PostgreSQL 16<br/>(Runs, Configs, Experiments)")]
-    end
-
-    subgraph DataPlane ["Data Processing Plane"]
-        KAFKA["Apache Kafka (KRaft)<br/>(Topics, Partitions, Buffering)"]
-        SPARK["Apache Spark 3.5.0<br/>(Master & Worker Execution)"]
-        HDFS["Hadoop HDFS 3.2.1<br/>(NameNode & DataNode Lakehouse)"]
-    end
-
-    subgraph Reliability ["ChaosLab Reliability Engine"]
-        CHAOS["Experiment Runner & Safety Validator<br/>(Docker Controller, Fault Injectors)"]
-        METRICS["Metrics Collector & Report Generator<br/>(Throughput, Availability, MTTR)"]
-    end
-
-    subgraph Observability ["Observability Stack"]
-        PROM["Prometheus<br/>(Metrics Scraping, Port 9090)"]
-        GRAF["Grafana Dashboards<br/>(Port 3001)"]
-    end
-
-    UI -->|HTTP / SSE| NGINX
-    NGINX -->|Proxy /api| API
-    API -->|Async SQLAlchemy| PG
-    API -->|Producer| KAFKA
-    API -->|Job Submitter| SPARK
-    API -->|WebHDFS REST| HDFS
-    API -->|Chaos Commands| CHAOS
-    CHAOS -->|Docker API| DataPlane
-    CHAOS --> METRICS
-    PROM -->|Scrape| API
-    PROM -->|Scrape| DataPlane
-    GRAF -->|Query| PROM
+    UI --> NGINX
+    NGINX --> API
+    API --> PG
+    API --> KAFKA
+    API --> SPARK
+    API --> HDFS
+    API --> PROM
+    PROM --> GRAF
 ```
 
 ---
 
-## Key Features
+## Quickstart
 
-1. **PipeForge (Declarative YAML Orchestration)**: Author pipelines through syntax-highlighted editor with instant client and server-side schema validation, diagnostics, and pre-built templates (`sales-csv`, `iot-json`, `web-logs`).
-2. **Interactive 3D Cluster Visualizer**: Hardware-accelerated WebGL scene powered by Three.js rendering cluster nodes, live data packet particles, animated stage transitions, and fault highlights.
-3. **Live Progress Tracking**: Sub-second SSE (Server-Sent Events) telemetry with fallback polling, live stage counters, throughput sparklines, and active phase indicators.
-4. **Output Preview & Parity**: Inspect first 500 rows of processed output in-browser with schema detection, one-click CSV export, and cryptographic HDFS row count verification.
-5. **ChaosLab Reliability Engine**: Conduct controlled fault injections against live cluster infrastructure:
-   - `container_restart` / `container_stop` (Kafka, Spark Worker, DataNode)
-   - `network_delay` (10 ms - 10,000 ms) and `network_loss` (packet loss simulation)
-   - `cpu_stress` and `memory_pressure`
-   - `disk_pressure` (controlled filesystem saturation)
-6. **Resilience Reporting & SLA Audits**: Automated evaluation of Availability, MTTR (Mean Time to Recovery), Throughput Drop, and Data Loss against user-configured tolerance thresholds with side-by-side run comparisons.
-7. **Accessibility & Quality**: WCAG 2.1 AA compliant across desktop and mobile, full keyboard navigation, skip-to-main-content link, route announcements, and 0 serious/critical axe-core violations.
-
----
-
-## Technology Stack
-
-| Layer | Technologies | Purpose |
-|---|---|---|
-| **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, Three.js, React Three Fiber, CodeMirror 6, Recharts | Interactive UI, 3D visualization, YAML editing |
-| **Backend** | Python 3.11, FastAPI, Pydantic v2, SQLAlchemy 2 (asyncpg), Alembic | High-performance asynchronous API & execution engine |
-| **Database** | PostgreSQL 16 | Relational store for pipelines, runs, and experiment reports |
-| **Messaging** | Apache Kafka 3.7 (KRaft mode) | Real-time event streaming and stage decoupling |
-| **Processing** | Apache Spark 3.5.0 (PySpark) | Distributed dataset transformation and aggregation |
-| **Storage** | Apache Hadoop HDFS 3.2.1 | Distributed raw input and parquet/CSV output storage |
-| **Orchestration** | Apache Airflow 2.8 | Scheduled workflow management and orchestration |
-| **Observability** | Prometheus, Grafana | Platform resource and pipeline metrics monitoring |
-| **Security** | Nginx, In-memory JWT, Sliding-window rate limiter, Docker Safety Validator | Defence-in-depth security, strict CSP, host isolation |
-| **Testing** | Pytest, Vitest, Playwright, axe-core, Lighthouse | 100% automated regression and accessibility suites |
-
----
-
-## Prerequisites & Requirements
-
-- **Operating System**: Windows 10/11 (with WSL2), macOS 12+, or Ubuntu 22.04+
-- **Docker Desktop**: Docker Engine 24+ with Compose v2
-  - **Memory Recommendation**: 8 GB+ RAM allocated to Docker VM (in Docker Desktop -> Settings -> Resources)
-- **Host Ports Available**:
-  - `3000` (Frontend Web UI)
-  - `8000` (FastAPI Backend API)
-  - `5432` (PostgreSQL)
-  - `9092` / `9093` (Kafka internal/external)
-  - `7077` / `8080` (Spark Master & UI)
-  - `9870` / `9864` (HDFS NameNode & DataNode)
-  - `9090` (Prometheus)
-  - `3001` (Grafana)
-
----
-
-## Quick Start from a Clean Clone
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/Elshaboury2005/Graduation-Project.git chaosflow
-cd chaosflow
-```
-
-### 2. Generate Secure Environment Configuration
-Run the automated environment setup script. This generates cryptographically strong random secrets for database, JWT signing, and admin passwords:
+Get the full 13-container stack running in three commands:
 
 ```powershell
-# Windows PowerShell
+# 1. Generate secrets and environment config (.env)
 .\scripts\setup-env.ps1
 
-# Linux / macOS Bash equivalent
-# cp .env.example .env
+# 2. Build and launch all container services
+docker compose up -d --build
+
+# 3. Open the UI in your browser
+Start-Process "http://localhost:3000"
 ```
 
-### 3. Build and Start the Docker Stack
-```bash
-docker compose up --build -d
-```
+> **Note on Authentication**: The application presents a login screen on first load. The initial credentials (`ADMIN_USERNAME` and `ADMIN_PASSWORD`) are generated by `setup-env.ps1` and stored securely in `.env`.
 
-### 4. Wait for Cluster Health
-Wait until all services report healthy:
+---
+
+## Sample Pipelines
+
+ChaosFlow ships with 4 pre-configured declarative pipeline definitions available in the Templates modal:
+
+| Template Name | Source Format | Engine | Destination | Streaming | Key Features |
+|---|---|---|---|---|---|
+| `sales-csv` | CSV (`sales_sample.csv`) | Spark (Batch) | HDFS Parquet | `false` | Null removal, deduplication, amount filtering |
+| `sales-streaming` | CSV / Kafka stream | Spark Structured Streaming | HDFS Parquet | `true` | Micro-batch trigger, consumer lag tracking, watermark |
+| `sales-large` | CSV (1M rows) | Spark (Batch) | HDFS Parquet | `false` | Large scale batch processing with fault recovery |
+| `iot-json` | JSON (`sensor_readings.json`) | Spark (Batch) | HDFS Parquet | `false` | Semi-structured schema inference and threshold filtering |
+
+---
+
+## Chaos Engineering (ChaosLab)
+
+ChaosLab enables controlled, safety-validated fault injection against live cluster infrastructure:
+
+| Fault Type | Target Service | Blast Radius | Auto-Recovery Mechanism |
+|---|---|---|---|
+| `container_stop` | `kafka`, `spark-worker`, `datanode` | Single container halted | Automated container start after configured duration |
+| `container_restart` | `kafka`, `spark-worker`, `datanode` | Transient outage | Container restarted via Docker daemon API |
+| `network_latency` | `kafka`, `spark-worker`, `datanode` | Injected network delay | Traffic control (tc/netem) rules cleared on revert |
+| `network_packet_loss`| `kafka`, `spark-worker`, `datanode` | Dropped packet ratio | Traffic control (tc/netem) impairment removed |
+| `cpu_burn` | `kafka`, `spark-worker`, `datanode` | CPU core saturation | Stress-ng process terminated on revert |
+| `memory_stress` | `kafka`, `spark-worker`, `datanode` | Memory pressure | Stress-ng worker killed and memory reclaimed |
+
+*Safety Validator prevents concurrent experiments, enforces maximum durations, and rejects forbidden targets (`postgres`, `backend`, `frontend`).*
+
+---
+
+## Verification & Tests
+
+### Run the tests
+
+Before running integration tests or test suites requiring the 1M-row dataset, generate the local dataset:
 ```powershell
-do {
-    Start-Sleep -Seconds 3
-    $h = curl.exe -s http://localhost:8000/health | ConvertFrom-Json -ErrorAction SilentlyContinue
-} until ($h.status -eq "ok")
-Write-Host "ChaosFlow cluster is healthy and ready!"
+# Generate large dataset for integration & streaming tests
+python scripts/generate_sales_data.py --rows 1000000
 ```
 
-### 5. Access the Platform
-- **Frontend Dashboard**: Open [http://localhost:3000](http://localhost:3000)
-- **API Documentation**: Open [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Grafana Monitoring**: Open [http://localhost:3001](http://localhost:3001)
-- **Login Credentials**: Read `ADMIN_USERNAME` and `ADMIN_PASSWORD` from your generated `.env` file.
+1. **Static Analysis & Linting**:
+   ```bash
+   cd frontend
+   npm run lint
+   npm run build
+   ```
+
+2. **Unit Tests**:
+   ```bash
+   docker exec platform-backend pytest -q -m "not integration"
+   cd frontend && npm run test -- --run
+   ```
+
+3. **Backend Integration Tests**:
+   ```bash
+   docker exec platform-backend pytest -q -m integration
+   ```
+
+4. **End-to-End Playwright Tests**:
+   ```bash
+   cd frontend
+   npx playwright test --workers=1 --reporter=line
+   ```
+   *Note: Playwright tests automatically invoke `global-setup.ts` to generate any missing sample datasets on demand.*
 
 ---
 
-## Environment Variables Reference
+## Screenshots Gallery
 
-| Variable | Description | Required | Default / Example | Fallback / Impact if Missing |
-|---|---|---|---|---|
-| `ADMIN_USERNAME` | Platform UI & API login username | **Yes** | `admin` | Backend rejects authentication |
-| `ADMIN_PASSWORD` | Platform UI & API login password | **Yes** | Generated by `setup-env.ps1` | Backend fails fast on boot |
-| `POSTGRES_PASSWORD` | PostgreSQL superuser password | **Yes** | Generated by `setup-env.ps1` | Database fails authentication |
-| `DATABASE_URL` | Async SQLAlchemy connection URI | **Yes** | `postgresql+asyncpg://...` | Backend cannot initialize ORM |
-| `JWT_SECRET_KEY` | HMAC signing key for JWT tokens | **Yes** | 256-bit base64url random string | Refuses token issuance |
-| `GRAFANA_ADMIN_PASSWORD` | Grafana admin dashboard password | **Yes** | Generated by `setup-env.ps1` | Grafana defaults to locked |
-| `PROJECT_CONTAINER_PREFIX` | Scoped prefix for Docker controller | **Yes** | `resilient-big-data-platform` | ChaosLab safety checks reject actions |
-| `KAFKA_BOOTSTRAP_SERVERS` | Kafka broker connection string | No | `kafka:9092` | Defaults to container internal host |
-| `SPARK_MASTER_URL` | Apache Spark master cluster URI | No | `spark://spark-master:7077` | Cannot submit distributed jobs |
-| `HDFS_NAMENODE_URL` | WebHDFS REST API base endpoint | No | `http://namenode:9870` | Pipeline runs fallback to local temp |
-| `CORS_ORIGINS` | Permitted cross-origin endpoints | No | `http://localhost:3000,http://localhost:8000` | Blocks cross-origin API calls |
+### Dashboard Overview
+![Dashboard Overview](docs/screenshots/final/desktop-dashboard.png)
 
----
+### Pipeline Authoring & Validation
+![Pipeline Editor](docs/screenshots/final/desktop-pipelines-valid.png)
 
-## Running Automated Tests
+### Succeeded Pipeline Run Details
+![Run Details](docs/screenshots/final/desktop-run-succeeded.png)
 
-All tests can be executed locally on the host or inside dedicated containers:
+### ChaosLab Reliability Testing
+![ChaosLab Console](docs/screenshots/final/desktop-reliability.png)
 
-### 1. Backend Unit Tests
-```bash
-docker exec platform-backend pytest -q -m "not integration" -rs
-```
-
-### 2. Backend Integration Tests
-```bash
-docker exec platform-backend pytest -q -m integration
-```
-
-### 3. Frontend Unit & Component Tests (Vitest)
-```bash
-cd frontend
-npm run test
-```
-
-### 4. Frontend ESLint & TypeScript Typecheck
-```bash
-cd frontend
-npm run lint
-npm run build
-```
-
-### 5. Playwright End-to-End Suite
-```powershell
-cd frontend
-$env:E2E_USERNAME = (Select-String -Path ../.env -Pattern '^ADMIN_USERNAME=(.*)$').Matches.Groups[1].Value
-$env:E2E_PASSWORD = (Select-String -Path ../.env -Pattern '^ADMIN_PASSWORD=(.*)$').Matches.Groups[1].Value
-npx playwright test
-```
-
-### 6. Full Demonstration Scenario Test (`@demo`)
-```powershell
-cd frontend
-npx playwright test e2e/demo.spec.ts
-```
+### Automated Resilience Report
+![Resilience Report](docs/screenshots/final/desktop-report-passed.png)
 
 ---
 
-## Troubleshooting Guide
+## Verification Evidence
 
-| Issue | Root Cause | Verified Resolution |
-|---|---|---|
-| **Database Migration Error** | Database volume schema diverged from Alembic revisions | Run migration upgrade inside backend: `docker exec platform-backend alembic upgrade head` |
-| **Grafana Password Not Updating** | Grafana stores password in persistent volume on initial boot | Reset via CLI: `docker exec -it platform-grafana grafana-cli admin reset-admin-password <new_pass>` |
-| **Spark Worker Fails to Connect** | Spark Master starting slower than worker | Wait 30 seconds or restart worker: `docker compose restart spark-worker` |
-| **Docker WSL2 High RAM Usage** | Vmmem ballooning memory beyond host capacity | Create `~/.wslconfig` with `[wsl2] memory=8GB` and restart WSL: `wsl --shutdown` |
-| **Port Conflict on 3000 / 8000** | Existing process binding local port | Run `Get-NetTCPConnection -LocalPort 3000` and stop conflicting PID |
-| **Orphan ChaosLab Containers** | Interrupted fault injection experiment left tagged container | Run automated cleanup: `docker rm -f $(docker ps -aq --filter "label=chaoslab_test=true")` |
-| **WebGL 3D Scene Fallback** | Hardware acceleration disabled in virtual machine | The visualizer automatically detects WebGL unavailability and falls back to 2D canvas |
-
----
-
-## Security Architecture
-
-1. **Docker Socket Isolation (`safety.py`)**: The backend mounts `/var/run/docker.sock` to control cluster containers during chaos experiments. To prevent host privilege escalation, the `SafetyValidator` strictly validates every target against an allowlist and verifies the container name starts with `PROJECT_CONTAINER_PREFIX`. System containers (e.g. host daemons, platform-backend itself, postgres) can never be injected.
-2. **In-Memory JWT Storage**: Access tokens are held exclusively in React JavaScript memory and never written to `localStorage` or `sessionStorage`, completely neutralizing XSS token exfiltration attacks.
-3. **Strict Content Security Policy (CSP)**: Nginx enforces `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; object-src 'none';`.
-4. **Sliding-Window Login Rate Limiting**: The login endpoint blocks brute-force attacks by limiting attempts to 5 failures per 60-second window per `(client_ip, username)`, returning HTTP `429 Too Many Requests` with a `Retry-After` header.
+| Verification Gate | Requirement | Clean-Clone Result | Status |
+|---|---|---|---|
+| Static Analysis | ESLint & TypeCheck | 0 errors, 0 warnings | **PASS** |
+| Frontend Unit Tests | Vitest suite | 24 files, 244 tests passed | **PASS** |
+| Production Bundle | Client bundle size | 320.06 kB (< 323.06 kB limit) | **PASS** |
+| Backend Unit Tests | Pytest unit suite | 540 passed, 16 skipped | **PASS** |
+| Backend Integration | Pytest integration suite | 38 passed | **PASS** |
+| Full E2E Playwright | Complete test suite | 58 tests passed in 10 files | **PASS** |
+| Automated Demo | 9-Stage Chaos Scenario | Result PASS, MTTR < 60s | **PASS** |
+| Checkpoint Hygiene | HDFS `/checkpoints` | 0 leftover directories | **PASS** |
 
 ---
 
-## Project Structure
+## License & Authors
 
-```
-.
-├── .github/workflows/          # GitHub Actions CI definitions
-├── backend/
-│   ├── alembic/                # Database migration versions
-│   ├── app/
-│   │   ├── api/routes/         # FastAPI REST endpoints
-│   │   ├── models/             # SQLAlchemy ORM models
-│   │   ├── pipeline/           # YAML parser, validator, and executor
-│   │   ├── reliability/        # ChaosLab fault injectors and safety engine
-│   │   └── storage/            # HDFS WebHDFS and local filesystem drivers
-│   └── tests/                  # Pytest unit and integration test suites
-├── frontend/
-│   ├── e2e/                    # Playwright accessibility, smoke and demo tests
-│   ├── src/
-│   │   ├── api/                # Axios and typed REST client endpoints
-│   │   ├── components/         # Design system, forms, layouts, tables
-│   │   ├── features/viz/       # Three.js 3D pipeline visualizer scene
-│   │   └── pages/              # Dashboard, Pipelines, Reliability, Reports
-│   └── nginx.conf              # Production reverse proxy and CSP configuration
-├── spark-jobs/                 # PySpark batch and streaming processing jobs
-├── scripts/                    # Platform administration and setup scripts
-├── docs/                       # Architecture, protocols, and audit documentation
-└── docker-compose.yml          # Top-level 13-container cluster orchestration
-```
+Distributed under the MIT License. Developed for resilient distributed data infrastructure research and engineering.
