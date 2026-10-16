@@ -17,6 +17,12 @@ export default async function globalSetup() {
       rows: 1_000_000,
       relativeName: 'backend/sample-data/sales_large.csv',
     },
+    {
+      file: path.resolve(rootDir, 'backend', 'sample-data', 'sales_300k.csv'),
+      expectedMinBytes: 15_000_000,
+      rows: 300_000,
+      relativeName: 'backend/sample-data/sales_300k.csv',
+    },
   ];
 
   for (const ds of datasets) {
