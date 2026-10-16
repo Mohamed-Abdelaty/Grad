@@ -127,7 +127,7 @@ async def test_streaming_pipeline_survives_kafka_restart(
         )
         if prog_res.status_code == 200:
             prog_data = prog_res.json()
-            kafka_published = (prog_data.get("kafka") or {}).get("published", 0)
+            kafka_published = (prog_data.get("kafka") or {}).get("published") or 0
 
             # Trigger fault when publishing has started but pipeline is still active
             if not fault_triggered and kafka_published > 0:
