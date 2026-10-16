@@ -4,11 +4,11 @@ This document provides an honest, transparent breakdown of the known boundaries,
 
 ---
 
-## 1. Batch Mode Has No Kafka Consumer Lag (`kafka.consumerLag` is `null`)
+## 1. Batch Mode Has No Kafka Consumer Lag vs Real Streaming Consumer Lag
 
-In batch execution mode, Apache Spark queries Kafka using bounded partition offsets (`startingOffsets` to `endingOffsets`) instead of running as a persistent streaming consumer group committing offset heartbeats to the Kafka coordinator.
-- **Why it matters**: There is no long-running consumer group committing periodic offset checkpoints to Kafka's consumer group coordinator during batch runs.
-- **Contract**: `kafka.consumerLag` is strictly returned as `null` (rendered on the UI as an em dash `—`) rather than displaying a false zero.
+- **Batch Mode (`streaming.enabled: false`)**: Apache Spark queries Kafka using bounded partition offsets (`startingOffsets` to `endingOffsets`) instead of running as a persistent streaming consumer group committing offset heartbeats to the Kafka coordinator. Therefore, `kafka.consumerLag` is strictly returned as `null` (rendered on the UI as an em dash `—`) rather than displaying a false zero.
+- **Streaming Mode (`streaming.enabled: true`)**: Real-time consumer lag is dynamically computed as $\max(0, \sum \text{end\_offsets} - \sum \text{spark\_offsets})$ from live Kafka partition high-water marks and PySpark `StreamingQueryProgress.sources[0].endOffset`. The UI renders live lag numbers and updates them in real time.
+- **Finite vs Continuous Stream Completion**: ChaosFlow provides finite stream completion detection (`StreamingCompletionDetector`). When an upstream finite source finishes producing (`producer_done=True`), the pipeline waits for consumer lag to drain to 0 and an idle timeout to elapse before cleanly stopping PySpark and committing HDFS output. Continuous streams (no bounded source) run indefinitely until cancelled or reaching `max_runtime_seconds`.
 
 ---
 

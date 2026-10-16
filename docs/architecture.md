@@ -63,3 +63,5 @@ flowchart TD
 - **Modularity**: Components are cleanly separated using Docker containers.
 - **ChaosLab Integration**: Relies on docker.sock mounted only to the backend, using label validation and a strict service allow-list for safety.
 - **Dedicated Airflow DB**: Prevents migration conflicts and resource starvation on the main database.
+- **Structured Streaming Engine**: Pipelines with `streaming.enabled: true` run as real PySpark Structured Streaming jobs reading from Kafka and sinking to HDFS with atomic Parquet commits and fault-tolerant HDFS checkpoints (`/checkpoints/streaming-{run_id}`).
+- **True Consumer Lag & Drain Detection**: The platform monitors real-time Kafka partition high watermarks vs Spark microbatch endOffsets to compute exact consumer lag and detect finite stream completion without manual intervention.
