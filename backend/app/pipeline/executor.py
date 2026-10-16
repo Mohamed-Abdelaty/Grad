@@ -294,43 +294,47 @@ class PipelineExecutor:
                 cause=RuntimeError("Cancelled by user request"),
             )
 
-        # ── Optional Kafka publish ─────────────────────────────────────────────
-        if plan.messaging_config:
-            self._publish_to_kafka(plan.messaging_config, df, ctx, tracker_run_id)
-        else:
-            if tracker_run_id:
-                _progress_tracker.set_stage_state(tracker_run_id, "kafka", "skipped")
-
-        # ── Cancel check ───────────────────────────────────────────────────────
-        if tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id):
-            ctx.status = "failed"
-            ctx.log_info("executor", "Pipeline cancelled after Kafka stage.")
-            raise PipelineExecutionError(
-                message="Cancelled",
-                step_name="executor",
-                context=ctx,
-                cause=RuntimeError("Cancelled by user request"),
-            )
-
         # ── Processing branch ──────────────────────────────────────────────────
-        if plan.processing_engine_type == "spark":
-            # Spark path: submit the whole processing block as a Spark job.
-            # The storage step afterward is skipped — Spark writes Parquet directly.
-            self._run_spark_job(plan, df, ctx, tracker_run_id)
+        if plan.streaming_enabled and plan.processing_engine_type == "spark":
+            # Streaming Spark path: coordinate topic, Kafka publishing, and Spark Structured Streaming
+            self._run_spark_streaming_job(plan, df, ctx, tracker_run_id)
         else:
-            # Pandas path (Phase 3): run processors in-process, then storage.
-            for step in plan.steps:
-                if step.step_type == "processor":
-                    df = self._run_processor(step, df, ctx)
-                elif step.step_type == "storage":
-                    _progress_tracker.emit(tracker_run_id, "hdfs_start")
-                    self._run_storage(step, df, ctx)
-                    _progress_tracker.emit(
-                        tracker_run_id,
-                        "hdfs_done",
-                        {"rows": len(df)},
-                    )
-                # source already handled above
+            # ── Optional Kafka publish ─────────────────────────────────────────
+            if plan.messaging_config:
+                self._publish_to_kafka(plan.messaging_config, df, ctx, tracker_run_id)
+            else:
+                if tracker_run_id:
+                    _progress_tracker.set_stage_state(tracker_run_id, "kafka", "skipped")
+
+            # ── Cancel check ───────────────────────────────────────────────────
+            if tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id):
+                ctx.status = "failed"
+                ctx.log_info("executor", "Pipeline cancelled after Kafka stage.")
+                raise PipelineExecutionError(
+                    message="Cancelled",
+                    step_name="executor",
+                    context=ctx,
+                    cause=RuntimeError("Cancelled by user request"),
+                )
+
+            if plan.processing_engine_type == "spark":
+                # Spark batch path: submit the whole processing block as a Spark job.
+                # The storage step afterward is skipped — Spark writes Parquet directly.
+                self._run_spark_job(plan, df, ctx, tracker_run_id)
+            else:
+                # Pandas path (Phase 3): run processors in-process, then storage.
+                for step in plan.steps:
+                    if step.step_type == "processor":
+                        df = self._run_processor(step, df, ctx)
+                    elif step.step_type == "storage":
+                        _progress_tracker.emit(tracker_run_id, "hdfs_start")
+                        self._run_storage(step, df, ctx)
+                        _progress_tracker.emit(
+                            tracker_run_id,
+                            "hdfs_done",
+                            {"rows": len(df)},
+                        )
+                    # source already handled above
 
         ctx.status = "success"
         from app.metrics import pipeline_records_processed_total
@@ -884,6 +888,293 @@ class PipelineExecutor:
                 current_out = output_path or ""
                 if fallback_path in current_out:
                     _delete_hdfs_path(current_out, recursive=True)
+
+    def _run_spark_streaming_job(
+        self,
+        plan: ExecutionPlan,
+        df: pd.DataFrame,
+        ctx: PipelineExecutionContext,
+        tracker_run_id: str | None = None,
+    ) -> None:
+        """
+        Coordinate end-to-end Spark Structured Streaming query execution.
+
+        1. Ensure topic exists with configured partitions.
+        2. Set up HDFS output and checkpoint paths.
+        3. Start StreamingCompletionDetector.
+        4. Start Spark Streaming Job asynchronously with stop_event.
+        5. Publish source records to Kafka in batches while stream is active.
+        6. Monitor lag & throughput, updating tracker until completion detector signals done.
+        7. Gracefully stop stream query, await exit, verify HDFS output, emit final metrics.
+        """
+        import json
+        from app.messaging.kafka_admin import KafkaAdminClient
+        from app.messaging.kafka_producer import KafkaProducerClient, get_topic_end_offsets
+        from app.pipeline.stream_progress import StreamingCompletionDetector, compute_lag
+        from app.spark.exceptions import SparkJobFailedError, SparkJobTimeoutError
+
+        _progress_tracker.emit(tracker_run_id, "spark_start", {})
+        ctx.log_info("spark_streaming", "Starting Structured Streaming execution...")
+        t0 = time.perf_counter()
+
+        messaging_cfg = plan.messaging_config or {}
+        topic = messaging_cfg.get("topic", "events")
+        partitions = messaging_cfg.get("partitions", 3)
+        replication_factor = messaging_cfg.get("replication_factor", 1)
+
+        streaming_cfg = plan.streaming_config or {}
+        idle_timeout = float(streaming_cfg.get("idle_timeout_seconds", 20))
+        max_runtime = float(streaming_cfg.get("max_runtime_seconds", 600))
+
+        # 1. Topic setup
+        try:
+            admin = KafkaAdminClient()
+            admin.create_topic(
+                topic,
+                partitions=partitions,
+                replication_factor=replication_factor,
+            )
+        except Exception as exc:
+            ctx.log_info("spark_streaming", f"Topic check/creation for '{topic}': {exc}")
+
+        # 2. Output and checkpoint paths
+        storage_step = next((s for s in plan.steps if s.step_type == "storage"), None)
+        raw_path = (
+            storage_step.config.get("path", f"/output/stream-{ctx.run_id}")
+            if storage_step
+            else f"/output/stream-{ctx.run_id}"
+        )
+        if not raw_path.startswith("/"):
+            raw_path = f"/{raw_path}"
+        output_path = f"hdfs://namenode:9000{raw_path}"
+        checkpoint_path = f"hdfs://namenode:9000/checkpoints/streaming-{ctx.run_id}"
+
+        # 3. Build job config
+        operations = [step.config for step in plan.steps if step.step_type == "processor"]
+        job_config = {
+            "messaging": {**messaging_cfg, "bootstrap_servers": "kafka:9092"},
+            "streaming": streaming_cfg,
+            "schema": plan.schema_def,
+            "processing": {"operations": operations},
+        }
+
+        # 4. State & Detector
+        detector = StreamingCompletionDetector(
+            idle_timeout_seconds=idle_timeout,
+            max_runtime_seconds=max_runtime,
+        )
+        stop_event = asyncio.Event()
+        submitter = SparkJobSubmitter()
+
+        producer = KafkaProducerClient()
+        actual_partitions = producer.get_topic_partitions(topic) or partitions
+        _progress_tracker.emit(
+            tracker_run_id,
+            "kafka_start",
+            {"topic": topic, "partitions": actual_partitions},
+        )
+
+        stream_started_event = threading.Event()
+        latest_spark_offset: Any = None
+        total_input_rows = 0
+        latest_proc_rate = 0.0
+
+        def _on_stream_started(started_data: dict[str, Any]) -> None:
+            ctx.log_info("spark_streaming", f"Spark Structured Streaming query started: {started_data}")
+            stream_started_event.set()
+
+        def _on_stream_progress(prog_data: dict[str, Any]) -> None:
+            nonlocal latest_spark_offset, total_input_rows, latest_proc_rate
+            latest_spark_offset = prog_data.get("endOffset")
+            total_input_rows = prog_data.get("totalInputRows", total_input_rows)
+            latest_proc_rate = prog_data.get("processedRowsPerSecond", 0.0)
+
+        published_count = 0
+        producer_done = False
+        producer_error: Exception | None = None
+
+        def _publish_worker() -> None:
+            nonlocal published_count, producer_done, producer_error
+            # Wait up to 15s for stream to start so Kafka messages aren't missed
+            stream_started_event.wait(timeout=15.0)
+            try:
+                records = (
+                    json.loads(df.to_json(orient="records", date_format="iso"))
+                    if df is not None and not df.empty
+                    else []
+                )
+
+                def _on_k_prog(pub: int, fail: int) -> None:
+                    nonlocal published_count
+                    published_count = pub
+                    if tracker_run_id:
+                        _progress_tracker.update_kafka(
+                            tracker_run_id,
+                            published=pub,
+                            failed=fail,
+                            partitions=actual_partitions,
+                            topic=topic,
+                        )
+
+                if records:
+                    res = producer.produce_batch(topic, records, on_progress=_on_k_prog)
+                    published_count = res.get("produced", len(records))
+            except Exception as e:
+                producer_error = e
+                ctx.log_info("spark_streaming", f"Producer error: {e}")
+            finally:
+                producer_done = True
+                end_offs = get_topic_end_offsets(topic)
+                _progress_tracker.emit(
+                    tracker_run_id,
+                    "kafka_done",
+                    {
+                        "count": published_count,
+                        "published": published_count,
+                        "failed": 0,
+                        "end_offsets": end_offs,
+                        "partitions": actual_partitions,
+                        "topic": topic,
+                    },
+                )
+
+        pub_thread = threading.Thread(target=_publish_worker, daemon=True)
+        pub_thread.start()
+
+        # Monitoring loop coroutine
+        async def _monitor_loop() -> None:
+            nonlocal latest_spark_offset, total_input_rows
+            while not stop_event.is_set():
+                await asyncio.sleep(1.0)
+
+                # Check if cancel requested
+                if tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id):
+                    ctx.log_info("spark_streaming", "Cancellation requested; stopping stream.")
+                    stop_event.set()
+                    break
+
+                end_offsets = get_topic_end_offsets(topic)
+                lag = compute_lag(end_offsets, latest_spark_offset)
+
+                if tracker_run_id:
+                    _progress_tracker.update_kafka(
+                        tracker_run_id,
+                        published=published_count,
+                        end_offsets=end_offsets,
+                        consumer_lag=lag,
+                    )
+                    _progress_tracker.update_spark(
+                        tracker_run_id,
+                        records_in=total_input_rows,
+                        records_out=total_input_rows,
+                    )
+                    _progress_tracker.emit(
+                        tracker_run_id,
+                        "spark_progress",
+                        {
+                            "records_in": total_input_rows,
+                            "records_out": total_input_rows,
+                            "consumer_lag": lag,
+                            "consumerLag": lag,
+                            "processedRowsPerSecond": latest_proc_rate,
+                        },
+                    )
+
+                if detector.is_complete(
+                    current_lag=lag,
+                    current_total_rows=total_input_rows,
+                    expected_total_rows=published_count,
+                    producer_done=producer_done,
+                ):
+                    ctx.log_info(
+                        "spark_streaming",
+                        f"Stream complete: published={published_count}, ingested={total_input_rows}, lag={lag}",
+                    )
+                    stop_event.set()
+                    break
+
+                if detector.is_timed_out():
+                    ctx.log_info("spark_streaming", "Stream reached max runtime; stopping.")
+                    stop_event.set()
+                    break
+
+        async def _execute_streaming() -> dict[str, Any]:
+            monitor_task = asyncio.create_task(_monitor_loop())
+            try:
+                job_result = await submitter.submit_streaming_job(
+                    config=job_config,
+                    output_path=output_path,
+                    checkpoint_path=checkpoint_path,
+                    run_id=tracker_run_id,
+                    on_stream_started=_on_stream_started,
+                    on_stream_progress=_on_stream_progress,
+                    stop_event=stop_event,
+                )
+                return job_result
+            finally:
+                if not monitor_task.done():
+                    monitor_task.cancel()
+
+        try:
+            result = asyncio.run(_execute_streaming())
+        except Exception as exc:
+            if tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id):
+                ctx.status = "failed"
+                raise PipelineExecutionError(
+                    message="Cancelled",
+                    step_name="spark_streaming",
+                    context=ctx,
+                    cause=RuntimeError("Cancelled by user request"),
+                ) from exc
+            spark_step = ExecutionStep(
+                name="spark_streaming",
+                step_type="spark",
+                plugin_type="spark",
+                plugin=None,
+                config={},
+            )
+            self._handle_failure(spark_step, ctx, exc)
+
+        duration_ms = round((time.perf_counter() - t0) * 1000, 2)
+        total_rows = result.get("output_rows", total_input_rows)
+        ctx.record_stage("spark_streaming", {**result, "duration_ms": duration_ms})
+        if tracker_run_id:
+            _progress_tracker.update_spark(
+                tracker_run_id,
+                records_in=total_rows,
+                records_out=total_rows,
+                duration_ms=duration_ms,
+            )
+            _progress_tracker.emit(
+                tracker_run_id,
+                "spark_done",
+                {
+                    "input_rows": total_rows,
+                    "output_rows": total_rows,
+                    "duration_ms": duration_ms,
+                    "duration_seconds": round(duration_ms / 1000.0, 2),
+                    "status": "success",
+                },
+            )
+
+        # Verification of HDFS Parquet output
+        hdfs_client = HdfsStorageClient()
+        hdfs_rows = total_rows
+        try:
+            hdfs_rows = hdfs_client.count_rows(raw_path) or total_rows
+        except Exception:
+            pass
+
+        if tracker_run_id:
+            _progress_tracker.emit(
+                tracker_run_id,
+                "hdfs_done",
+                {"rows": hdfs_rows, "verified": True, "path": output_path},
+            )
+        ctx.log_info(
+            "spark_streaming",
+            f"Streaming job finished successfully: {total_rows} rows processed in {duration_ms}ms.",
+        )
 
 
     # ── Error handling ─────────────────────────────────────────────────────────

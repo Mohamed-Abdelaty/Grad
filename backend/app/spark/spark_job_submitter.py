@@ -23,6 +23,7 @@ import asyncio
 import json
 import logging
 import os
+import signal
 from collections import deque
 from collections.abc import Callable
 from typing import Any
@@ -30,6 +31,10 @@ from typing import Any
 import httpx
 
 from app.core.config import get_settings
+from app.pipeline.stream_progress import (
+    parse_stream_progress_line,
+    parse_stream_started_line,
+)
 from app.spark.exceptions import SparkJobFailedError, SparkJobTimeoutError
 
 logger = logging.getLogger(__name__)
@@ -147,6 +152,75 @@ class SparkJobSubmitter:
         )
         return self._parse_result(stdout, stderr)
 
+    async def submit_streaming_job(
+        self,
+        config: dict[str, Any],
+        output_path: str,
+        checkpoint_path: str | None = None,
+        run_id: str | None = None,
+        on_stream_started: Callable[[dict[str, Any]], None] | None = None,
+        on_stream_progress: Callable[[dict[str, Any]], None] | None = None,
+        stop_event: asyncio.Event | None = None,
+    ) -> dict[str, Any]:
+        """
+        Submit ``streaming_processing_job.py`` to the Spark cluster.
+
+        Parameters
+        ----------
+        config : dict
+            Full pipeline processing configuration serialized as JSON.
+        output_path : str
+            Absolute HDFS path where Parquet output will be appended.
+        checkpoint_path : str | None
+            Absolute HDFS checkpoint path.
+        run_id : str | None
+            Tracking run ID.
+        on_stream_started : Callable | None
+            Callback for STREAM_STARTED events.
+        on_stream_progress : Callable | None
+            Callback for STREAM_PROGRESS events.
+        stop_event : asyncio.Event | None
+            Event to signal graceful SIGTERM shutdown of the query.
+
+        Returns
+        -------
+        dict
+            Parsed result metrics dict.
+        """
+        jobs_path = self._settings.SPARK_JOBS_PATH
+        job_script = f"{jobs_path}/streaming_processing_job.py"
+        config_json = json.dumps(config)
+        spark_home = os.environ.get("SPARK_HOME", "/opt/bitnami/spark")
+
+        cmd = [
+            f"{spark_home}/bin/spark-submit",
+            "--master", self._settings.SPARK_MASTER_URL,
+            "--conf", "spark.cores.max=1",
+            job_script,
+            "--config-json", config_json,
+            "--input-source", "kafka",
+            "--output-path", output_path,
+        ]
+        if checkpoint_path:
+            cmd.extend(["--checkpoint-path", checkpoint_path])
+
+        logger.info(
+            "Submitting streaming Spark job: output=%s checkpoint=%s master=%s run_id=%s",
+            output_path,
+            checkpoint_path,
+            self._settings.SPARK_MASTER_URL,
+            run_id,
+        )
+
+        stdout, stderr = await self._run_subprocess(
+            cmd,
+            run_id=run_id,
+            on_stream_started=on_stream_started,
+            on_stream_progress=on_stream_progress,
+            stop_event=stop_event,
+        )
+        return self._parse_result(stdout, stderr)
+
     async def health_check(self) -> dict[str, Any]:
         """
         Probe the Spark master REST API to confirm cluster availability.
@@ -197,6 +271,9 @@ class SparkJobSubmitter:
         cmd: list[str],
         run_id: str | None = None,
         on_progress: Callable[[dict[str, Any]], None] | None = None,
+        on_stream_started: Callable[[dict[str, Any]], None] | None = None,
+        on_stream_progress: Callable[[dict[str, Any]], None] | None = None,
+        stop_event: asyncio.Event | None = None,
     ) -> tuple[str, str]:
         """
         Execute *cmd* asynchronously, enforcing the configured timeout.
@@ -212,6 +289,12 @@ class SparkJobSubmitter:
         on_progress : Callable[[dict], None] | None
             Optional callback invoked whenever a valid SPARK_JOB_PROGRESS
             line is received on stdout while the job is running.
+        on_stream_started : Callable[[dict], None] | None
+            Optional callback invoked on STREAM_STARTED lines.
+        on_stream_progress : Callable[[dict], None] | None
+            Optional callback invoked on STREAM_PROGRESS lines.
+        stop_event : asyncio.Event | None
+            Optional event to trigger graceful SIGTERM shutdown of the query.
 
         Returns
         -------
@@ -243,6 +326,29 @@ class SparkJobSubmitter:
         stdout_deque: deque[str] = deque(maxlen=2000)
         stderr_deque: deque[str] = deque(maxlen=2000)
 
+        def _dispatch_stdout(line: str) -> None:
+            if on_stream_started is not None:
+                started = parse_stream_started_line(line)
+                if started is not None:
+                    try:
+                        on_stream_started(started)
+                    except Exception:
+                        pass
+            if on_stream_progress is not None:
+                sprog = parse_stream_progress_line(line)
+                if sprog is not None:
+                    try:
+                        on_stream_progress(sprog)
+                    except Exception:
+                        pass
+            if on_progress is not None:
+                prog = parse_progress_line(line)
+                if prog is not None:
+                    try:
+                        on_progress(prog)
+                    except Exception:
+                        pass
+
         async def _read_stream(
             stream: asyncio.StreamReader,
             target_deque: deque[str],
@@ -258,30 +364,38 @@ class SparkJobSubmitter:
                 while "\n" in buffer:
                     line, buffer = buffer.split("\n", 1)
                     target_deque.append(line)
-                    if is_stdout and on_progress is not None:
-                        prog = parse_progress_line(line)
-                        if prog is not None:
-                            try:
-                                on_progress(prog)
-                            except Exception:
-                                pass
+                    if is_stdout:
+                        _dispatch_stdout(line)
             if buffer:
                 target_deque.append(buffer)
-                if is_stdout and on_progress is not None:
-                    prog = parse_progress_line(buffer)
-                    if prog is not None:
-                        try:
-                            on_progress(prog)
-                        except Exception:
-                            pass
+                if is_stdout:
+                    _dispatch_stdout(buffer)
+
+        async def _watch_stop_event() -> None:
+            if stop_event is None:
+                return
+            await stop_event.wait()
+            try:
+                pgid = os.getpgid(proc.pid)
+                os.killpg(pgid, signal.SIGTERM)
+                logger.info("Sent SIGTERM to process group %d on stop_event", pgid)
+            except Exception as exc:
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+
+        gather_coros = [
+            _read_stream(proc.stdout, stdout_deque, True),
+            _read_stream(proc.stderr, stderr_deque, False),
+            proc.wait(),
+        ]
+        if stop_event is not None:
+            gather_coros.append(_watch_stop_event())
 
         try:
             await asyncio.wait_for(
-                asyncio.gather(
-                    _read_stream(proc.stdout, stdout_deque, True),
-                    _read_stream(proc.stderr, stderr_deque, False),
-                    proc.wait(),
-                ),
+                asyncio.gather(*gather_coros),
                 timeout=float(timeout),
             )
         except asyncio.TimeoutError:
@@ -301,6 +415,11 @@ class SparkJobSubmitter:
         stderr = "\n".join(stderr_deque)
 
         if proc.returncode != 0:
+            if stop_event is not None and stop_event.is_set():
+                for line in stdout.splitlines():
+                    if line.strip().startswith(_RESULT_PREFIX):
+                        return stdout, stderr
+
             diagnostic_lines = (stderr + "\n" + stdout).splitlines()
             markers = ("error", "exception", "caused by", "failed", "denied")
             matches = [

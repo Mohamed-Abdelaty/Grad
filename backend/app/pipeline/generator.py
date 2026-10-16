@@ -88,6 +88,9 @@ class ExecutionPlan:
     steps: list[ExecutionStep] = field(default_factory=list)
     messaging_config: dict | None = None
     processing_engine_type: str | None = None  # e.g. "spark"; None → pandas path
+    streaming_config: dict | None = None
+    streaming_enabled: bool = False
+    schema_def: list[dict] = field(default_factory=list)
 
     @property
     def source_step(self) -> ExecutionStep:
@@ -206,6 +209,13 @@ class PipelineGenerator:
             if config.processing_engine is not None
             else None
         )
+        streaming_dict = (
+            config.streaming.model_dump() if config.streaming is not None else None
+        )
+        streaming_enabled = (
+            bool(config.streaming.enabled) if config.streaming is not None else False
+        )
+        schema_list = [col.model_dump() for col in config.pipeline_schema]
 
         plan = ExecutionPlan(
             pipeline_name=config.pipeline.name,
@@ -213,6 +223,9 @@ class PipelineGenerator:
             steps=steps,
             messaging_config=messaging_dict,
             processing_engine_type=engine_type,
+            streaming_config=streaming_dict,
+            streaming_enabled=streaming_enabled,
+            schema_def=schema_list,
         )
 
         logger.info(

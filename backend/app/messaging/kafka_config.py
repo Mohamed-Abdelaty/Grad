@@ -36,6 +36,10 @@ def get_producer_config(settings: Settings | None = None) -> dict[str, Any]:
         "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS,
         "client.id": settings.KAFKA_CLIENT_ID,
         "acks": settings.KAFKA_PRODUCER_ACKS,
+        "enable.idempotence": True,
+        "delivery.timeout.ms": 120000,
+        "retries": 10,
+        "max.in.flight.requests.per.connection": 5,
     }
 
 

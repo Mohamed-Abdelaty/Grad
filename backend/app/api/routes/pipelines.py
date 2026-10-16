@@ -62,6 +62,19 @@ def _extract_pipeline_name(yaml_content: str) -> str:
     return "unknown"
 
 
+def _extract_pipeline_mode(yaml_content: str) -> str:
+    """Best-effort extraction of pipeline mode (streaming vs batch) from raw YAML."""
+    try:
+        cfg = yaml.safe_load(yaml_content)
+        if isinstance(cfg, dict):
+            st = cfg.get("streaming")
+            if isinstance(st, dict) and bool(st.get("enabled")):
+                return "streaming"
+    except Exception:  # noqa: BLE001
+        pass
+    return "batch"
+
+
 async def _get_or_create_pipeline_and_version(
     db: AsyncSession, yaml_content: str
 ) -> tuple[Pipeline, PipelineVersion]:
@@ -484,7 +497,11 @@ async def run_pipeline(
 
     # ── Async mode (default) ───────────────────────────────────────────────────
     # Register with tracker BEFORE launching the task so events are not lost.
-    tracker.start(pipeline_run_id, _extract_pipeline_name(request.yaml_content))
+    tracker.start(
+        pipeline_run_id,
+        _extract_pipeline_name(request.yaml_content),
+        mode=_extract_pipeline_mode(request.yaml_content),
+    )
     asyncio.create_task(
         _run_pipeline_background(pipeline_run_id, request.yaml_content),
         name=f"pipeline-run-{pipeline_run_id}",

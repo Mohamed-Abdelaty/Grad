@@ -63,6 +63,7 @@ def build_progress_dict(
     kafka_published: int | None = None,
     kafka_failed: int = 0,
     kafka_end_offsets: int | None = None,
+    kafka_consumer_lag: int | None = None,
     spark_metrics: dict[str, Any] | None = None,
     spark_app_id: str | None = None,
     spark_tasks_total: int | None = None,
@@ -140,7 +141,7 @@ def build_progress_dict(
             "published": published,
             "failed": kafka_failed if kafka_failed is not None else 0,
             "endOffsets": kafka_end_offsets,
-            "consumerLag": None,
+            "consumerLag": kafka_consumer_lag,
         },
         "spark": {
             "appId": spark_app_id,
@@ -232,7 +233,7 @@ class RunProgressTracker:
 
     # ── Run lifecycle ──────────────────────────────────────────────────────────
 
-    def start(self, run_id: str, pipeline_name: str) -> None:
+    def start(self, run_id: str, pipeline_name: str, mode: str = "batch") -> None:
         """
         Register a new running pipeline.
 
@@ -244,6 +245,7 @@ class RunProgressTracker:
             self._runs[run_id] = {
                 "run_id": run_id,
                 "pipeline_name": pipeline_name,
+                "mode": mode,
                 "status": "running",
                 "stages": {
                     "source": {"key": "source", "state": "pending", "startedAt": None, "finishedAt": None, "error": None},
@@ -262,6 +264,7 @@ class RunProgressTracker:
                 "kafka_published": None,
                 "kafka_failed": 0,
                 "kafka_end_offsets": None,
+                "kafka_consumer_lag": None,
                 "spark_app_id": None,
                 "spark_tasks_total": None,
                 "spark_tasks_done": None,
@@ -385,6 +388,10 @@ class RunProgressTracker:
                 state["kafka_end_offsets"] = payload["end_offsets"]
             if "partitions" in payload:
                 state["kafka_partitions"] = payload["partitions"]
+            if "consumer_lag" in payload:
+                state["kafka_consumer_lag"] = payload["consumer_lag"]
+            elif "consumerLag" in payload:
+                state["kafka_consumer_lag"] = payload["consumerLag"]
             if "recordsPerSecond" in payload:
                 state["throughput_rps"] = payload["recordsPerSecond"]
             if "samples" in payload:
@@ -405,6 +412,10 @@ class RunProgressTracker:
                 state["kafka_end_offsets"] = payload["end_offsets"]
             if "partitions" in payload:
                 state["kafka_partitions"] = payload["partitions"]
+            if "consumer_lag" in payload:
+                state["kafka_consumer_lag"] = payload["consumer_lag"]
+            elif "consumerLag" in payload:
+                state["kafka_consumer_lag"] = payload["consumerLag"]
             if payload.get("topic"):
                 state["kafka_topic"] = payload.get("topic")
         elif event_type == "stage_skipped":
@@ -430,6 +441,23 @@ class RunProgressTracker:
                 state["spark_tasks_done"] = payload["tasksDone"]
             if "activeStage" in payload:
                 state["spark_active_stage"] = payload["activeStage"]
+            if "consumer_lag" in payload:
+                state["kafka_consumer_lag"] = payload["consumer_lag"]
+            elif "consumerLag" in payload:
+                state["kafka_consumer_lag"] = payload["consumerLag"]
+            if "records_in" in payload:
+                state["spark_records_in"] = payload["records_in"]
+            elif "totalInputRows" in payload:
+                state["spark_records_in"] = payload["totalInputRows"]
+            elif "numInputRows" in payload:
+                state["spark_records_in"] = payload["numInputRows"]
+            if "records_out" in payload:
+                state["spark_records_out"] = payload["records_out"]
+            elif "totalInputRows" in payload:
+                state["spark_records_out"] = payload["totalInputRows"]
+            rps = payload.get("processed_rows_per_second", payload.get("processedRowsPerSecond"))
+            if rps is not None:
+                state["throughput_rps"] = float(rps)
         elif event_type == "spark_done":
             st = stages["spark"]
             st["state"] = "done"
@@ -575,6 +603,7 @@ class RunProgressTracker:
         end_offsets: int | None = None,
         partitions: int | None = None,
         topic: str | None = None,
+        consumer_lag: int | None = None,
     ) -> None:
         """Update kafka stage counters."""
         with self._lock:
@@ -600,6 +629,8 @@ class RunProgressTracker:
                 state["kafka_partitions"] = partitions
             if topic is not None:
                 state["kafka_topic"] = topic
+            if consumer_lag is not None:
+                state["kafka_consumer_lag"] = consumer_lag
 
     def update_spark(
         self,
@@ -735,7 +766,7 @@ class RunProgressTracker:
             return build_progress_dict(
                 run_id=run_id,
                 status=state["status"],
-                mode="batch",
+                mode=state.get("mode", "batch"),
                 started_at=state.get("started_at"),
                 updated_at=_utc_now(),
                 completed_at=state.get("finished_at"),
@@ -750,6 +781,7 @@ class RunProgressTracker:
                 kafka_published=state.get("kafka_published"),
                 kafka_failed=state.get("kafka_failed", 0),
                 kafka_end_offsets=state.get("kafka_end_offsets"),
+                kafka_consumer_lag=state.get("kafka_consumer_lag"),
                 spark_metrics=state.get("spark_metrics"),
                 spark_app_id=state.get("spark_app_id"),
                 spark_tasks_total=state.get("spark_tasks_total"),
