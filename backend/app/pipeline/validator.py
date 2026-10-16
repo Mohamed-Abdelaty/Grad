@@ -29,9 +29,13 @@ from __future__ import annotations
 
 import logging
 
-from app.pipeline.config_models import AggregateOperation, PipelineConfig
+from app.pipeline.config_models import (
+    AggregateOperation,
+    FilterOperation,
+    PipelineConfig,
+    RemoveDuplicatesOperation,
+)
 from app.pipeline.exceptions import ValidationErrorDetail
-from app.pipeline.config_models import FilterOperation
 from app.pipeline.filter_expression import validate_filter_condition
 
 logger = logging.getLogger(__name__)
@@ -76,6 +80,8 @@ class PipelineBusinessValidator:
         errors: list[ValidationErrorDetail] = []
 
         errors.extend(self._check_streaming_requires_messaging(config))
+        errors.extend(self._check_streaming_unsupported_operations(config))
+        errors.extend(self._check_streaming_watermark_column(config))
         errors.extend(self._check_aggregate_column_references(config))
         errors.extend(self._check_api_source_requires_url(config))
         errors.extend(self._check_storage_path_is_absolute(config))
@@ -124,6 +130,78 @@ class PipelineBusinessValidator:
                 }
             ]
         return []
+
+    def _check_streaming_unsupported_operations(
+        self, config: PipelineConfig
+    ) -> list[ValidationErrorDetail]:
+        """
+        Rule: In streaming mode, aggregate operations are not supported yet,
+        and remove_duplicates requires a watermark on a timestamp column.
+        """
+        if not config.streaming.enabled:
+            return []
+
+        errors: list[ValidationErrorDetail] = []
+        for idx, op in enumerate(config.processing.operations):
+            if isinstance(op, AggregateOperation):
+                errors.append(
+                    {
+                        "field": f"processing.operations.{idx}",
+                        "message": (
+                            "Aggregate operations are not supported in streaming mode yet; "
+                            "remove the aggregate operation or set streaming.enabled to false."
+                        ),
+                    }
+                )
+            elif isinstance(op, RemoveDuplicatesOperation):
+                if config.streaming.watermark is None:
+                    errors.append(
+                        {
+                            "field": f"processing.operations.{idx}",
+                            "message": (
+                                "remove_duplicates in streaming mode requires streaming.watermark "
+                                "to be configured on an event-time timestamp column."
+                            ),
+                        }
+                    )
+        return errors
+
+    def _check_streaming_watermark_column(
+        self, config: PipelineConfig
+    ) -> list[ValidationErrorDetail]:
+        """
+        Rule: If streaming.watermark is configured, the watermark column must exist
+        in the declared schema and must have type 'timestamp'.
+        """
+        if not config.streaming.enabled or config.streaming.watermark is None:
+            return []
+
+        errors: list[ValidationErrorDetail] = []
+        schema_map = {col.name: col.type for col in config.pipeline_schema}
+        wm_col = config.streaming.watermark.column
+
+        if wm_col not in schema_map:
+            errors.append(
+                {
+                    "field": "streaming.watermark.column",
+                    "message": (
+                        f"Watermark column '{wm_col}' is not declared in the schema. "
+                        f"Declared columns: {sorted(schema_map.keys())}."
+                    ),
+                }
+            )
+        elif schema_map[wm_col] != "timestamp":
+            errors.append(
+                {
+                    "field": "streaming.watermark.column",
+                    "message": (
+                        f"Watermark column '{wm_col}' must have type 'timestamp', "
+                        f"but got '{schema_map[wm_col]}'."
+                    ),
+                }
+            )
+
+        return errors
 
     def _check_aggregate_column_references(
         self, config: PipelineConfig

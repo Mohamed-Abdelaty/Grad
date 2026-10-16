@@ -508,6 +508,148 @@ class TestNoDuplicateSchemaColumns:
         msg = schema_errors[0]["message"]
         assert "a" in msg and "b" in msg
 
+
+class TestStreamingValidatorRules:
+    """Tests for streaming operations and watermark validation."""
+
+    def test_streaming_aggregate_disallowed(
+        self, validator: PipelineBusinessValidator
+    ) -> None:
+        config = make_config(
+            {
+                "streaming": {"enabled": True},
+                "messaging": {
+                    "broker": "kafka",
+                    "topic": "events",
+                    "partitions": 3,
+                },
+                "processing": {
+                    "operations": [
+                        {
+                            "type": "aggregate",
+                            "group_by": "category",
+                            "operation": "sum",
+                            "field": "value",
+                        }
+                    ]
+                },
+            }
+        )
+        errors = validator.validate(config)
+        assert any(
+            err["field"] == "processing.operations.0"
+            and "Aggregate operations are not supported in streaming mode yet" in err["message"]
+            for err in errors
+        )
+
+    def test_streaming_remove_duplicates_without_watermark_disallowed(
+        self, validator: PipelineBusinessValidator
+    ) -> None:
+        config = make_config(
+            {
+                "streaming": {"enabled": True},
+                "messaging": {
+                    "broker": "kafka",
+                    "topic": "events",
+                },
+                "processing": {
+                    "operations": [{"type": "remove_duplicates"}],
+                },
+            }
+        )
+        errors = validator.validate(config)
+        assert any(
+            err["field"] == "processing.operations.0"
+            and "remove_duplicates in streaming mode requires streaming.watermark" in err["message"]
+            for err in errors
+        )
+
+    def test_streaming_watermark_column_not_in_schema(
+        self, validator: PipelineBusinessValidator
+    ) -> None:
+        config = make_config(
+            {
+                "streaming": {
+                    "enabled": True,
+                    "watermark": {"column": "event_time", "delay_seconds": 15},
+                },
+                "messaging": {
+                    "broker": "kafka",
+                    "topic": "events",
+                },
+                "processing": {
+                    "operations": [{"type": "remove_duplicates"}],
+                },
+            }
+        )
+        errors = validator.validate(config)
+        assert any(
+            err["field"] == "streaming.watermark.column"
+            and "Watermark column 'event_time' is not declared in the schema" in err["message"]
+            for err in errors
+        )
+
+    def test_streaming_watermark_column_not_timestamp(
+        self, validator: PipelineBusinessValidator
+    ) -> None:
+        config = make_config(
+            {
+                "schema": [
+                    {"name": "id", "type": "string"},
+                    {"name": "created_str", "type": "string"},
+                ],
+                "streaming": {
+                    "enabled": True,
+                    "watermark": {"column": "created_str", "delay_seconds": 15},
+                },
+                "messaging": {
+                    "broker": "kafka",
+                    "topic": "events",
+                },
+                "processing": {
+                    "operations": [{"type": "remove_duplicates"}],
+                },
+            }
+        )
+        errors = validator.validate(config)
+        assert any(
+            err["field"] == "streaming.watermark.column"
+            and "must have type 'timestamp'" in err["message"]
+            for err in errors
+        )
+
+    def test_streaming_valid_with_watermark_and_dedup(
+        self, validator: PipelineBusinessValidator
+    ) -> None:
+        config = make_config(
+            {
+                "schema": [
+                    {"name": "id", "type": "string"},
+                    {"name": "timestamp", "type": "timestamp"},
+                ],
+                "streaming": {
+                    "enabled": True,
+                    "trigger_interval_seconds": 5,
+                    "idle_timeout_seconds": 20,
+                    "max_runtime_seconds": 300,
+                    "starting_offsets": "earliest",
+                    "watermark": {"column": "timestamp", "delay_seconds": 10},
+                    "max_offsets_per_trigger": 1000,
+                },
+                "messaging": {
+                    "broker": "kafka",
+                    "topic": "events",
+                    "partitions": 3,
+                },
+                "processing": {
+                    "operations": [{"type": "remove_duplicates"}],
+                },
+            }
+        )
+        errors = validator.validate(config)
+        assert errors == []
+
+
     def test_unique_column_names_pass(
         self, validator: PipelineBusinessValidator
     ) -> None:

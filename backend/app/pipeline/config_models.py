@@ -240,12 +240,54 @@ class ProcessingConfig(BaseModel):
     )
 
 
+class WatermarkConfig(BaseModel):
+    """Event-time watermark configuration for streaming operations."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    column: str = Field(..., description="Timestamp column name to apply watermark on.")
+    delay_seconds: int = Field(
+        default=10, ge=1, le=86400, description="Watermark delay threshold in seconds."
+    )
+
+
 class StreamingConfig(BaseModel):
     """Controls whether the pipeline runs in streaming or batch mode."""
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(..., description="True for streaming mode, False for batch.")
+    trigger_interval_seconds: int = Field(
+        default=5,
+        ge=1,
+        le=60,
+        description="Structured Streaming micro-batch trigger interval in seconds.",
+    )
+    idle_timeout_seconds: int = Field(
+        default=20,
+        ge=5,
+        le=600,
+        description="Seconds of zero input rows and zero consumer lag before finite stream is marked complete.",
+    )
+    max_runtime_seconds: int = Field(
+        default=600,
+        ge=30,
+        le=3600,
+        description="Hard cap on stream execution duration in seconds.",
+    )
+    starting_offsets: Literal["earliest", "latest"] = Field(
+        default="earliest",
+        description="Kafka starting offset strategy.",
+    )
+    watermark: Optional[WatermarkConfig] = Field(
+        default=None,
+        description="Event-time watermark configuration for streaming deduplication / stateful ops.",
+    )
+    max_offsets_per_trigger: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Optional rate limiter per trigger.",
+    )
 
 
 class MessagingConfig(BaseModel):
