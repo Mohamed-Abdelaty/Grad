@@ -160,8 +160,12 @@ class StreamingCompletionDetector:
         now = time.monotonic()
         self.record_activity(current_total_rows, current_lag)
 
+        # A stream cannot be drained if an expected total is defined and producer is still active
+        if expected_total_rows is not None and not producer_done:
+            return False
+
         # Condition 1: Known producer total reached and lag is zero
-        if producer_done and expected_total_rows is not None and expected_total_rows > 0:
+        if expected_total_rows is not None and expected_total_rows > 0:
             if current_total_rows >= expected_total_rows and current_lag == 0:
                 logger.info(
                     "Streaming completion: expected rows (%d) reached with lag 0",
@@ -169,7 +173,7 @@ class StreamingCompletionDetector:
                 )
                 return True
 
-        # Condition 2: Lag is 0 and idle for idle_timeout_seconds
+        # Condition 2: Lag is 0 and idle for idle_timeout_seconds after producer is done
         idle_time = now - self.last_activity_time
         if current_lag == 0 and idle_time >= self.idle_timeout_seconds:
             logger.info(

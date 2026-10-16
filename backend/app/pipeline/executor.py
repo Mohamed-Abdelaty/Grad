@@ -995,8 +995,8 @@ class PipelineExecutor:
 
         def _publish_worker() -> None:
             nonlocal published_count, producer_done, producer_error
-            # Wait up to 15s for stream to start so Kafka messages aren't missed
-            stream_started_event.wait(timeout=15.0)
+            # Wait up to 30s for stream to start so Kafka messages aren't missed
+            stream_started_event.wait(timeout=30.0)
             try:
                 records = (
                     json.loads(df.to_json(orient="records", date_format="iso"))
@@ -1137,7 +1137,15 @@ class PipelineExecutor:
 
         duration_ms = round((time.perf_counter() - t0) * 1000, 2)
         total_rows = result.get("output_rows", total_input_rows)
-        ctx.record_stage("spark_streaming", {**result, "duration_ms": duration_ms})
+        ctx.record_stage(
+            "spark_streaming",
+            {
+                **result,
+                "output_path": output_path,
+                "actual_output_path": output_path,
+                "duration_ms": duration_ms,
+            },
+        )
         if tracker_run_id:
             _progress_tracker.update_spark(
                 tracker_run_id,

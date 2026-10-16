@@ -22,13 +22,14 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import signal
 import sys
 import threading
 import time
 from typing import Any
 
-from pyspark.sql import DataFrame
+from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.streaming import StreamingQuery
 from pyspark.sql.types import (
@@ -64,17 +65,11 @@ class StreamingProcessingJob(BaseSparkJob):
     schema enforcement, streaming operations, and HDFS checkpointing.
     """
 
-    def _build_session(self):
+    def _build_session(self) -> SparkSession:
         """Build SparkSession capped to 1 core for predictable multi-tenant scheduling."""
-        builder = (
-            self.SparkSession.builder.appName(self.__class__.__name__)
-            if hasattr(self, "SparkSession")
-            else super()._build_session().builder
-        )
         return (
-            super()
-            ._build_session()
-            .builder.config("spark.jars.packages", KAFKA_SPARK_PACKAGE)
+            SparkSession.builder.appName(self.__class__.__name__)
+            .config("spark.jars.packages", KAFKA_SPARK_PACKAGE)
             .config("spark.cores.max", "1")
             .config("spark.sql.adaptive.enabled", "true")
             .getOrCreate()
@@ -105,6 +100,11 @@ class StreamingProcessingJob(BaseSparkJob):
             type=int,
             default=None,
             help="Max offsets to consume per micro-batch trigger.",
+        )
+        parser.add_argument(
+            "--stop-file",
+            default=None,
+            help="Optional file path whose creation signals graceful stream shutdown.",
         )
         return parser
 
@@ -271,10 +271,16 @@ class StreamingProcessingJob(BaseSparkJob):
 
         last_seen_batch_id = -1
         total_input_rows = 0
+        total_output_rows = 0
+        stop_file = getattr(self.args, "stop_file", None)
 
         # Monitor loop: poll progress every 1s
         while query.isActive and not stop_event.is_set():
             time.sleep(1.0)
+            if stop_file and os.path.exists(stop_file):
+                self.logger.info("Stop file %s detected; stopping query cleanly...", stop_file)
+                stop_event.set()
+                break
             lp = query.lastProgress
             if lp is not None:
                 bid = lp.get("batchId", -1)
@@ -324,13 +330,18 @@ class StreamingProcessingJob(BaseSparkJob):
             print(f"STREAM_PROGRESS:{json.dumps(progress_payload)}", flush=True)
 
         duration = round(time.perf_counter() - start_time, 3)
-        status = "failed" if query.exception() else "success"
+        exc = query.exception()
+        if exc is not None:
+            self.logger.error("Streaming query terminated with exception: %s", exc)
+        status = "failed" if exc else "success"
         result_payload = {
             "input_rows": total_input_rows,
             "output_rows": total_input_rows,
             "duration_seconds": duration,
             "status": status,
         }
+        if exc is not None:
+            result_payload["error"] = str(exc)
         self._emit_result(result_payload)
         self.logger.info("Streaming job finished: %s", result_payload)
 

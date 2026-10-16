@@ -176,7 +176,7 @@ async def _finalize_run(
 
     # Resolve output_path from spark metrics or storage metrics
     stages = result.get("metrics", {})
-    spark_metrics = stages.get("spark_job", {})
+    spark_metrics = stages.get("spark_job") or stages.get("spark_streaming") or {}
     storage_metrics = next(
         (v for k, v in stages.items() if k.startswith("storage:")), {}
     )

@@ -370,10 +370,21 @@ async def get_run_progress(
     if "output_path" not in spark_metrics and run.output_path:
         spark_metrics["output_path"] = run.output_path
 
+    run_mode = "batch"
+    if run.config_yaml:
+        try:
+            import yaml
+            parsed_cfg = yaml.safe_load(run.config_yaml)
+            if isinstance(parsed_cfg, dict) and isinstance(parsed_cfg.get("streaming"), dict):
+                if bool(parsed_cfg["streaming"].get("enabled")):
+                    run_mode = "streaming"
+        except Exception:
+            pass
+
     progress_dict = build_progress_dict(
         run_id=run_id,
         status=run.status,
-        mode="batch",
+        mode=run_mode,
         started_at=run.started_at.isoformat() if run.started_at else None,
         updated_at=(run.finished_at or run.started_at or datetime.now(tz=timezone.utc)).isoformat(),
         completed_at=run.finished_at.isoformat() if run.finished_at else None,

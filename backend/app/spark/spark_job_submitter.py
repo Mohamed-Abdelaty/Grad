@@ -191,15 +191,21 @@ class SparkJobSubmitter:
         job_script = f"{jobs_path}/streaming_processing_job.py"
         config_json = json.dumps(config)
         spark_home = os.environ.get("SPARK_HOME", "/opt/bitnami/spark")
+        stop_file = f"/tmp/spark-stop-{run_id or 'anon'}"
 
         cmd = [
             f"{spark_home}/bin/spark-submit",
             "--master", self._settings.SPARK_MASTER_URL,
+            "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0",
             "--conf", "spark.cores.max=1",
+            "--conf", "spark.hadoop.HADOOP_USER_NAME=root",
+            "--conf", "spark.driver.extraJavaOptions=-DHADOOP_USER_NAME=root",
+            "--conf", "spark.executor.extraJavaOptions=-DHADOOP_USER_NAME=root",
             job_script,
             "--config-json", config_json,
             "--input-source", "kafka",
             "--output-path", output_path,
+            "--stop-file", stop_file,
         ]
         if checkpoint_path:
             cmd.extend(["--checkpoint-path", checkpoint_path])
@@ -218,6 +224,7 @@ class SparkJobSubmitter:
             on_stream_started=on_stream_started,
             on_stream_progress=on_stream_progress,
             stop_event=stop_event,
+            stop_file=stop_file,
         )
         return self._parse_result(stdout, stderr)
 
@@ -274,6 +281,7 @@ class SparkJobSubmitter:
         on_stream_started: Callable[[dict[str, Any]], None] | None = None,
         on_stream_progress: Callable[[dict[str, Any]], None] | None = None,
         stop_event: asyncio.Event | None = None,
+        stop_file: str | None = None,
     ) -> tuple[str, str]:
         """
         Execute *cmd* asynchronously, enforcing the configured timeout.
@@ -374,11 +382,30 @@ class SparkJobSubmitter:
         async def _watch_stop_event() -> None:
             if stop_event is None:
                 return
-            await stop_event.wait()
+            while proc.returncode is None:
+                if stop_event.is_set():
+                    break
+                await asyncio.sleep(0.2)
+            if proc.returncode is not None:
+                return
+            if stop_file:
+                try:
+                    with open(stop_file, "w") as f:
+                        f.write("stop")
+                    logger.info("Wrote stop_file %s on stop_event", stop_file)
+                except Exception as exc:
+                    logger.warning("Failed to write stop_file %s: %s", stop_file, exc)
+
+            # Wait up to 12s for process to exit cleanly on its own
+            for _ in range(24):
+                if proc.returncode is not None:
+                    return
+                await asyncio.sleep(0.5)
+
             try:
                 pgid = os.getpgid(proc.pid)
                 os.killpg(pgid, signal.SIGTERM)
-                logger.info("Sent SIGTERM to process group %d on stop_event", pgid)
+                logger.info("Sent fallback SIGTERM to process group %d on stop_event", pgid)
             except Exception as exc:
                 try:
                     proc.terminate()
@@ -407,6 +434,11 @@ class SparkJobSubmitter:
                 stderr="\n".join(stderr_deque),
             )
         finally:
+            if stop_file and os.path.exists(stop_file):
+                try:
+                    os.remove(stop_file)
+                except Exception:
+                    pass
             # Always deregister — whether the job succeeded, failed, or was killed.
             if run_id is not None:
                 tracker.deregister_proc_pid(run_id)
