@@ -6,6 +6,12 @@
     "file": "sales_csv.yaml"
   },
   {
+    "id": "sales-streaming",
+    "name": "Sales Transactions (Streaming)",
+    "description": "Structured Streaming pipeline consuming transactions from Kafka with real consumer lag tracking and Parquet sink.",
+    "file": "sales_streaming.yaml"
+  },
+  {
     "id": "iot-json",
     "name": "IoT Sensors Telemetry (JSON)",
     "description": "JSON sensor telemetry filtered and aggregated through Kafka and Spark into HDFS.",

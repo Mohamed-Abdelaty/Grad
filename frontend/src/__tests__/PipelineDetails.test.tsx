@@ -484,6 +484,29 @@ describe('PipelineDetails Live Operations View', () => {
     expect(screen.getByTestId('connection-badge')).toBeInTheDocument();
   });
 
+  it('renders streaming badge and consumer lag counter when mode is streaming', async () => {
+    const streamingProgress: RunProgress = {
+      ...mockRunningProgress,
+      mode: 'streaming',
+      kafka: {
+        ...mockRunningProgress.kafka,
+        consumerLag: 42,
+      },
+    };
+    vi.spyOn(runLiveHook, 'useRunLive').mockReturnValue({
+      progress: streamingProgress,
+      connection: 'live',
+      lastUpdatedAt: 1000,
+      error: null,
+    });
+
+    renderPage();
+    expect(screen.getByTestId('streaming-badge')).toHaveTextContent('STREAMING');
+    const lagTile = screen.getByTestId('counter-lag');
+    expect(lagTile).toBeInTheDocument();
+    expect(lagTile).toHaveTextContent('42');
+  });
+
   it('has zero accessibility violations (axe-core)', async () => {
     const { container } = renderPage();
     const results = await axe(container, {

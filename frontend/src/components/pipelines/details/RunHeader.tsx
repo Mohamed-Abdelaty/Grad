@@ -139,6 +139,15 @@ export const RunHeader = React.memo(function RunHeader({
 
           <StatusPill status={status} label={status} dot={isRunning} />
 
+          {progress?.mode === 'streaming' && (
+            <span
+              data-testid="streaming-badge"
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand/20 text-brand-light border border-brand/40 uppercase tracking-wide"
+            >
+              STREAMING
+            </span>
+          )}
+
           <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-surface-base px-2.5 py-1 rounded-md border border-surface-border">
             <ClockIcon className="h-3.5 w-3.5 text-slate-500" />
             <span className="tabular-nums font-mono">

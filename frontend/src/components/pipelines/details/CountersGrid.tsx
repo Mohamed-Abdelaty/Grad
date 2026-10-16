@@ -101,6 +101,18 @@ export const CountersGrid = React.memo(function CountersGrid({
         }
       />
 
+      {/* 4. Consumer lag */}
+      <CounterTile
+        testId="counter-lag"
+        label="Consumer Lag"
+        value={kafka?.consumerLag ?? null}
+        subtitle={
+          progress?.mode === 'streaming' && kafka?.consumerLag === 0 ? (
+            <span className="text-status-success font-medium">Drained</span>
+          ) : undefined
+        }
+      />
+
       {/* 4. Spark records in */}
       <CounterTile
         testId="counter-records-in"

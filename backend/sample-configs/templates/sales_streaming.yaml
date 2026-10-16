@@ -1,0 +1,34 @@
+pipeline:
+  name: sales-streaming
+  version: "1.0"
+source:
+  type: csv
+  path: /app/sample-data/sales_sample.csv
+schema:
+  - { name: transaction_id, type: string }
+  - { name: amount, type: double }
+  - { name: customer_id, type: string }
+  - { name: product_id, type: string }
+  - { name: sale_date, type: string }
+processing:
+  operations:
+    - { type: remove_nulls }
+    - { type: filter, condition: "amount > 0" }
+streaming:
+  enabled: true
+  trigger_interval_seconds: 5
+  idle_timeout_seconds: 20
+  max_runtime_seconds: 600
+  starting_offsets: earliest
+messaging:
+  broker: kafka
+  topic: sales-stream-events
+  partitions: 3
+  replication_factor: 1
+processing_engine:
+  type: spark
+storage:
+  type: hdfs
+  path: /data/processed/sales_streaming
+monitoring:
+  enabled: true

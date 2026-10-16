@@ -23,6 +23,7 @@ export const ActiveProgress = React.memo(function ActiveProgress({
 
   // Streaming mode handler
   if (progress.mode === 'streaming') {
+    const isDrained = progress.kafka.consumerLag === 0;
     return (
       <div
         data-testid="active-progress"
@@ -34,7 +35,9 @@ export const ActiveProgress = React.memo(function ActiveProgress({
               <span className="h-1.5 w-1.5 rounded-full bg-status-success animate-pulse" />
               Live Streaming
             </span>
-            <span className="text-xs text-slate-400">Processing live stream events</span>
+            <span className="text-xs text-slate-400">
+              {isDrained ? 'Stream drained' : `Draining Kafka: lag ${progress.kafka.consumerLag !== null ? formatCount(progress.kafka.consumerLag) : '—'}`}
+            </span>
           </div>
           {progress.kafka.consumerLag !== null && (
             <div className="text-xs font-mono text-slate-300">
