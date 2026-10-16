@@ -15,8 +15,17 @@ import AxeBuilder from '@axe-core/playwright';
 import * as path from 'path';
 import * as fs from 'fs';
 
-const USERNAME = process.env.E2E_USERNAME || 'admin';
-const PASSWORD = process.env.E2E_PASSWORD || '123456';
+const USERNAME = process.env.E2E_USERNAME ?? '';
+const PASSWORD = process.env.E2E_PASSWORD ?? '';
+
+test.beforeAll(() => {
+  if (!USERNAME) {
+    throw new Error('Missing required environment variable: E2E_USERNAME');
+  }
+  if (!PASSWORD) {
+    throw new Error('Missing required environment variable: E2E_PASSWORD');
+  }
+});
 
 const STREAMING_SAMPLE_YAML = `pipeline:
   name: "streaming-e2e-run"

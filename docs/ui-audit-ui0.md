@@ -115,17 +115,17 @@ row. Continue execution in a background task.
 
 ```tsx
 const [username, setUsername] = useState('mohamed');
-const [password, setPassword] = useState('123456');
+const [password, setPassword] = useState('<weak default removed>');
 ```
 
 `config.py` lines 53–54:
 
 ```python
 ADMIN_USERNAME: str = 'mohamed'
-ADMIN_PASSWORD: str = '123456'
+ADMIN_PASSWORD: str = '<weak default removed>'
 ```
 
-**Fix required:** Replace `useState('mohamed')` / `useState('123456')` with `useState('')`.
+**Fix required:** Replace `useState('mohamed')` / `useState('<weak default removed>')` with `useState('')`.
 In `config.py`, remove the default values and raise a `ValueError` at startup if they are unset
 in non-dev mode. Document in `.env.example`.
 
