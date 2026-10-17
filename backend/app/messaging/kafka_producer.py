@@ -24,18 +24,20 @@ from app.messaging.kafka_config import get_producer_config
 logger = logging.getLogger(__name__)
 
 
-def get_topic_end_offsets(topic: str, settings: Settings | None = None) -> int | None:
+def get_topic_partition_end_offsets(
+    topic: str, settings: Settings | None = None
+) -> dict[int, int] | None:
     """
-    Query the sum of end offsets (high watermarks) across all partitions of *topic*.
+    Query the end offset (high watermark) for each partition of *topic*.
 
     Creates a short-lived probe consumer, queries watermarks with timeout=5,
-    sums the high watermarks, and always closes the consumer.
+    returns a dict of {partition_id: high_watermark}, and always closes the consumer.
     Returns None on any error.
     """
     settings = settings or get_settings()
     conf = {
         "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS,
-        "group.id": "chaosflow-offset-probe",
+        "group.id": f"chaosflow-offset-probe-{topic}",
         "enable.auto.commit": False,
     }
     consumer = None
@@ -51,15 +53,17 @@ def get_topic_end_offsets(topic: str, settings: Settings | None = None) -> int |
         if not partition_ids:
             return None
 
-        total_end_offset = 0
+        offsets: dict[int, int] = {}
         for p in partition_ids:
             low, high = consumer.get_watermark_offsets(
                 TopicPartition(topic, p), timeout=5.0, cached=False
             )
-            total_end_offset += high
-        return total_end_offset
+            offsets[p] = high
+        return offsets
     except Exception as exc:
-        logger.warning("Failed to get topic end offsets for '%s': %s", topic, exc)
+        logger.warning(
+            "Failed to get topic partition end offsets for '%s': %s", topic, exc
+        )
         return None
     finally:
         if consumer is not None:
@@ -67,6 +71,18 @@ def get_topic_end_offsets(topic: str, settings: Settings | None = None) -> int |
                 consumer.close()
             except Exception:
                 pass
+
+
+def get_topic_end_offsets(topic: str, settings: Settings | None = None) -> int | None:
+    """
+    Query the sum of end offsets (high watermarks) across all partitions of *topic*.
+
+    Returns the sum of high watermarks across all partitions, or None on error.
+    """
+    offsets = get_topic_partition_end_offsets(topic, settings)
+    if offsets is None:
+        return None
+    return sum(offsets.values())
 
 
 class KafkaProducerClient:

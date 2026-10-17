@@ -90,6 +90,7 @@ class ExecutionPlan:
     processing_engine_type: str | None = None  # e.g. "spark"; None → pandas path
     streaming_config: dict | None = None
     streaming_enabled: bool = False
+    batch_kafka_ingestion: dict | None = None
     schema_def: list[dict] = field(default_factory=list)
 
     @property
@@ -215,6 +216,11 @@ class PipelineGenerator:
         streaming_enabled = (
             bool(config.streaming.enabled) if config.streaming is not None else False
         )
+        batch_kafka_dict = (
+            config.batch_kafka_ingestion.model_dump()
+            if config.batch_kafka_ingestion is not None
+            else None
+        )
         schema_list = [col.model_dump() for col in config.pipeline_schema]
 
         plan = ExecutionPlan(
@@ -225,6 +231,7 @@ class PipelineGenerator:
             processing_engine_type=engine_type,
             streaming_config=streaming_dict,
             streaming_enabled=streaming_enabled,
+            batch_kafka_ingestion=batch_kafka_dict,
             schema_def=schema_list,
         )
 

@@ -28,6 +28,7 @@ Rules
 from __future__ import annotations
 
 import logging
+import re
 
 from app.pipeline.config_models import (
     AggregateOperation,
@@ -87,6 +88,7 @@ class PipelineBusinessValidator:
         errors.extend(self._check_storage_path_is_absolute(config))
         errors.extend(self._check_no_duplicate_schema_columns(config))
         errors.extend(self._check_filter_conditions(config))
+        errors.extend(self._check_batch_kafka_ingestion(config))
 
         if errors:
             logger.debug(
@@ -323,3 +325,69 @@ class PipelineBusinessValidator:
                 }
             ]
         return []
+
+    def _check_batch_kafka_ingestion(
+        self, config: PipelineConfig
+    ) -> list[ValidationErrorDetail]:
+        """
+        Validate batch Kafka ingestion settings when enabled.
+
+        - Can only be enabled when streaming.enabled is False.
+        - Requires processing_engine.type == 'spark'.
+        - Topic name (if specified) must be valid Kafka topic identifier.
+        """
+        errors: list[ValidationErrorDetail] = []
+        bki = config.batch_kafka_ingestion
+        if bki is None or not bki.enabled:
+            return errors
+
+        if config.streaming.enabled:
+            errors.append(
+                {
+                    "field": "batch_kafka_ingestion",
+                    "message": "batch_kafka_ingestion cannot be enabled when streaming.enabled is True.",
+                }
+            )
+
+        engine_type = (
+            config.processing_engine.type
+            if config.processing_engine is not None
+            else None
+        )
+        if engine_type != "spark":
+            errors.append(
+                {
+                    "field": "batch_kafka_ingestion",
+                    "message": "batch_kafka_ingestion requires processing_engine.type to be 'spark'.",
+                }
+            )
+
+        if bki.topic is not None:
+            topic = bki.topic.strip()
+            if not topic:
+                errors.append(
+                    {
+                        "field": "batch_kafka_ingestion.topic",
+                        "message": "batch_kafka_ingestion.topic cannot be empty.",
+                    }
+                )
+            elif len(topic) > 249:
+                errors.append(
+                    {
+                        "field": "batch_kafka_ingestion.topic",
+                        "message": "batch_kafka_ingestion.topic exceeds maximum length of 249 characters.",
+                    }
+                )
+            elif not re.match(r"^[a-zA-Z0-9._-]+$", topic) or topic in (".", ".."):
+                errors.append(
+                    {
+                        "field": "batch_kafka_ingestion.topic",
+                        "message": (
+                            f"batch_kafka_ingestion.topic '{topic}' contains invalid characters. "
+                            "Only letters, numbers, dots, underscores, and hyphens are allowed."
+                        ),
+                    }
+                )
+
+        return errors
+

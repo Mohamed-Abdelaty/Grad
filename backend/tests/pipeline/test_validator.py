@@ -824,3 +824,90 @@ class TestMultipleRulesCanFailTogether:
         errors = validator.validate(config)
         # At minimum: rule1 + rule2(×2) + rule3 + rule4 + rule5 = 6 errors
         assert len(errors) >= 5
+
+
+# ── Batch Kafka Ingestion Rules ───────────────────────────────────────────────
+
+
+class TestBatchKafkaIngestionValidatorRules:
+    """Business validation rules for batch Kafka ingestion."""
+
+    def test_default_config_has_batch_kafka_disabled(self) -> None:
+        cfg = make_config({})
+        assert cfg.batch_kafka_ingestion is not None
+        assert cfg.batch_kafka_ingestion.enabled is False
+
+    def test_batch_kafka_disallowed_when_streaming_enabled(
+        self, validator: PipelineBusinessValidator
+    ) -> None:
+        cfg = make_config({
+            "streaming": {"enabled": True},
+            "messaging": {
+                "broker": "kafka",
+                "topic": "events",
+                "partitions": 1,
+                "replication_factor": 1,
+            },
+            "processing_engine": {"type": "spark"},
+            "batch_kafka_ingestion": {"enabled": True},
+        })
+        errors = validator.validate(cfg)
+        fields = [e["field"] for e in errors]
+        assert "batch_kafka_ingestion" in fields
+
+    def test_batch_kafka_requires_spark_processing_engine(
+        self, validator: PipelineBusinessValidator
+    ) -> None:
+        cfg = make_config({
+            "processing_engine": None,
+            "batch_kafka_ingestion": {"enabled": True},
+        })
+        errors = validator.validate(cfg)
+        fields = [e["field"] for e in errors]
+        assert "batch_kafka_ingestion" in fields
+        assert any("spark" in e["message"] for e in errors)
+
+    def test_batch_kafka_invalid_topic_characters(
+        self, validator: PipelineBusinessValidator
+    ) -> None:
+        cfg = make_config({
+            "processing_engine": {"type": "spark"},
+            "batch_kafka_ingestion": {
+                "enabled": True,
+                "topic": "invalid topic with spaces!",
+            },
+        })
+        errors = validator.validate(cfg)
+        fields = [e["field"] for e in errors]
+        assert "batch_kafka_ingestion.topic" in fields
+
+    def test_batch_kafka_topic_too_long(
+        self, validator: PipelineBusinessValidator
+    ) -> None:
+        cfg = make_config({
+            "processing_engine": {"type": "spark"},
+            "batch_kafka_ingestion": {
+                "enabled": True,
+                "topic": "a" * 250,
+            },
+        })
+        errors = validator.validate(cfg)
+        fields = [e["field"] for e in errors]
+        assert "batch_kafka_ingestion.topic" in fields
+
+    def test_batch_kafka_valid_config_passes(
+        self, validator: PipelineBusinessValidator
+    ) -> None:
+        cfg = make_config({
+            "processing_engine": {"type": "spark"},
+            "batch_kafka_ingestion": {
+                "enabled": True,
+                "topic": "valid-batch-topic-1",
+                "partitions": 3,
+                "replication_factor": 1,
+                "cleanup_topic": True,
+            },
+        })
+        errors = validator.validate(cfg)
+        assert errors == []
+

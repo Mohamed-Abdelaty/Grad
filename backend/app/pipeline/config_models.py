@@ -345,6 +345,35 @@ class MonitoringConfig(BaseModel):
     enabled: bool = Field(..., description="True to enable monitoring hooks.")
 
 
+class BatchKafkaIngestionConfig(BaseModel):
+    """Configuration for optional Kafka staging in batch mode."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to route batch records through Kafka before Spark.",
+    )
+    topic: Optional[str] = Field(
+        default=None,
+        description="Optional custom topic name. Defaults to an isolated run-scoped topic.",
+    )
+    partitions: int = Field(
+        default=1,
+        ge=1,
+        description="Number of topic partitions (default 1).",
+    )
+    replication_factor: int = Field(
+        default=1,
+        ge=1,
+        description="Replication factor for the topic (default 1).",
+    )
+    cleanup_topic: bool = Field(
+        default=True,
+        description="Whether to delete the topic after the batch run finishes.",
+    )
+
+
 # ── Top-level config ───────────────────────────────────────────────────────────
 
 
@@ -385,3 +414,8 @@ class PipelineConfig(BaseModel):
     )
     storage: StorageConfig
     monitoring: Optional[MonitoringConfig] = None
+    batch_kafka_ingestion: Optional[BatchKafkaIngestionConfig] = Field(
+        default_factory=BatchKafkaIngestionConfig,
+        description="Optional batch ingestion via Kafka configuration.",
+    )
+

@@ -35,8 +35,10 @@ Each step's row count and wall-clock duration are recorded in
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
+import re
 import threading
 import time
 import uuid
@@ -189,6 +191,21 @@ def _delete_hdfs_path(hdfs_path: str, recursive: bool = False) -> None:
         logger.warning("Failed to delete HDFS path %s: %s", hdfs_path, exc)
 
 
+def sanitize_kafka_topic_name(name: str) -> str:
+    """
+    Sanitize a string for use as a Kafka topic name.
+
+    Kafka topics:
+    - Max 249 characters
+    - Valid characters: [a-zA-Z0-9._-]
+    """
+    sanitized = re.sub(r"[^a-zA-Z0-9._-]", "-", name)
+    sanitized = sanitized.strip(".-")
+    if not sanitized:
+        sanitized = f"batch-run-{uuid.uuid4().hex[:8]}"
+    return sanitized[:249]
+
+
 # ── Executor exception ─────────────────────────────────────────────────────────
 
 
@@ -278,38 +295,20 @@ class PipelineExecutor:
         )
 
         df: pd.DataFrame | None = None
+        batch_kafka_topic: str | None = None
+        cleanup_batch_topic: bool = False
+        batch_kafka_offsets: tuple[str, str] | None = None
+        batch_published_count: int | None = None
 
-        # ── Source step ────────────────────────────────────────────────────────
-        source_step = next(s for s in plan.steps if s.step_type == "source")
-        df = self._run_source(source_step, ctx, tracker_run_id)
-
-        # ── Cancel check ───────────────────────────────────────────────────────
-        if tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id):
-            ctx.status = "failed"
-            ctx.log_info("executor", "Pipeline cancelled after source stage.")
-            raise PipelineExecutionError(
-                message="Cancelled",
-                step_name="executor",
-                context=ctx,
-                cause=RuntimeError("Cancelled by user request"),
-            )
-
-        # ── Processing branch ──────────────────────────────────────────────────
-        if plan.streaming_enabled and plan.processing_engine_type == "spark":
-            # Streaming Spark path: coordinate topic, Kafka publishing, and Spark Structured Streaming
-            self._run_spark_streaming_job(plan, df, ctx, tracker_run_id)
-        else:
-            # ── Optional Kafka publish ─────────────────────────────────────────
-            if plan.messaging_config:
-                self._publish_to_kafka(plan.messaging_config, df, ctx, tracker_run_id)
-            else:
-                if tracker_run_id:
-                    _progress_tracker.set_stage_state(tracker_run_id, "kafka", "skipped")
+        try:
+            # ── Source step ────────────────────────────────────────────────────
+            source_step = next(s for s in plan.steps if s.step_type == "source")
+            df = self._run_source(source_step, ctx, tracker_run_id)
 
             # ── Cancel check ───────────────────────────────────────────────────
             if tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id):
                 ctx.status = "failed"
-                ctx.log_info("executor", "Pipeline cancelled after Kafka stage.")
+                ctx.log_info("executor", "Pipeline cancelled after source stage.")
                 raise PipelineExecutionError(
                     message="Cancelled",
                     step_name="executor",
@@ -317,31 +316,196 @@ class PipelineExecutor:
                     cause=RuntimeError("Cancelled by user request"),
                 )
 
-            if plan.processing_engine_type == "spark":
-                # Spark batch path: submit the whole processing block as a Spark job.
-                # The storage step afterward is skipped — Spark writes Parquet directly.
-                self._run_spark_job(plan, df, ctx, tracker_run_id)
+            # ── Processing branch ──────────────────────────────────────────────
+            if plan.streaming_enabled and plan.processing_engine_type == "spark":
+                # Streaming Spark path: coordinate topic, Kafka publishing, and Spark Structured Streaming
+                self._run_spark_streaming_job(plan, df, ctx, tracker_run_id)
             else:
-                # Pandas path (Phase 3): run processors in-process, then storage.
-                for step in plan.steps:
-                    if step.step_type == "processor":
-                        df = self._run_processor(step, df, ctx)
-                    elif step.step_type == "storage":
-                        _progress_tracker.emit(tracker_run_id, "hdfs_start")
-                        self._run_storage(step, df, ctx)
-                        _progress_tracker.emit(
-                            tracker_run_id,
-                            "hdfs_done",
-                            {"rows": len(df)},
-                        )
-                    # source already handled above
+                batch_kafka_cfg = plan.batch_kafka_ingestion or {}
+                use_batch_kafka = bool(batch_kafka_cfg.get("enabled"))
 
-        ctx.status = "success"
-        from app.metrics import pipeline_records_processed_total
-        pipeline_records_processed_total.labels(plan.pipeline_name).inc(len(df))
-        ctx.log_info("executor", f"Pipeline '{plan.pipeline_name}' completed successfully.")
-        logger.info("Pipeline '%s' run %s completed.", plan.pipeline_name, ctx.run_id)
-        return ctx
+                if use_batch_kafka:
+                    raw_topic = batch_kafka_cfg.get("topic") or f"batch-{plan.pipeline_name}-{ctx.run_id}"
+                    batch_kafka_topic = sanitize_kafka_topic_name(raw_topic)
+                    cleanup_batch_topic = bool(batch_kafka_cfg.get("cleanup_topic", True))
+                    partitions = batch_kafka_cfg.get("partitions", 1)
+                    replication_factor = batch_kafka_cfg.get("replication_factor", 1)
+
+                    t0_kafka = time.perf_counter()
+                    try:
+                        from app.messaging.kafka_admin import KafkaAdminClient
+                        from app.messaging.kafka_producer import (
+                            KafkaProducerClient,
+                            get_topic_partition_end_offsets,
+                        )
+
+                        admin = KafkaAdminClient()
+                        admin.create_topic(
+                            batch_kafka_topic,
+                            partitions=partitions,
+                            replication_factor=replication_factor,
+                        )
+
+                        producer = KafkaProducerClient()
+                        actual_partitions = producer.get_topic_partitions(batch_kafka_topic) or partitions
+                        if tracker_run_id:
+                            _progress_tracker.emit(
+                                tracker_run_id,
+                                "kafka_start",
+                                {"topic": batch_kafka_topic, "partitions": actual_partitions},
+                            )
+                        ctx.log_info(
+                            "kafka_publish",
+                            f"Publishing {len(df)} batch records to Kafka topic '{batch_kafka_topic}'.",
+                        )
+
+                        def _on_batch_kafka_progress(published: int, failed: int) -> None:
+                            if tracker_run_id:
+                                _progress_tracker.update_kafka(
+                                    tracker_run_id,
+                                    published=published,
+                                    failed=failed,
+                                    partitions=actual_partitions,
+                                    topic=batch_kafka_topic,
+                                )
+                                _progress_tracker.emit(
+                                    tracker_run_id,
+                                    "kafka_progress",
+                                    {
+                                        "published": published,
+                                        "failed": failed,
+                                        "partitions": actual_partitions,
+                                        "topic": batch_kafka_topic,
+                                    },
+                                )
+
+                        records = json.loads(df.to_json(orient="records", date_format="iso"))
+                        publish_result = producer.produce_batch(
+                            batch_kafka_topic,
+                            records,
+                            on_progress=_on_batch_kafka_progress,
+                        )
+
+                        part_offsets = get_topic_partition_end_offsets(batch_kafka_topic)
+                        final_end_offsets = sum(part_offsets.values()) if part_offsets else 0
+                        duration_ms = round((time.perf_counter() - t0_kafka) * 1000, 2)
+                        meta_with_timing = {**publish_result, "duration_ms": duration_ms}
+                        ctx.record_stage("kafka_publish", meta_with_timing)
+                        batch_published_count = publish_result.get("produced", 0)
+                        failed = publish_result.get("failed", 0)
+
+                        if failed > 0:
+                            raise RuntimeError(
+                                f"Failed to publish {failed} records to Kafka topic '{batch_kafka_topic}'"
+                            )
+
+                        if tracker_run_id:
+                            _progress_tracker.emit(
+                                tracker_run_id,
+                                "kafka_done",
+                                {
+                                    "count": batch_published_count,
+                                    "published": batch_published_count,
+                                    "failed": failed,
+                                    "end_offsets": final_end_offsets,
+                                    "partitions": actual_partitions,
+                                    "topic": batch_kafka_topic,
+                                    "duration_ms": duration_ms,
+                                },
+                            )
+
+                        if part_offsets:
+                            starting_offsets_json = json.dumps(
+                                {batch_kafka_topic: {str(p): 0 for p in part_offsets.keys()}}
+                            )
+                            ending_offsets_json = json.dumps(
+                                {batch_kafka_topic: {str(p): off for p, off in part_offsets.items()}}
+                            )
+                        else:
+                            starting_offsets_json = "earliest"
+                            ending_offsets_json = "latest"
+
+                        batch_kafka_offsets = (starting_offsets_json, ending_offsets_json)
+
+                    except Exception as exc:
+                        if tracker_run_id:
+                            _progress_tracker.set_stage_state(
+                                tracker_run_id, "kafka", "error", error=str(exc)
+                            )
+                        publish_step = ExecutionStep(
+                            name="kafka_publish",
+                            step_type="messaging",
+                            plugin_type="kafka",
+                            plugin=None,
+                            config={"topic": batch_kafka_topic, "partitions": partitions},
+                        )
+                        self._handle_failure(publish_step, ctx, exc)
+                elif plan.messaging_config:
+                    self._publish_to_kafka(plan.messaging_config, df, ctx, tracker_run_id)
+                else:
+                    if tracker_run_id:
+                        _progress_tracker.set_stage_state(tracker_run_id, "kafka", "skipped")
+
+                # ── Cancel check ───────────────────────────────────────────────
+                if tracker_run_id and _progress_tracker.is_cancel_requested(tracker_run_id):
+                    ctx.status = "failed"
+                    ctx.log_info("executor", "Pipeline cancelled after Kafka stage.")
+                    raise PipelineExecutionError(
+                        message="Cancelled",
+                        step_name="executor",
+                        context=ctx,
+                        cause=RuntimeError("Cancelled by user request"),
+                    )
+
+                if plan.processing_engine_type == "spark":
+                    # Spark batch path: submit the whole processing block as a Spark job.
+                    # The storage step afterward is skipped — Spark writes Parquet directly.
+                    self._run_spark_job(
+                        plan,
+                        df,
+                        ctx,
+                        tracker_run_id,
+                        batch_kafka_topic=batch_kafka_topic,
+                        batch_kafka_offsets=batch_kafka_offsets,
+                        batch_published_count=batch_published_count,
+                    )
+                else:
+                    # Pandas path (Phase 3): run processors in-process, then storage.
+                    for step in plan.steps:
+                        if step.step_type == "processor":
+                            df = self._run_processor(step, df, ctx)
+                        elif step.step_type == "storage":
+                            _progress_tracker.emit(tracker_run_id, "hdfs_start")
+                            self._run_storage(step, df, ctx)
+                            _progress_tracker.emit(
+                                tracker_run_id,
+                                "hdfs_done",
+                                {"rows": len(df)},
+                            )
+                        # source already handled above
+
+            ctx.status = "success"
+            from app.metrics import pipeline_records_processed_total
+            pipeline_records_processed_total.labels(plan.pipeline_name).inc(len(df))
+            ctx.log_info("executor", f"Pipeline '{plan.pipeline_name}' completed successfully.")
+            logger.info("Pipeline '%s' run %s completed.", plan.pipeline_name, ctx.run_id)
+            return ctx
+        finally:
+            if batch_kafka_topic and cleanup_batch_topic:
+                try:
+                    from app.messaging.kafka_admin import KafkaAdminClient
+
+                    admin = KafkaAdminClient()
+                    admin.delete_topic(batch_kafka_topic)
+                    ctx.log_info(
+                        "executor", f"Cleaned up batch Kafka topic '{batch_kafka_topic}'."
+                    )
+                except Exception as cleanup_exc:
+                    logger.warning(
+                        "Failed to clean up batch Kafka topic '%s': %s",
+                        batch_kafka_topic,
+                        cleanup_exc,
+                    )
 
     # ── Step runners ───────────────────────────────────────────────────────────
 
@@ -579,6 +743,9 @@ class PipelineExecutor:
         df: pd.DataFrame,
         ctx: PipelineExecutionContext,
         tracker_run_id: str | None = None,
+        batch_kafka_topic: str | None = None,
+        batch_kafka_offsets: tuple[str, str] | None = None,
+        batch_published_count: int | None = None,
     ) -> None:
         """
         Submit a Spark batch job for the pipeline's processing + storage steps.
@@ -622,7 +789,10 @@ class PipelineExecutor:
         output_path: str | None = None
         try:
             source_step = next(s for s in plan.steps if s.step_type == "source")
-            input_source: str | None = source_step.config.get("path")
+            if batch_kafka_topic:
+                input_source = f"kafka:{batch_kafka_topic}"
+            else:
+                input_source = source_step.config.get("path")
 
             if not input_source:
                 # Source has no file path (e.g. api_source, kafka_source).
@@ -683,7 +853,19 @@ class PipelineExecutor:
                     f"'{output_path}' (Spark workers cannot see backend-local paths).",
                 )
 
-            processing_config = {"processing": {"operations": operations}}
+            processing_config: dict[str, Any] = {
+                "processing": {"operations": operations},
+                "schema": plan.schema_def,
+            }
+            if batch_kafka_topic:
+                start_off, end_off = batch_kafka_offsets or ("earliest", "latest")
+                processing_config["batch_kafka_ingestion"] = {
+                    "enabled": True,
+                    "topic": batch_kafka_topic,
+                    "starting_offsets": start_off,
+                    "ending_offsets": end_off,
+                    "bootstrap_servers": "kafka:9092",
+                }
 
             # ── Submit job & background HDFS poller ────────────────────────────
             hdfs_client = HdfsStorageClient()
@@ -763,36 +945,45 @@ class PipelineExecutor:
                 if hdfs_poller_thread is not None and hdfs_poller_thread.is_alive():
                     hdfs_poller_thread.join(timeout=2.0)
 
+            if batch_kafka_topic and batch_published_count is not None:
+                spark_in = result.get("input_rows")
+                if spark_in is not None and spark_in != batch_published_count:
+                    raise RuntimeError(
+                        f"Batch Kafka ingestion mismatch: published {batch_published_count} rows, "
+                        f"but Spark read {spark_in} rows."
+                    )
+
             duration_ms = round((time.perf_counter() - t0) * 1000, 2)
-            ctx.record_stage(
-                "spark_job",
-                {
-                    "input_rows": result.get("input_rows"),
-                    "output_rows": result.get("output_rows"),
-                    "duration_seconds": result.get("duration_seconds"),
-                    "output_path": output_path,
-                    "actual_output_path": output_path,
-                    "duration_ms": duration_ms,
-                },
-            )
+            stage_metrics: dict[str, Any] = {
+                "input_rows": result.get("input_rows"),
+                "output_rows": result.get("output_rows"),
+                "duration_seconds": result.get("duration_seconds"),
+                "output_path": output_path,
+                "actual_output_path": output_path,
+                "duration_ms": duration_ms,
+            }
+            if batch_published_count is not None:
+                stage_metrics["published_count"] = batch_published_count
+            ctx.record_stage("spark_job", stage_metrics)
+
+            published_info = f" (published to Kafka: {batch_published_count})" if batch_published_count is not None else ""
             ctx.log_info(
                 "spark_job",
                 f"Spark job completed: {result.get('input_rows')} → "
-                f"{result.get('output_rows')} rows in {result.get('duration_seconds')}s. "
-                f"Output: {output_path}",
+                f"{result.get('output_rows')} rows in {result.get('duration_seconds')}s"
+                f"{published_info}. Output: {output_path}",
             )
-            _progress_tracker.emit(
-                tracker_run_id,
-                "spark_done",
-                {
-                    "input_rows": result.get("input_rows"),
-                    "output_rows": result.get("output_rows"),
-                    "output_path": output_path,
-                    "actual_output_path": output_path,
-                    "duration_seconds": result.get("duration_seconds"),
-                    "duration_ms": duration_ms,
-                },
-            )
+            spark_done_payload: dict[str, Any] = {
+                "input_rows": result.get("input_rows"),
+                "output_rows": result.get("output_rows"),
+                "output_path": output_path,
+                "actual_output_path": output_path,
+                "duration_seconds": result.get("duration_seconds"),
+                "duration_ms": duration_ms,
+            }
+            if batch_published_count is not None:
+                spark_done_payload["published_count"] = batch_published_count
+            _progress_tracker.emit(tracker_run_id, "spark_done", spark_done_payload)
 
             # ── Verify storage output ──────────────────────────────────────────
             # Stage hdfs: active when verification starts, done after verification.

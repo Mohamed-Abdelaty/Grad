@@ -27,12 +27,31 @@ import threading
 import time
 
 from pyspark.sql import DataFrame
+from pyspark.sql import functions as F
+from pyspark.sql.types import (
+    BooleanType,
+    DoubleType,
+    IntegerType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
+)
 
 from base_job import BaseSparkJob
 from operations.aggregate_ops import aggregate
 from operations.cleaning_ops import remove_duplicates, remove_nulls
 from operations.column_ops import convert_type, rename_columns, select_columns
 from operations.filter_ops import apply_filter
+
+_COLUMN_TYPE_MAP: dict[str, object] = {
+    "string": StringType(),
+    "integer": IntegerType(),
+    "double": DoubleType(),
+    "boolean": BooleanType(),
+    "timestamp": TimestampType(),
+}
+
 
 
 class BatchProcessingJob(BaseSparkJob):
@@ -138,7 +157,11 @@ class BatchProcessingJob(BaseSparkJob):
         monitor_thread.start()
 
         # ── Read source ────────────────────────────────────────────────────────
-        df = self._read_source(self.args.input_source)
+        batch_kafka_cfg = self.config.get("batch_kafka_ingestion", {})
+        if batch_kafka_cfg.get("enabled"):
+            df = self._read_kafka(batch_kafka_cfg)
+        else:
+            df = self._read_source(self.args.input_source)
         input_rows = df.count()
         self.logger.info("Read %d rows from source.", input_rows)
 
@@ -181,6 +204,48 @@ class BatchProcessingJob(BaseSparkJob):
         )
 
     # ── Private helpers ────────────────────────────────────────────────────────
+
+    def _build_schema(self, schema_def: list[dict[str, Any]]) -> StructType:
+        """Convert pipeline schema definition to Spark StructType."""
+        fields = []
+        for col in schema_def:
+            name = col["name"]
+            type_str = col.get("type", "string")
+            spark_type = _COLUMN_TYPE_MAP.get(type_str, StringType())
+            nullable = col.get("nullable", True)
+            fields.append(StructField(name, spark_type, nullable))
+        return StructType(fields)
+
+    def _read_kafka(self, kafka_cfg: dict[str, Any]) -> DataFrame:
+        """
+        Read batch dataset from Kafka using bounded offsets and deserialize JSON payload.
+        """
+        topic = kafka_cfg.get("topic")
+        bootstrap_servers = kafka_cfg.get("bootstrap_servers") or "kafka:9092"
+        starting_offsets = kafka_cfg.get("starting_offsets", "earliest")
+        ending_offsets = kafka_cfg.get("ending_offsets", "latest")
+
+        reader = (
+            self.spark.read.format("kafka")
+            .option("kafka.bootstrap.servers", bootstrap_servers)
+            .option("subscribe", topic)
+            .option("startingOffsets", starting_offsets)
+            .option("endingOffsets", ending_offsets)
+            .option("failOnDataLoss", "false")
+        )
+        raw_df = reader.load()
+
+        schema_def = self.config.get("schema", [])
+        if schema_def:
+            spark_schema = self._build_schema(schema_def)
+            df = raw_df.select(
+                F.from_json(F.col("value").cast("string"), spark_schema).alias("data")
+            ).select("data.*")
+        else:
+            df = self.spark.read.json(
+                raw_df.select(F.col("value").cast("string")).rdd.map(lambda r: r[0])
+            )
+        return df
 
     def _read_source(self, path: str) -> DataFrame:
         """

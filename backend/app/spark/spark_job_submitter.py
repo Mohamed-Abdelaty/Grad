@@ -129,15 +129,29 @@ class SparkJobSubmitter:
         job_script = f"{jobs_path}/batch_processing_job.py"
         config_json = json.dumps(processing_config)
 
+        use_kafka = bool(
+            processing_config.get("batch_kafka_ingestion", {}).get("enabled")
+        )
+
         spark_home = os.environ.get("SPARK_HOME", "/opt/bitnami/spark")
         cmd = [
             f"{spark_home}/bin/spark-submit",
             "--master", self._settings.SPARK_MASTER_URL,
+        ]
+        if use_kafka:
+            cmd.extend([
+                "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0",
+                "--conf", "spark.cores.max=1",
+                "--conf", "spark.hadoop.HADOOP_USER_NAME=root",
+                "--conf", "spark.driver.extraJavaOptions=-DHADOOP_USER_NAME=root",
+                "--conf", "spark.executor.extraJavaOptions=-DHADOOP_USER_NAME=root",
+            ])
+        cmd.extend([
             job_script,
             "--config-json", config_json,
             "--input-source", input_source,
             "--output-path", output_path,
-        ]
+        ])
 
         logger.info(
             "Submitting batch Spark job: input=%s output=%s master=%s run_id=%s",

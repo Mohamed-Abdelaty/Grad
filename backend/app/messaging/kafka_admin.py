@@ -71,6 +71,17 @@ class KafkaAdminClient:
                 f"Unexpected error checking topic existence for '{topic_name}': {exc}", cause=exc
             ) from exc
 
+    def list_topics(self, timeout: float = 5.0) -> list[str]:
+        """Return list of all existing topic names on the cluster."""
+        try:
+            metadata = self._admin.list_topics(timeout=timeout)
+            if metadata is None or metadata.topics is None:
+                return []
+            return list(metadata.topics.keys())
+        except Exception as exc:
+            logger.warning("Failed to list topics: %s", exc)
+            return []
+
     def create_topic(
         self,
         topic_name: str,

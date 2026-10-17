@@ -783,6 +783,64 @@ class TestSparkBranchWithMockedSubmitter:
         finally:
             tracker.finish(run_id)
 
+    def test_spark_batch_hdfs_verification_with_filter_dropping_rows_succeeds(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """When a filter operation drops rows (input_rows > output_rows), HDFS verification compares against output_rows and succeeds."""
+        from unittest.mock import AsyncMock, patch
+        from app.pipeline.progress import tracker
+
+        plan = self._make_plan_with_spark(tmp_path)
+        # Add a filter processing step that drops rows
+        filter_step = ExecutionStep(
+            name="processor:filter:0",
+            step_type="processor",
+            plugin_type="filter",
+            plugin=registry.get_processor("filter"),
+            config={"condition": "amount > 500"},
+        )
+        plan.steps.insert(1, filter_step)
+
+        storage_step = next(s for s in plan.steps if s.step_type == "storage")
+        storage_step.plugin_type = "hdfs"
+        storage_step.config["path"] = "/data/output/filter_test"
+
+        # Spark reads 20 rows, filters down to 14 rows, and writes 14 rows
+        mock_result = {
+            "input_rows": 20,
+            "output_rows": 14,
+            "duration_seconds": 1.2,
+            "status": "success",
+        }
+
+        run_id = "test-run-verify-filter-drop"
+        tracker.start(run_id, plan.pipeline_name, mode="batch")
+
+        try:
+            with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+                 patch("app.pipeline.executor.HdfsStorageClient") as MockHdfsClient:
+                mock_client = MockHdfsClient.return_value
+                mock_client.path_exists.return_value = True
+                mock_client.get_part_files_summary.return_value = {"fileCount": 1, "length": 400}
+                mock_client.content_summary.return_value = {"fileCount": 1, "length": 400}
+                # HDFS contains the 14 output rows
+                mock_client.count_rows.return_value = 14
+                mock_client._normalize_hdfs_path.side_effect = lambda p: p.replace("hdfs://namenode:9000", "")
+
+                instance = MockSubmitter.return_value
+                instance.submit_batch_job = AsyncMock(return_value=mock_result)
+
+                ctx = executor.execute(plan, tracker_run_id=run_id)
+
+            assert ctx.status == "success"
+            assert tracker.get_stage_state(run_id, "hdfs") == "done"
+            prog = tracker.get_progress(run_id)
+            assert prog is not None
+            assert prog["hdfs"]["verified"] is True
+            assert prog["hdfs"]["rowsWritten"] == 14
+        finally:
+            tracker.finish(run_id)
+
     @pytest.mark.parametrize(
         ("failure_mode", "expected_err"),
         [
@@ -846,6 +904,262 @@ class TestSparkBranchWithMockedSubmitter:
             assert expected_err in hdfs_stage["error"]
         finally:
             tracker.finish(run_id)
+
+    def test_batch_kafka_ingestion_end_to_end_success(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """Batch execution with Kafka ingestion routes Source -> Kafka -> Spark -> HDFS."""
+        from unittest.mock import AsyncMock, patch, MagicMock
+        from app.pipeline.progress import tracker
+
+        plan = self._make_plan_with_spark(tmp_path)
+        plan.batch_kafka_ingestion = {
+            "enabled": True,
+            "topic": "my-batch-topic",
+            "partitions": 2,
+            "replication_factor": 1,
+            "cleanup_topic": True,
+        }
+        storage_step = next(s for s in plan.steps if s.step_type == "storage")
+        storage_step.plugin_type = "hdfs"
+        storage_step.config["path"] = "/data/output/batch_kafka"
+
+        run_id = "test-run-batch-kafka-success"
+        tracker.start(run_id, plan.pipeline_name, mode="batch")
+
+        created_topics: list[str] = []
+        deleted_topics: list[str] = []
+
+        mock_admin = MagicMock()
+        mock_admin.create_topic.side_effect = lambda t, **kw: created_topics.append(t)
+        mock_admin.delete_topic.side_effect = lambda t: deleted_topics.append(t)
+
+        mock_producer = MagicMock()
+        mock_producer.get_topic_partitions.return_value = 2
+        mock_producer.produce_batch.return_value = {"produced": 20, "failed": 0}
+
+        mock_spark_result = {
+            "input_rows": 20,
+            "output_rows": 20,
+            "duration_seconds": 1.5,
+            "status": "success",
+        }
+
+        submitted_configs: list[dict] = []
+
+        try:
+            with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+                 patch("app.pipeline.executor.HdfsStorageClient") as MockHdfsClient, \
+                 patch("app.messaging.kafka_admin.KafkaAdminClient", return_value=mock_admin), \
+                 patch("app.messaging.kafka_producer.KafkaProducerClient", return_value=mock_producer), \
+                 patch("app.messaging.kafka_producer.get_topic_partition_end_offsets", return_value={0: 10, 1: 10}):
+
+                mock_client = MockHdfsClient.return_value
+                mock_client.path_exists.return_value = True
+                mock_client.get_part_files_summary.return_value = {"fileCount": 1, "length": 500}
+                mock_client.content_summary.return_value = {"fileCount": 1, "length": 500}
+                mock_client.count_rows.return_value = 20
+                mock_client._normalize_hdfs_path.side_effect = lambda p: p.replace("hdfs://namenode:9000", "")
+
+                async def fake_submit_batch(input_source, output_path, processing_config, **kw):
+                    submitted_configs.append(processing_config)
+                    assert input_source == "kafka:my-batch-topic"
+                    return mock_spark_result
+
+                inst = MockSubmitter.return_value
+                inst.submit_batch_job = AsyncMock(side_effect=fake_submit_batch)
+
+                ctx = executor.execute(plan, tracker_run_id=run_id)
+
+            assert ctx.status == "success"
+            assert created_topics == ["my-batch-topic"]
+            assert deleted_topics == ["my-batch-topic"]
+            assert len(submitted_configs) == 1
+            batch_cfg = submitted_configs[0].get("batch_kafka_ingestion", {})
+            assert batch_cfg.get("enabled") is True
+            assert batch_cfg.get("topic") == "my-batch-topic"
+            assert "0" in batch_cfg.get("starting_offsets", "")
+            assert "10" in batch_cfg.get("ending_offsets", "")
+
+            assert tracker.get_stage_state(run_id, "kafka") == "done"
+            assert tracker.get_stage_state(run_id, "spark") == "done"
+            assert tracker.get_stage_state(run_id, "hdfs") == "done"
+        finally:
+            tracker.finish(run_id)
+
+    def test_batch_kafka_ingestion_with_filter_dropping_rows_succeeds(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """When batch Kafka ingestion is used and a filter drops rows: published==input_rows, output_rows==hdfs_rows < input_rows, run succeeds."""
+        from unittest.mock import AsyncMock, patch, MagicMock
+        from app.pipeline.progress import tracker
+
+        plan = self._make_plan_with_spark(tmp_path)
+        filter_step = ExecutionStep(
+            name="processor:filter:0",
+            step_type="processor",
+            plugin_type="filter",
+            plugin=registry.get_processor("filter"),
+            config={"condition": "amount > 100"},
+        )
+        plan.steps.insert(1, filter_step)
+
+        plan.batch_kafka_ingestion = {
+            "enabled": True,
+            "topic": "filter-kafka-topic",
+            "partitions": 1,
+            "replication_factor": 1,
+            "cleanup_topic": True,
+        }
+        storage_step = next(s for s in plan.steps if s.step_type == "storage")
+        storage_step.plugin_type = "hdfs"
+        storage_step.config["path"] = "/data/output/filter_kafka_test"
+
+        run_id = "test-run-batch-kafka-filter-drop"
+        tracker.start(run_id, plan.pipeline_name, mode="batch")
+
+        created_topics: list[str] = []
+        deleted_topics: list[str] = []
+
+        mock_admin = MagicMock()
+        mock_admin.create_topic.side_effect = lambda t, **kw: created_topics.append(t)
+        mock_admin.delete_topic.side_effect = lambda t: deleted_topics.append(t)
+
+        mock_producer = MagicMock()
+        mock_producer.get_topic_partitions.return_value = 1
+        # 20 records published
+        mock_producer.produce_batch.return_value = {"produced": 20, "failed": 0}
+
+        # Spark reads 20 rows, filters down to 14 rows, and writes 14 rows
+        mock_spark_result = {
+            "input_rows": 20,
+            "output_rows": 14,
+            "duration_seconds": 1.5,
+            "status": "success",
+        }
+
+        try:
+            with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+                 patch("app.pipeline.executor.HdfsStorageClient") as MockHdfsClient, \
+                 patch("app.messaging.kafka_admin.KafkaAdminClient", return_value=mock_admin), \
+                 patch("app.messaging.kafka_producer.KafkaProducerClient", return_value=mock_producer), \
+                 patch("app.messaging.kafka_producer.get_topic_partition_end_offsets", return_value={0: 20}):
+
+                mock_client = MockHdfsClient.return_value
+                mock_client.path_exists.return_value = True
+                mock_client.get_part_files_summary.return_value = {"fileCount": 1, "length": 400}
+                mock_client.content_summary.return_value = {"fileCount": 1, "length": 400}
+                mock_client.count_rows.return_value = 14
+                mock_client._normalize_hdfs_path.side_effect = lambda p: p.replace("hdfs://namenode:9000", "")
+
+                inst = MockSubmitter.return_value
+                inst.submit_batch_job = AsyncMock(return_value=mock_spark_result)
+
+                ctx = executor.execute(plan, tracker_run_id=run_id)
+
+            assert ctx.status == "success"
+            assert deleted_topics == ["filter-kafka-topic"]
+            assert tracker.get_stage_state(run_id, "kafka") == "done"
+            assert tracker.get_stage_state(run_id, "spark") == "done"
+            assert tracker.get_stage_state(run_id, "hdfs") == "done"
+            prog = tracker.get_progress(run_id)
+            assert prog["spark"]["recordsIn"] == 20
+            assert prog["spark"]["recordsOut"] == 14
+            assert prog["hdfs"]["rowsWritten"] == 14
+            assert prog["hdfs"]["verified"] is True
+        finally:
+            tracker.finish(run_id)
+
+    def test_batch_kafka_ingestion_mismatch_fails_and_cleans_up(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """When Spark reads fewer rows than Kafka published, run fails and topic is cleaned up."""
+        from unittest.mock import AsyncMock, patch, MagicMock
+        from app.pipeline.progress import tracker
+
+        plan = self._make_plan_with_spark(tmp_path)
+        plan.batch_kafka_ingestion = {
+            "enabled": True,
+            "topic": "mismatch-topic",
+            "cleanup_topic": True,
+        }
+
+        run_id = "test-run-batch-kafka-mismatch"
+        tracker.start(run_id, plan.pipeline_name, mode="batch")
+
+        deleted_topics: list[str] = []
+        mock_admin = MagicMock()
+        mock_admin.delete_topic.side_effect = lambda t: deleted_topics.append(t)
+
+        mock_producer = MagicMock()
+        mock_producer.produce_batch.return_value = {"produced": 20, "failed": 0}
+
+        mock_spark_result = {
+            "input_rows": 18,  # mismatch! Expected 20
+            "output_rows": 18,
+            "duration_seconds": 1.0,
+            "status": "success",
+        }
+
+        try:
+            with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+                 patch("app.pipeline.executor.HdfsStorageClient"), \
+                 patch("app.messaging.kafka_admin.KafkaAdminClient", return_value=mock_admin), \
+                 patch("app.messaging.kafka_producer.KafkaProducerClient", return_value=mock_producer), \
+                 patch("app.messaging.kafka_producer.get_topic_partition_end_offsets", return_value={0: 20}):
+
+                inst = MockSubmitter.return_value
+                inst.submit_batch_job = AsyncMock(return_value=mock_spark_result)
+
+                with pytest.raises(PipelineExecutionError) as exc_info:
+                    executor.execute(plan, tracker_run_id=run_id)
+
+            assert exc_info.value.context.status == "failed"
+            assert "mismatch" in str(exc_info.value).lower()
+            assert deleted_topics == ["mismatch-topic"]
+        finally:
+            tracker.finish(run_id)
+
+    def test_batch_kafka_ingestion_producer_failure_fails_and_cleans_up(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """When Kafka produce fails, run fails with error in kafka stage and topic is cleaned up."""
+        from unittest.mock import patch, MagicMock
+        from app.pipeline.progress import tracker
+
+        plan = self._make_plan_with_spark(tmp_path)
+        plan.batch_kafka_ingestion = {
+            "enabled": True,
+            "topic": "fail-topic",
+            "cleanup_topic": True,
+        }
+
+        run_id = "test-run-batch-kafka-producer-fail"
+        tracker.start(run_id, plan.pipeline_name, mode="batch")
+
+        deleted_topics: list[str] = []
+        mock_admin = MagicMock()
+        mock_admin.delete_topic.side_effect = lambda t: deleted_topics.append(t)
+
+        mock_producer = MagicMock()
+        mock_producer.produce_batch.return_value = {"produced": 15, "failed": 5}
+
+        try:
+            with patch("app.pipeline.executor.SparkJobSubmitter"), \
+                 patch("app.pipeline.executor.HdfsStorageClient"), \
+                 patch("app.messaging.kafka_admin.KafkaAdminClient", return_value=mock_admin), \
+                 patch("app.messaging.kafka_producer.KafkaProducerClient", return_value=mock_producer), \
+                 patch("app.messaging.kafka_producer.get_topic_partition_end_offsets", return_value={0: 15}):
+
+                with pytest.raises(PipelineExecutionError) as exc_info:
+                    executor.execute(plan, tracker_run_id=run_id)
+
+            assert exc_info.value.context.status == "failed"
+            assert tracker.get_stage_state(run_id, "kafka") == "error"
+            assert deleted_topics == ["fail-topic"]
+        finally:
+            tracker.finish(run_id)
+
 
 
     @pytest.mark.parametrize("outcome", ["success", "failure", "timeout", "cancel"])
