@@ -78,10 +78,54 @@ class ExperimentRun(Base):
         comment="Associated pipeline run ID if driven by this experiment.",
     )
 
+    parent_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("experiment_runs.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="Parent experiment run ID for grouped repetitions.",
+    )
+
+    repetition_index: Mapped[int | None] = mapped_column(
+        nullable=True,
+        comment="1-based index of this repetition within the parent run.",
+    )
+
+    repetition_count: Mapped[int] = mapped_column(
+        nullable=False,
+        default=1,
+        server_default="1",
+        comment="Total number of repetitions configured for this experiment.",
+    )
+
+    pre_fault_accounting: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Snapshot of pipeline counters immediately prior to fault injection.",
+    )
+
+    aggregated_metrics: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Statistical aggregation across completed repetitions (parent run only).",
+    )
+
     # ── Relationships ──────────────────────────────────────────────────────────
     experiment: Mapped["Experiment"] = relationship(  # noqa: F821
         "Experiment",
         back_populates="runs",
+    )
+
+    parent_run: Mapped["ExperimentRun | None"] = relationship(
+        "ExperimentRun",
+        remote_side="ExperimentRun.id",
+        back_populates="child_runs",
+    )
+
+    child_runs: Mapped[list["ExperimentRun"]] = relationship(
+        "ExperimentRun",
+        cascade="all, delete-orphan",
+        back_populates="parent_run",
     )
 
     def __repr__(self) -> str:

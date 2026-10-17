@@ -168,6 +168,34 @@ export interface ExperimentDetail {
   result: 'PASS' | 'FAIL' | null;
   failedCriteria: string[];
   results: ExperimentResults;
+  preFaultAccounting?: {
+    snapshot_timestamp: string;
+    pipeline_run_id: string;
+    records_received: number | null;
+    records_processed: number | null;
+    records_written: number | null;
+  } | null;
+  totalRepetitions?: number;
+  currentRepetition?: number | null;
+  aggregatedMetrics?: Record<string, {
+    n_samples: number;
+    mean: number | null;
+    std: number | null;
+    min: number | null;
+    max: number | null;
+  }> | null;
+  repetitionResults?: Array<{
+    repetition_index: number;
+    run_id?: string;
+    status: string;
+    result: string;
+    recovery_time_seconds?: number | null;
+    data_loss?: number | null;
+    duplicates?: number | null;
+    availability_percentage?: number | null;
+    throughput_records_per_sec?: number | null;
+    error?: string | null;
+  }> | null;
 
   // Compatibility fields
   description?: string | null;

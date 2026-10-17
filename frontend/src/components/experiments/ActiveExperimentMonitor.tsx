@@ -253,6 +253,14 @@ export function ActiveExperimentMonitor({ experimentId, onFinished }: Props) {
             >
               {detail.status}
             </span>
+            {detail.totalRepetitions && detail.totalRepetitions > 1 && (
+              <span
+                data-testid="repetition-badge"
+                className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800"
+              >
+                Repetition {detail.currentRepetition ?? 1} / {detail.totalRepetitions}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <span className="bg-slate-800 px-2 py-0.5 rounded text-slate-300 font-medium">

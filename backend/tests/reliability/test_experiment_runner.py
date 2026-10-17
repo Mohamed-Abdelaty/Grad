@@ -77,8 +77,17 @@ def _make_mock_db(run=None, experiment=None):
     _run = run or _make_fake_run()
     _exp = experiment or _make_fake_experiment()
 
-    # db.add / db.flush / db.commit are no-ops
-    db.add.return_value = None
+    db._objects = {}
+    if _run is not None:
+        db._objects[_run.id] = _run
+    if _exp is not None:
+        db._objects[_exp.id] = _exp
+
+    def _add(obj):
+        if getattr(obj, "id", None) is not None:
+            db._objects[obj.id] = obj
+
+    db.add.side_effect = _add
     db.flush.return_value = None
     db.commit.return_value = None
 
@@ -87,6 +96,8 @@ def _make_mock_db(run=None, experiment=None):
         from app.models.experiment_run import ExperimentRun
         from app.models.experiment import Experiment
         from app.models.report import Report
+        if obj_id in db._objects:
+            return db._objects[obj_id]
         if model_class.__name__ == "ExperimentRun":
             return _run
         if model_class.__name__ == "Experiment":
@@ -579,4 +590,240 @@ class TestExperimentRunnerTimeoutHandling:
 
         # Rollback was called unconditionally in finally block
         mock_injector.rollback.assert_called_once()
+
+
+class TestPreFaultAccountingAndRepetitions:
+    """Tests for pre-fault accounting snapshots and multi-repetition orchestration."""
+
+    def test_compute_aggregate_metrics(self) -> None:
+        """Verify statistical aggregation with N=0, N=1, and N>1."""
+        from app.reliability.experiment_runner import ExperimentRunner
+
+        # N=0
+        agg0 = ExperimentRunner._compute_aggregate_metrics([])
+        assert agg0["recovery_time_seconds"]["n_samples"] == 0
+        assert agg0["recovery_time_seconds"]["mean"] is None
+        assert agg0["recovery_time_seconds"]["std"] is None
+
+        # N=1
+        rep1 = [{"recovery_time_seconds": 5.0, "data_loss": 0}]
+        agg1 = ExperimentRunner._compute_aggregate_metrics(rep1)
+        assert agg1["recovery_time_seconds"]["n_samples"] == 1
+        assert agg1["recovery_time_seconds"]["mean"] == 5.0
+        assert agg1["recovery_time_seconds"]["std"] == 0.0
+
+        # N=3
+        reps = [
+            {"recovery_time_seconds": 2.0, "data_loss": 0},
+            {"recovery_time_seconds": 4.0, "data_loss": 0},
+            {"recovery_time_seconds": 6.0, "data_loss": 0},
+        ]
+        agg3 = ExperimentRunner._compute_aggregate_metrics(reps)
+        assert agg3["recovery_time_seconds"]["n_samples"] == 3
+        assert agg3["recovery_time_seconds"]["mean"] == 4.0
+        assert agg3["recovery_time_seconds"]["min"] == 2.0
+        assert agg3["recovery_time_seconds"]["max"] == 6.0
+        # Sample std with N-1: sqrt(((2-4)^2 + (4-4)^2 + (6-4)^2)/2) = sqrt(8/2) = 2.0
+        assert agg3["recovery_time_seconds"]["std"] == 2.0
+
+    def test_pre_fault_accounting_pipelineless_is_none(self) -> None:
+        """When no pipeline is linked, pre-fault accounting is None."""
+        from app.reliability.experiment_runner import ExperimentRunner
+        from app.models.experiment_run import ExperimentRun
+
+        runner = ExperimentRunner.__new__(ExperimentRunner)
+        mock_run = MagicMock(spec=ExperimentRun)
+        mock_run.pipeline_run_id = None
+        accounting = runner._snapshot_pre_fault_accounting(mock_run)
+        assert accounting is None
+
+    def test_pre_fault_accounting_with_linked_pipeline(self) -> None:
+        """When a pipeline is linked, pre-fault accounting snapshots real counters."""
+        from app.reliability.experiment_runner import ExperimentRunner
+        from app.models.experiment_run import ExperimentRun
+        from app.models.pipeline_run import PipelineRun
+
+        db = MagicMock()
+        runner = ExperimentRunner(db_session=db)
+        p_run_id = uuid.uuid4()
+        exp_run = ExperimentRun(id=uuid.uuid4(), experiment_id=uuid.uuid4(), pipeline_run_id=p_run_id)
+        p_run = PipelineRun(
+            id=p_run_id,
+            last_progress_snapshot={
+                "kafka": {"published": 1000},
+                "spark": {"recordsIn": 1000, "recordsOut": 950},
+                "hdfs": {"rowsWritten": 950},
+            },
+        )
+        db.get.side_effect = lambda model, obj_id: p_run if model == PipelineRun else exp_run
+
+        accounting = runner._snapshot_pre_fault_accounting(exp_run)
+        assert accounting is not None
+        assert accounting["pipeline_run_id"] == str(p_run_id)
+        assert accounting["records_received"] == 1000
+        assert accounting["records_processed"] == 950
+        assert accounting["records_written"] == 950
+        assert "snapshot_timestamp" in accounting
+
+    def test_repetition_loop_orchestration_passes_all(self) -> None:
+        """Multi-repetition experiment executes sequential loop and aggregates stats."""
+        from app.reliability.experiment_runner import ExperimentRunner
+        from app.reliability.experiment_models import ExperimentModel
+        from app.reliability.safety import SafetyValidator
+        from app.reliability.docker_controller import DockerController
+
+        db = _make_mock_db()
+        mock_safety = MagicMock(spec=SafetyValidator)
+        mock_safety.enforce_max_concurrent_experiments.return_value = None
+        mock_safety.validate_target.return_value = None
+        mock_safety.validate_duration.return_value = None
+        mock_safety._client = MagicMock()
+
+        mock_docker = MagicMock(spec=DockerController)
+        mock_docker.is_container_running.return_value = True
+
+        runner = ExperimentRunner(
+            db_session=db,
+            safety=mock_safety,
+            docker_controller=mock_docker,
+        )
+
+        mock_injector = MagicMock()
+        mock_injector.inject.return_value = {
+            "container_id": "abc",
+            "stopped_at": "2024-01-01T00:00:00+00:00",
+        }
+        mock_injector.rollback.return_value = None
+
+        config = ExperimentModel.model_validate({
+            "experiment": {"name": "multi-rep-exp"},
+            "target": {"service": "kafka"},
+            "fault": {"type": "container_stop", "duration": 1},
+            "validation": {"max_recovery_time": 10},
+            "repetitions": 2,
+        })
+
+        with patch.dict(
+            "app.reliability.experiment_runner.FAULT_INJECTOR_REGISTRY",
+            {"container_stop": lambda dc: mock_injector},
+        ):
+            report = runner.run_experiment(config)
+
+        assert report["result"] == "PASS"
+        assert report["repetitions"] == 2
+        assert len(report["repetition_results"]) == 2
+        assert report["aggregate_statistics"] is not None
+        assert report["aggregate_statistics"]["recovery_time_seconds"]["n_samples"] == 2
+
+    def test_repetition_loop_health_gate_failure_aborts(self) -> None:
+        """When health check fails after a repetition, subsequent repetitions are skipped and parent fails."""
+        from app.reliability.experiment_runner import ExperimentRunner
+        from app.reliability.experiment_models import ExperimentModel
+        from app.reliability.safety import SafetyValidator
+        from app.reliability.docker_controller import DockerController
+
+        db = _make_mock_db()
+        mock_safety = MagicMock(spec=SafetyValidator)
+        mock_safety.enforce_max_concurrent_experiments.return_value = None
+        mock_safety.validate_target.return_value = None
+        mock_safety.validate_duration.return_value = None
+        mock_safety._client = MagicMock()
+
+        mock_docker = MagicMock(spec=DockerController)
+        mock_docker.is_container_running.return_value = True
+
+        runner = ExperimentRunner(
+            db_session=db,
+            safety=mock_safety,
+            docker_controller=mock_docker,
+        )
+
+        mock_injector = MagicMock()
+        mock_injector.inject.return_value = {
+            "container_id": "abc",
+            "stopped_at": "2024-01-01T00:00:00+00:00",
+        }
+        mock_injector.rollback.return_value = None
+
+        # Fail health check between repetitions
+        runner._verify_target_health = MagicMock(return_value=False)
+
+        config = ExperimentModel.model_validate({
+            "experiment": {"name": "health-gate-fail-exp"},
+            "target": {"service": "kafka"},
+            "fault": {"type": "container_stop", "duration": 1},
+            "validation": {"max_recovery_time": 10},
+            "repetitions": 3,
+        })
+
+        with patch.dict(
+            "app.reliability.experiment_runner.FAULT_INJECTOR_REGISTRY",
+            {"container_stop": lambda dc: mock_injector},
+        ):
+            report = runner.run_experiment(config)
+
+        assert report["result"] == "FAIL"
+        assert report["repetitions"] == 3
+        assert len(report["repetition_results"]) == 3
+        # Repetition 1 completed PASS, repetition 2 skipped, repetition 3 skipped
+        assert report["repetition_results"][0]["result"] == "PASS"
+        assert report["repetition_results"][1]["status"] == "skipped"
+        assert report["repetition_results"][2]["status"] == "skipped"
+        # Aggregated stats computed over the 1 completed repetition
+        assert report["aggregate_statistics"]["recovery_time_seconds"]["n_samples"] == 1
+
+    def test_repetition_loop_cancellation_stops_group(self) -> None:
+        """When cancelled, repetition loop stops immediately and marks skipped."""
+        from app.reliability.experiment_runner import ExperimentRunner
+        from app.reliability.experiment_models import ExperimentModel
+        from app.reliability.safety import SafetyValidator
+        from app.reliability.docker_controller import DockerController
+
+        db = _make_mock_db()
+        mock_safety = MagicMock(spec=SafetyValidator)
+        mock_safety.enforce_max_concurrent_experiments.return_value = None
+        mock_safety.validate_target.return_value = None
+        mock_safety.validate_duration.return_value = None
+        mock_safety._client = MagicMock()
+
+        mock_docker = MagicMock(spec=DockerController)
+        mock_docker.is_container_running.return_value = True
+
+        runner = ExperimentRunner(
+            db_session=db,
+            safety=mock_safety,
+            docker_controller=mock_docker,
+        )
+
+        mock_injector = MagicMock()
+        mock_injector.inject.return_value = {"stopped_at": "2024-01-01T00:00:00Z"}
+        mock_injector.rollback.return_value = None
+
+        # Cancel after rep 1 finishes
+        original_execute = runner._execute_single_run
+        def side_effect_exec(*args, **kwargs):
+            res = original_execute(*args, **kwargs)
+            runner.cancel()
+            return res
+        runner._execute_single_run = side_effect_exec
+
+        config = ExperimentModel.model_validate({
+            "experiment": {"name": "cancel-multi-exp"},
+            "target": {"service": "kafka"},
+            "fault": {"type": "container_stop", "duration": 1},
+            "validation": {"max_recovery_time": 10},
+            "repetitions": 3,
+        })
+
+        with patch.dict(
+            "app.reliability.experiment_runner.FAULT_INJECTOR_REGISTRY",
+            {"container_stop": lambda dc: mock_injector},
+        ):
+            report = runner.run_experiment(config)
+
+        assert report["result"] == "FAIL"
+        assert report["repetitions"] == 3
+        # 1 completed, 2 skipped
+        assert report["aggregate_statistics"]["recovery_time_seconds"]["n_samples"] == 1
+
 

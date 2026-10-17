@@ -194,6 +194,13 @@ class ReportGenerator:
                 "cpuSamples": None,
                 "memorySamples": None,
             },
+            "pre_fault_accounting": run.pre_fault_accounting,
+            "preFaultAccounting": run.pre_fault_accounting,
+            "repetitions": run.repetition_count,
+            "repetition_results": results.get("repetition_results"),
+            "repetitionResults": results.get("repetition_results"),
+            "aggregate_statistics": run.aggregated_metrics,
+            "aggregateStatistics": run.aggregated_metrics,
         }
 
         # ── Persist to Report model ────────────────────────────────────────────

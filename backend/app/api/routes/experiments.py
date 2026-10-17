@@ -245,6 +245,7 @@ async def list_experiments(
         run_stmt = (
             select(ExperimentRun)
             .where(ExperimentRun.experiment_id == exp.id)
+            .where(ExperimentRun.parent_run_id.is_(None))
             .order_by(ExperimentRun.created_at.desc())
             .limit(1)
         )
@@ -297,6 +298,7 @@ async def get_experiment(
     run_stmt = (
         select(ExperimentRun)
         .where(ExperimentRun.experiment_id == experiment_id)
+        .where(ExperimentRun.parent_run_id.is_(None))
         .order_by(ExperimentRun.created_at.desc())
         .limit(1)
     )
@@ -420,6 +422,11 @@ async def get_experiment(
         "pipelineRunId": str(latest_run.pipeline_run_id) if latest_run and latest_run.pipeline_run_id else None,
         "result": results.get("result"),
         "failedCriteria": results.get("failed_criteria", []),
+        "preFaultAccounting": latest_run.pre_fault_accounting if latest_run else None,
+        "totalRepetitions": latest_run.repetition_count if latest_run else 1,
+        "currentRepetition": results.get("current_repetition") or (1 if latest_run else None),
+        "aggregatedMetrics": latest_run.aggregated_metrics if latest_run else None,
+        "repetitionResults": results.get("repetition_results"),
         "results": results_payload,
         "logs": execution_logs,
     }

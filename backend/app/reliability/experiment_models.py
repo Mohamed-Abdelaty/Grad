@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -169,3 +169,9 @@ class ExperimentModel(BaseModel):
     target: TargetConfig
     fault: FaultConfig
     validation: ValidationConfig = ValidationConfig()
+    repetitions: int = Field(
+        default=1,
+        ge=1,
+        le=10,
+        description="Number of sequential experiment repetitions for reproducibility.",
+    )

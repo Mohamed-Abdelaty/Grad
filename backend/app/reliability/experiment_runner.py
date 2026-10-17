@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 import uuid
 import yaml
@@ -190,6 +191,8 @@ class ExperimentRunner:
                 results={"phases": initial_phases},
                 started_at=datetime.now(tz=timezone.utc),
             )
+            if run.id is None:
+                run.id = uuid.uuid4()
             self._db.add(run)
             self._db.flush()
         self._db.commit()
@@ -211,6 +214,246 @@ class ExperimentRunner:
             run_id,
             experiment.id,
         )
+
+        total_repetitions = getattr(experiment_config, "repetitions", 1) or 1
+        run.repetition_count = total_repetitions
+        self._db.add(run)
+        self._db.flush()
+
+        if total_repetitions == 1:
+            return self._execute_single_run(
+                run=run,
+                experiment=experiment,
+                experiment_config=experiment_config,
+                associated_pipeline_yaml=associated_pipeline_yaml,
+            )
+
+        # ── REPETITION LOOP (repetitions > 1) ─────────────────────────────────
+        repetition_reports: list[dict[str, Any]] = []
+        repetition_results: list[dict[str, Any]] = []
+        completed_count = 0
+        failed_count = 0
+        skipped_count = 0
+        aborted = False
+
+        self._emit_event(
+            experiment.id,
+            run_id,
+            "validating",
+            f"Starting {total_repetitions} sequential repetitions.",
+        )
+
+        for rep_idx in range(1, total_repetitions + 1):
+            if self._cancelled:
+                skipped_count += (total_repetitions - rep_idx + 1)
+                break
+
+            if aborted:
+                skipped_count += 1
+                repetition_results.append({
+                    "repetition_index": rep_idx,
+                    "status": "skipped",
+                    "result": "SKIPPED",
+                    "error": "Previous repetition failed or recovery health check failed",
+                })
+                continue
+
+            # Update parent current_repetition for live monitoring
+            self._merge_results(run, {"current_repetition": rep_idx})
+
+            # Create child run with CASCADE FK
+            child_run = ExperimentRun(
+                experiment_id=experiment.id,
+                parent_run_id=run.id,
+                repetition_index=rep_idx,
+                repetition_count=total_repetitions,
+                status="running",
+                params={
+                    "target_service": target_service,
+                    "fault_type": fault_type,
+                    "fault_duration": fault_duration,
+                    "experiment_config": experiment_config.model_dump(),
+                    "repetition_index": rep_idx,
+                    "total_repetitions": total_repetitions,
+                },
+                results={"phases": [
+                    {"name": p, "state": "pending", "startedAt": None, "finishedAt": None}
+                    for p in LIFECYCLE_PHASES
+                ]},
+                pipeline_run_id=run.pipeline_run_id,
+                started_at=datetime.now(tz=timezone.utc),
+            )
+            if child_run.id is None:
+                child_run.id = uuid.uuid4()
+            self._db.add(child_run)
+            self._db.flush()
+            self._db.commit()
+
+            self._emit_event(
+                experiment.id,
+                run.id,
+                "validating",
+                f"Starting repetition {rep_idx}/{total_repetitions}.",
+            )
+
+            try:
+                rep_report = self._execute_single_run(
+                    run=child_run,
+                    experiment=experiment,
+                    experiment_config=experiment_config,
+                    associated_pipeline_yaml=associated_pipeline_yaml,
+                    parent_run=run,
+                )
+                repetition_reports.append(rep_report)
+                completed_count += 1
+
+                rep_res = {
+                    "repetition_index": rep_idx,
+                    "run_id": str(child_run.id),
+                    "status": child_run.status,
+                    "result": rep_report.get("result", "FAIL"),
+                    "recovery_time_seconds": rep_report.get("recovery_time_seconds"),
+                    "data_loss": rep_report.get("data_loss"),
+                    "duplicates": rep_report.get("duplicates"),
+                    "availability_percentage": rep_report.get("availability_percentage"),
+                    "throughput_records_per_sec": rep_report.get("average_throughput"),
+                    "error": (child_run.results or {}).get("error"),
+                }
+                repetition_results.append(rep_res)
+
+                if rep_report.get("result") != "PASS":
+                    failed_count += 1
+                    aborted = True
+                    self._emit_event(
+                        experiment.id,
+                        run.id,
+                        "analyzing",
+                        f"Repetition {rep_idx} failed acceptance criteria. Aborting remaining repetitions.",
+                        level="WARNING",
+                    )
+                else:
+                    # Health-gate verification before next repetition
+                    if rep_idx < total_repetitions:
+                        health_fn = self._get_health_check_fn(target_service)
+                        is_healthy = self._verify_target_health(
+                            target_service,
+                            health_fn=health_fn,
+                            max_wait=float(experiment_config.validation.max_recovery_time),
+                        )
+                        if not is_healthy:
+                            aborted = True
+                            self._emit_event(
+                                experiment.id,
+                                run.id,
+                                "waiting_for_recovery",
+                                f"Service '{target_service}' health not restored after repetition {rep_idx}. Aborting remaining repetitions.",
+                                level="ERROR",
+                            )
+
+            except Exception as rep_exc:
+                failed_count += 1
+                aborted = True
+                repetition_results.append({
+                    "repetition_index": rep_idx,
+                    "run_id": str(child_run.id),
+                    "status": "failed",
+                    "result": "FAIL",
+                    "error": str(rep_exc),
+                })
+                self._emit_event(
+                    experiment.id,
+                    run.id,
+                    "error",
+                    f"Repetition {rep_idx} encountered error: {rep_exc}. Aborting remaining repetitions.",
+                    level="ERROR",
+                )
+
+        # Compute statistical aggregates across completed repetitions
+        aggregated_stats = self._compute_aggregate_metrics(repetition_reports)
+        run.aggregated_metrics = aggregated_stats
+
+        # Parent pass/fail decision:
+        # Parent passes iff ALL N repetitions completed and ALL passed criteria
+        all_passed = (
+            completed_count == total_repetitions
+            and failed_count == 0
+            and all(r.get("result") == "PASS" for r in repetition_results)
+        )
+        parent_result = "PASS" if all_passed else "FAIL"
+
+        run.status = "succeeded" if all_passed else "failed"
+        run.stage = "generating_report"
+        run.finished_at = datetime.now(tz=timezone.utc)
+
+        # Merge summary results onto parent run
+        parent_results = dict(run.results or {})
+        parent_results["result"] = parent_result
+        parent_results["repetitions"] = total_repetitions
+        parent_results["completed_repetitions"] = completed_count
+        parent_results["failed_repetitions"] = failed_count
+        parent_results["skipped_repetitions"] = skipped_count
+        parent_results["repetition_results"] = repetition_results
+        parent_results["aggregated_metrics"] = aggregated_stats
+
+        phases = list(parent_results.get("phases") or [])
+        fin_iso = run.finished_at.isoformat()
+        for p in phases:
+            p["state"] = "done"
+            if not p.get("finishedAt"):
+                p["finishedAt"] = fin_iso
+        parent_results["phases"] = phases
+        run.results = parent_results
+
+        self._db.add(run)
+        self._db.flush()
+
+        parent_report = self._reporter.generate(run_id, self._db)
+        self._db.commit()
+
+        self._emit_event(
+            experiment.id,
+            run_id,
+            "generating_report",
+            f"All {total_repetitions} repetitions processed: completed={completed_count}, failed={failed_count}, skipped={skipped_count}. Parent result={parent_result}.",
+        )
+        return parent_report
+
+    def _verify_target_health(
+        self,
+        target_service: str,
+        health_fn: Callable | None = None,
+        max_wait: float = 60.0,
+    ) -> bool:
+        """Poll target service health until healthy or max_wait seconds elapse."""
+        start_t = time.monotonic()
+        while time.monotonic() - start_t < max_wait:
+            if self._cancelled:
+                return False
+            container_ok = self._docker.is_container_running(target_service)
+            if container_ok:
+                if health_fn is None:
+                    return True
+                try:
+                    if health_fn():
+                        return True
+                except Exception:
+                    pass
+            time.sleep(1.0)
+        return False
+
+    def _execute_single_run(
+        self,
+        run: Any,
+        experiment: Any,
+        experiment_config: ExperimentModel,
+        associated_pipeline_yaml: str = "",
+        parent_run: Any = None,
+    ) -> dict[str, Any]:
+        """Execute a single repetition / run lifecycle."""
+        target_service = experiment_config.target.service
+        fault_type = experiment_config.fault.type
+        fault_duration = experiment_config.fault.duration
+        run_id = run.id
 
         global_timeout = fault_duration + _TIMEOUT_GRACE_SECONDS
         experiment_start = time.monotonic()
@@ -279,6 +522,15 @@ class ExperimentRunner:
                     target_service=target_service,
                 )
             injector = injector_class(self._docker)
+
+            # Snapshot pre-fault accounting counters immediately prior to injection
+            pre_accounting = self._snapshot_pre_fault_accounting(run)
+            run.pre_fault_accounting = pre_accounting
+            if parent_run is not None and parent_run.pre_fault_accounting is None:
+                parent_run.pre_fault_accounting = pre_accounting
+                self._db.add(parent_run)
+            self._db.add(run)
+            self._db.flush()
 
             try:
                 # ── INJECT FAILURE ─────────────────────────────────────────────
@@ -998,3 +1250,113 @@ class ExperimentRunner:
         elapsed = time.monotonic() - start
         if elapsed >= timeout:
             raise ExperimentTimeoutError(timeout_seconds=int(timeout))
+
+    def _snapshot_pre_fault_accounting(self, run: Any) -> dict[str, Any] | None:
+        """
+        Snapshot trusted pipeline counters immediately prior to fault injection.
+
+        Returns None if no pipeline run is linked (standalone container fault).
+        """
+        if run.pipeline_run_id is None:
+            return None
+
+        from app.models.pipeline_run import PipelineRun
+
+        p_run = self._db.get(PipelineRun, run.pipeline_run_id)
+        raw_snapshot: dict[str, Any] = {}
+        if p_run and p_run.last_progress_snapshot:
+            raw_snapshot = dict(p_run.last_progress_snapshot)
+
+        # Fallback to in-memory tracker if available
+        try:
+            from app.pipeline.progress import tracker
+
+            snap = tracker.get_progress(str(run.pipeline_run_id))
+            if snap:
+                raw_snapshot = snap
+        except Exception:
+            pass
+
+        kafka_info = raw_snapshot.get("kafka") or {}
+        spark_info = raw_snapshot.get("spark") or {}
+        hdfs_info = raw_snapshot.get("hdfs") or {}
+
+        records_received = (
+            kafka_info.get("published")
+            if kafka_info.get("published") is not None
+            else spark_info.get("recordsIn")
+        )
+        records_processed = spark_info.get("recordsOut")
+        records_written = hdfs_info.get("rowsWritten")
+
+        return {
+            "snapshot_timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "pipeline_run_id": str(run.pipeline_run_id),
+            "records_received": records_received,
+            "records_processed": records_processed,
+            "records_written": records_written,
+        }
+
+    @staticmethod
+    def _compute_aggregate_metrics(
+        repetition_reports: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Compute statistical aggregations across completed repetitions.
+
+        For N=1, sample std is 0.0.
+        For N>1, sample std is computed with N-1 denominator.
+        For N=0, all stats are None.
+        """
+        metric_keys = [
+            "recovery_time_seconds",
+            "data_loss",
+            "duplicates",
+            "availability_percentage",
+            "throughput_records_per_sec",
+        ]
+        aggregates: dict[str, Any] = {}
+
+        for key in metric_keys:
+            raw_vals: list[float] = []
+            for rep in repetition_reports:
+                val = rep.get(key)
+                if val is None:
+                    # also check nested results or metadata
+                    val = (rep.get("results") or {}).get(key)
+                if val is not None:
+                    try:
+                        raw_vals.append(float(val))
+                    except (ValueError, TypeError):
+                        pass
+
+            n = len(raw_vals)
+            if n == 0:
+                aggregates[key] = {
+                    "n_samples": 0,
+                    "mean": None,
+                    "std": None,
+                    "min": None,
+                    "max": None,
+                }
+            elif n == 1:
+                aggregates[key] = {
+                    "n_samples": 1,
+                    "mean": round(raw_vals[0], 4),
+                    "std": 0.0,
+                    "min": round(raw_vals[0], 4),
+                    "max": round(raw_vals[0], 4),
+                }
+            else:
+                mean_val = sum(raw_vals) / n
+                variance = sum((x - mean_val) ** 2 for x in raw_vals) / (n - 1)
+                std_val = math.sqrt(variance)
+                aggregates[key] = {
+                    "n_samples": n,
+                    "mean": round(mean_val, 4),
+                    "std": round(std_val, 4),
+                    "min": round(min(raw_vals), 4),
+                    "max": round(max(raw_vals), 4),
+                }
+
+        return aggregates

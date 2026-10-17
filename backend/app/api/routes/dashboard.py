@@ -75,13 +75,13 @@ async def get_dashboard_summary(
     # 2. Experiments aggregates (window-scoped, running is global)
     exp_time_col = coalesce(ExperimentRun.started_at, ExperimentRun.created_at)
     exp_stmt = select(
-        func.count(case((ExperimentRun.status == "running", 1))).label("running"),
-        func.count(case((exp_time_col >= cutoff, 1))).label("total"),
+        func.count(case((and_(ExperimentRun.parent_run_id.is_(None), ExperimentRun.status == "running"), 1))).label("running"),
+        func.count(case((and_(ExperimentRun.parent_run_id.is_(None), exp_time_col >= cutoff), 1))).label("total"),
         func.count(
-            case((and_(exp_time_col >= cutoff, ExperimentRun.status == "succeeded"), 1))
+            case((and_(ExperimentRun.parent_run_id.is_(None), exp_time_col >= cutoff, ExperimentRun.status == "succeeded"), 1))
         ).label("succeeded"),
         func.count(
-            case((and_(exp_time_col >= cutoff, ExperimentRun.status == "failed"), 1))
+            case((and_(ExperimentRun.parent_run_id.is_(None), exp_time_col >= cutoff, ExperimentRun.status == "failed"), 1))
         ).label("failed"),
     )
     exp_res = (await db.execute(exp_stmt)).one()
@@ -190,6 +190,7 @@ async def get_dashboard_summary(
     # Also fallback/supplement with last 10 completed ExperimentRuns if fewer than 10 reports
     exp_run_stmt = (
         select(ExperimentRun)
+        .where(ExperimentRun.parent_run_id.is_(None))
         .where(ExperimentRun.status.in_(["succeeded", "failed"]))
         .where(ExperimentRun.results.isnot(None))
         .order_by(ExperimentRun.created_at.desc())
