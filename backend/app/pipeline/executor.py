@@ -824,6 +824,22 @@ class PipelineExecutor:
                         else last_bytes_written
                     )
                     output_rows = result.get("output_rows")
+                    if final_files is None or final_files <= 0:
+                        raise RuntimeError(
+                            f"HDFS output verification failed: no files written to {output_path}"
+                        )
+
+                    if hasattr(hdfs_client, "count_rows"):
+                        actual_rows = hdfs_client.count_rows(output_path)
+                        if (
+                            actual_rows is not None
+                            and output_rows is not None
+                            and actual_rows != output_rows
+                        ):
+                            raise RuntimeError(
+                                f"HDFS output verification failed: row count mismatch "
+                                f"(expected {output_rows}, found {actual_rows} in {output_path})"
+                            )
 
                     _progress_tracker.emit(
                         tracker_run_id,
@@ -845,6 +861,14 @@ class PipelineExecutor:
                         "error",
                         error=f"Storage verification failed: {verify_exc}",
                     )
+                    storage_step = ExecutionStep(
+                        name="storage_verification",
+                        step_type="storage",
+                        plugin_type="hdfs",
+                        plugin=None,
+                        config={"path": output_path},
+                    )
+                    self._handle_failure(storage_step, ctx, verify_exc)
 
         except (SparkJobFailedError, SparkJobTimeoutError) as exc:
             if tracker_run_id:
@@ -863,6 +887,8 @@ class PipelineExecutor:
                     "Spark job stderr:\n%s", "\n".join(exc.stderr.splitlines()[-30:])
                 )
             self._handle_failure(spark_step, ctx, exc)
+        except PipelineExecutionError:
+            raise
         except Exception as exc:
             if tracker_run_id:
                 _progress_tracker.set_stage_state(

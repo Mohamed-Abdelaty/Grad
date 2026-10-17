@@ -737,6 +737,117 @@ class TestSparkBranchWithMockedSubmitter:
         assert ctx.status == "success"
         mock_client_instance.delete.assert_not_called()
 
+    def test_spark_batch_hdfs_verification_success(
+        self, tmp_path: Path, executor: PipelineExecutor
+    ) -> None:
+        """HDFS storage verification success: run succeeds and hdfs stage is done/verified."""
+        from unittest.mock import AsyncMock, patch
+        from app.pipeline.progress import tracker
+
+        plan = self._make_plan_with_spark(tmp_path)
+        storage_step = next(s for s in plan.steps if s.step_type == "storage")
+        storage_step.plugin_type = "hdfs"
+        storage_step.config["path"] = "/data/output/batch_test"
+
+        mock_result = {
+            "input_rows": 10,
+            "output_rows": 10,
+            "duration_seconds": 1.0,
+            "status": "success",
+        }
+
+        run_id = "test-run-verify-success"
+        tracker.start(run_id, plan.pipeline_name, mode="batch")
+
+        try:
+            with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+                 patch("app.pipeline.executor.HdfsStorageClient") as MockHdfsClient:
+                mock_client = MockHdfsClient.return_value
+                mock_client.path_exists.return_value = True
+                mock_client.get_part_files_summary.return_value = {"fileCount": 2, "length": 500}
+                mock_client.content_summary.return_value = {"fileCount": 2, "length": 500}
+                mock_client.count_rows.return_value = 10
+                mock_client._normalize_hdfs_path.side_effect = lambda p: p.replace("hdfs://namenode:9000", "")
+
+                instance = MockSubmitter.return_value
+                instance.submit_batch_job = AsyncMock(return_value=mock_result)
+
+                ctx = executor.execute(plan, tracker_run_id=run_id)
+
+            assert ctx.status == "success"
+            assert tracker.get_stage_state(run_id, "hdfs") == "done"
+            prog = tracker.get_progress(run_id)
+            assert prog is not None
+            assert prog["hdfs"]["verified"] is True
+            assert prog["hdfs"]["filesWritten"] == 2
+        finally:
+            tracker.finish(run_id)
+
+    @pytest.mark.parametrize(
+        ("failure_mode", "expected_err"),
+        [
+            ("missing_path", "HDFS output path does not exist"),
+            ("zero_files", "no files written"),
+            ("row_mismatch", "row count mismatch"),
+        ],
+    )
+    def test_spark_batch_hdfs_verification_failure_raises_and_marks_error(
+        self, tmp_path: Path, executor: PipelineExecutor, failure_mode: str, expected_err: str
+    ) -> None:
+        """HDFS storage verification failure: raises PipelineExecutionError and marks hdfs stage error."""
+        from unittest.mock import AsyncMock, patch
+        from app.pipeline.progress import tracker
+
+        plan = self._make_plan_with_spark(tmp_path)
+        storage_step = next(s for s in plan.steps if s.step_type == "storage")
+        storage_step.plugin_type = "hdfs"
+        storage_step.config["path"] = "/data/output/batch_test"
+
+        mock_result = {
+            "input_rows": 10,
+            "output_rows": 10,
+            "duration_seconds": 1.0,
+            "status": "success",
+        }
+
+        run_id = f"test-run-verify-fail-{failure_mode}"
+        tracker.start(run_id, plan.pipeline_name, mode="batch")
+
+        try:
+            with patch("app.pipeline.executor.SparkJobSubmitter") as MockSubmitter, \
+                 patch("app.pipeline.executor.HdfsStorageClient") as MockHdfsClient:
+                mock_client = MockHdfsClient.return_value
+                mock_client._normalize_hdfs_path.side_effect = lambda p: p.replace("hdfs://namenode:9000", "")
+                if failure_mode == "missing_path":
+                    mock_client.path_exists.return_value = False
+                elif failure_mode == "zero_files":
+                    mock_client.path_exists.return_value = True
+                    mock_client.get_part_files_summary.return_value = {"fileCount": 0, "length": 0}
+                    mock_client.content_summary.return_value = {"fileCount": 0, "length": 0}
+                elif failure_mode == "row_mismatch":
+                    mock_client.path_exists.return_value = True
+                    mock_client.get_part_files_summary.return_value = {"fileCount": 1, "length": 100}
+                    mock_client.content_summary.return_value = {"fileCount": 1, "length": 100}
+                    mock_client.count_rows.return_value = 7  # expected 10
+
+                instance = MockSubmitter.return_value
+                instance.submit_batch_job = AsyncMock(return_value=mock_result)
+
+                with pytest.raises(PipelineExecutionError) as exc_info:
+                    executor.execute(plan, tracker_run_id=run_id)
+
+            assert exc_info.value.context.status == "failed"
+            assert exc_info.value.step_name == "storage_verification"
+            assert tracker.get_stage_state(run_id, "hdfs") == "error"
+            prog = tracker.get_progress(run_id)
+            assert prog is not None
+            hdfs_stage = next(s for s in prog["stages"] if s["key"] == "hdfs")
+            assert hdfs_stage["state"] == "error"
+            assert expected_err in hdfs_stage["error"]
+        finally:
+            tracker.finish(run_id)
+
+
     @pytest.mark.parametrize("outcome", ["success", "failure", "timeout", "cancel"])
     def test_streaming_checkpoint_deleted_on_all_outcomes(
         self, tmp_path: Path, executor: PipelineExecutor, outcome: str
