@@ -115,9 +115,13 @@ $$\text{Data Loss} = \max\left(0, R_{\text{expected}} - R_{\text{actual}}\right)
 ### Definition & Purpose
 The count of duplicate records introduced strictly by fault injection, network retries, or at-least-once message reprocessing, excluding duplicates inherently present in the source input dataset.
 
+The platform uses ONE uniform definition of duplicate rows across both source input and physical output:
+$$\text{duplicate\_extra\_rows} = \text{total\_rows} - \text{distinct\_ids}$$
+*Mathematical note: This represents the number of extra/redundant rows in the dataset beyond unique keys ($N - \text{cardinality}$). For example, a list of IDs `[1, 1, 1, 2, 2, 3]` contains 6 total rows and 3 distinct IDs, yielding 3 duplicate extra rows (whereas the count of IDs that appear more than once is 2).*
+
 ### Source vs Destination Provenance
-- **Source Duplicates ($D_{\text{source}}$)**: Directly calculated by scanning the pipeline's raw source file or input topic for duplicate unique identification keys (`id_column`, e.g., `transaction_id`).
-- **Output Duplicates ($D_{\text{output}}$)**: Directly calculated by scanning physical destination files (e.g., HDFS Parquet files) after pipeline completion for duplicate identification keys.
+- **Source Duplicates ($D_{\text{source}}$)**: Calculated by scanning the pipeline's raw source file or input topic for duplicate unique identification keys (`id_column`, e.g., `transaction_id`), using `total_source_rows - distinct_source_ids`. For `sales_300k.csv`, $\text{total\_rows} = 300{,}000$ and $\text{distinct\_ids} = 295{,}068$, yielding exactly $D_{\text{source}} = 4{,}932$ extra rows (with $4{,}842$ distinct IDs appearing $>1$ time).
+- **Output Duplicates ($D_{\text{output}}$)**: Directly calculated by scanning physical destination files (e.g., HDFS Parquet files) after pipeline completion for duplicate identification keys, using $\text{total\_output\_rows} - \text{distinct\_output\_ids}$.
 - **Reporting Columns**: The report row exposes `source_duplicates`, `output_duplicates`, and `fault_induced_duplicates`.
 
 ### Formula
@@ -125,7 +129,7 @@ $$\text{Fault Induced Duplicates} = \max\left(0, D_{\text{output}} - D_{\text{so
 *Condition: Calculated ONLY when both $D_{\text{output}}$ and $D_{\text{source}}$ are non-null real numbers.*
 
 ### Direct or Derived
-- **Derived**: Delta between physical output duplicate keys and source input duplicate keys.
+- **Derived**: Delta between physical output duplicate extra rows and source input duplicate extra rows.
 
 ### Baseline Applicability & Null Conditions
 - **Baseline Counterpart**: Not measured during the baseline phase (`baseline_applicable = False`).
