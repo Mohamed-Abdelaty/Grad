@@ -14,6 +14,7 @@ Verifies:
 
 import asyncio
 from datetime import timedelta
+import uuid
 import pytest
 from httpx import AsyncClient
 
