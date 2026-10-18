@@ -261,6 +261,18 @@ class ExperimentRunner:
             # Update parent current_repetition for live monitoring
             self._merge_results(run, {"current_repetition": rep_idx})
 
+            child_pipeline_run_id = None
+            if associated_pipeline_yaml:
+                child_pipeline_run_id = self._launch_fresh_pipeline_run(associated_pipeline_yaml)
+            elif run.pipeline_run_id:
+                # If parent had a linked pipeline run with stored config_yaml, launch fresh pipeline run
+                from app.models.pipeline_run import PipelineRun
+                p_run = self._db.get(PipelineRun, run.pipeline_run_id)
+                if p_run and p_run.config_yaml:
+                    child_pipeline_run_id = self._launch_fresh_pipeline_run(p_run.config_yaml)
+                else:
+                    child_pipeline_run_id = run.pipeline_run_id
+
             # Create child run with CASCADE FK
             child_run = ExperimentRun(
                 experiment_id=experiment.id,
@@ -280,7 +292,7 @@ class ExperimentRunner:
                     {"name": p, "state": "pending", "startedAt": None, "finishedAt": None}
                     for p in LIFECYCLE_PHASES
                 ]},
-                pipeline_run_id=run.pipeline_run_id,
+                pipeline_run_id=child_pipeline_run_id,
                 started_at=datetime.now(tz=timezone.utc),
             )
             if child_run.id is None:
@@ -319,6 +331,7 @@ class ExperimentRunner:
                     "throughput_records_per_sec": rep_report.get("average_throughput") or (child_run.results or {}).get("throughput_records_per_sec"),
                     "error_rate": rep_report.get("error_rate"),
                     "pre_fault_accounting": child_run.pre_fault_accounting,
+                    "injection_offset_seconds": (child_run.results or {}).get("injection_offset_seconds"),
                     "error": (child_run.results or {}).get("error"),
                 }
                 repetition_results.append(rep_res)
@@ -490,7 +503,7 @@ class ExperimentRunner:
         fault_duration = experiment_config.fault.duration
         run_id = run.id
 
-        global_timeout = fault_duration + _TIMEOUT_GRACE_SECONDS
+        global_timeout = fault_duration + _TIMEOUT_GRACE_SECONDS + (300 if run.pipeline_run_id else 0)
         experiment_start = time.monotonic()
         injection_metadata: dict = {}
         recovery_time = None
@@ -522,7 +535,11 @@ class ExperimentRunner:
                 "preparing",
                 "Preparing execution environment and pipeline context.",
             )
-            pipeline_context = self._prepare(associated_pipeline_yaml)
+            # When pipeline_run_id is already set (e.g. repetition-launched pipeline), avoid re-running synchronous pipeline prepare
+            if run.pipeline_run_id is not None:
+                pipeline_context = {"records_processed": 0, "output_location": {}}
+            else:
+                pipeline_context = self._prepare(associated_pipeline_yaml)
             self._emit_event(
                 experiment.id,
                 run_id,
@@ -570,6 +587,28 @@ class ExperimentRunner:
                 )
             injector = injector_class(self._docker)
 
+            # When linked pipeline run is present, ensure pipeline is actively executing before injecting fault
+            if run.pipeline_run_id is not None:
+                from app.models.pipeline_run import PipelineRun
+                from app.pipeline.progress import tracker
+                p_row = self._db.get(PipelineRun, run.pipeline_run_id)
+                pipe_wait_start = time.monotonic()
+                while time.monotonic() - pipe_wait_start < 30:
+                    if self._cancelled:
+                        break
+                    if p_row is not None:
+                        self._db.refresh(p_row)
+                    snap = tracker.get_progress(str(run.pipeline_run_id))
+                    # Wait until Kafka or Spark has started actively processing records
+                    if snap:
+                        pub = (snap.get("kafka") or {}).get("published")
+                        read_rows = (snap.get("source") or {}).get("rowsRead")
+                        if (pub is not None and pub > 0) or (read_rows is not None and read_rows > 0):
+                            break
+                    time.sleep(0.5)
+                # Consistent injection delay offset after pipeline progress starts
+                time.sleep(2.0)
+
             # Snapshot pre-fault accounting counters immediately prior to injection
             pre_accounting = self._snapshot_pre_fault_accounting(run)
             run.pre_fault_accounting = pre_accounting
@@ -590,8 +629,10 @@ class ExperimentRunner:
                     f"Applying fault '{fault_type}' to '{target_service}' for {fault_duration}s.",
                 )
                 params = experiment_config.fault.model_dump()
+                injection_offset = round(time.monotonic() - experiment_start, 2)
                 try:
                     injection_metadata = injector.inject(target_service, params)
+                    injection_metadata["injection_offset_seconds"] = injection_offset
                 except Exception as exc:
                     logger.error("Fault injection failed for '%s': %s", target_service, exc)
                     self._emit_event(
@@ -796,7 +837,7 @@ class ExperimentRunner:
                 "validating_data",
                 "Verifying data completeness and zero record loss.",
             )
-            if associated_pipeline_yaml:
+            if associated_pipeline_yaml and not run.pipeline_run_id:
                 post_recovery_context = self._prepare(associated_pipeline_yaml)
                 output_location = post_recovery_context.get("output_location", {})
                 if not output_location:
@@ -1138,6 +1179,128 @@ class ExperimentRunner:
             return self._extract_pipeline_output(result, pipeline_yaml)
         except Exception as exc:
             raise RuntimeError(f"Pipeline preparation failed: {exc}") from exc
+
+    def _launch_fresh_pipeline_run(self, pipeline_yaml: str) -> uuid.UUID | None:
+        """
+        Launch a fresh asynchronous pipeline run for a repetition.
+
+        Creates Pipeline, PipelineVersion (if needed), and a running PipelineRun row,
+        then spawns the background execution thread.
+        """
+        if not pipeline_yaml or not pipeline_yaml.strip():
+            return None
+
+        import threading
+        from sqlalchemy import select, func
+        from app.models.pipeline import Pipeline
+        from app.models.pipeline_version import PipelineVersion
+        from app.models.pipeline_run import PipelineRun
+        from app.services.pipeline_execution_service import run_pipeline_from_yaml
+
+        try:
+            cfg = yaml.safe_load(pipeline_yaml) or {}
+            pipe_data = cfg.get("pipeline") if isinstance(cfg, dict) else None
+            name = (
+                pipe_data.get("name", "experiment-pipeline")
+                if isinstance(pipe_data, dict)
+                else "experiment-pipeline"
+            )
+
+            # Query or create pipeline
+            pipeline = self._db.execute(
+                select(Pipeline).where(Pipeline.name == name)
+            ).scalar_one_or_none()
+            if pipeline is None:
+                pipeline = Pipeline(name=name)
+                self._db.add(pipeline)
+                self._db.flush()
+
+            # Query or create version
+            version = self._db.execute(
+                select(PipelineVersion)
+                .where(PipelineVersion.pipeline_id == pipeline.id)
+                .order_by(PipelineVersion.version_number.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            if version is None or version.config != cfg:
+                max_ver = self._db.scalar(
+                    select(func.coalesce(func.max(PipelineVersion.version_number), 0))
+                    .where(PipelineVersion.pipeline_id == pipeline.id)
+                ) or 0
+                version = PipelineVersion(
+                    pipeline_id=pipeline.id,
+                    version_number=int(max_ver) + 1,
+                    config=cfg,
+                )
+                self._db.add(version)
+                self._db.flush()
+
+            fresh_run = PipelineRun(
+                id=uuid.uuid4(),
+                pipeline_id=pipeline.id,
+                pipeline_version_id=version.id,
+                status="running",
+                started_at=datetime.now(tz=timezone.utc),
+                config_yaml=pipeline_yaml,
+            )
+            self._db.add(fresh_run)
+            self._db.flush()
+            self._db.commit()
+            fresh_run_id = fresh_run.id
+            from app.pipeline.progress import tracker
+            tracker.start(str(fresh_run_id), pipeline_name=pipeline.name or "repetition-pipeline", mode="batch")
+
+            def _bg_run(run_uuid: str, y_content: str):
+                from app.database.session import SyncSessionLocal
+                from app.pipeline.progress import tracker
+                from app.models.pipeline_run import PipelineRun as PRunModel
+                from app.models.metric import Metric
+                from datetime import datetime as dt, timezone as tz
+
+                try:
+                    res = run_pipeline_from_yaml(y_content, tracker_run_id=run_uuid)
+                except Exception as b_exc:
+                    res = {"status": "failed", "metrics": {}, "logs": [{"level": "ERROR", "message": str(b_exc)}]}
+
+                fin_at = dt.now(tz=tz.utc)
+                with SyncSessionLocal() as s_db:
+                    pr = s_db.get(PRunModel, uuid.UUID(run_uuid))
+                    if pr:
+                        pr.status = "succeeded" if res.get("status") == "success" else "failed"
+                        pr.finished_at = fin_at
+                        m = res.get("metrics", {})
+                        spark_m = m.get("spark_job") or m.get("spark_streaming") or {}
+                        stor_m = next((v for k, v in m.items() if k.startswith("storage:")), {})
+                        pr.output_path = (
+                            spark_m.get("actual_output_path")
+                            or spark_m.get("output_path")
+                            or stor_m.get("hdfs_path")
+                            or stor_m.get("path")
+                        )
+                        snap = tracker.get_progress(run_uuid)
+                        if snap:
+                            pr.last_progress_snapshot = snap
+                        rec_out = spark_m.get("output_rows")
+                        if rec_out is not None:
+                            s_db.add(Metric(
+                                pipeline_run_id=pr.id,
+                                name="records_processed",
+                                value=float(rec_out),
+                                unit="records",
+                            ))
+                        s_db.commit()
+
+            t = threading.Thread(
+                target=_bg_run,
+                args=(str(fresh_run_id), pipeline_yaml),
+                daemon=True,
+                name=f"rep-pipe-{fresh_run_id}",
+            )
+            t.start()
+            return fresh_run_id
+        except Exception as exc:
+            logger.warning("Failed to launch fresh pipeline run: %s", exc)
+            return None
 
     def _analyze(
         self,

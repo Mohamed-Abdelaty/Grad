@@ -1218,5 +1218,117 @@ class TestComparisonTable:
             assert "std" in row["aggregate"]
             assert row["aggregate"]["n_samples"] == 2
 
+    def test_repetition_pipeline_run_fresh_per_repetition(self) -> None:
+        """For repetitions > 1 with associated pipeline, each repetition launches a fresh pipeline run and sets pre_fault_accounting to its pipeline_run_id."""
+        from app.reliability.experiment_runner import ExperimentRunner
+        from app.reliability.experiment_models import ExperimentModel
+        from app.reliability.safety import SafetyValidator
+        from app.reliability.docker_controller import DockerController
+        from app.models.experiment_run import ExperimentRun
+
+        db = _make_mock_db()
+        mock_safety = MagicMock(spec=SafetyValidator)
+        mock_safety.enforce_max_concurrent_experiments.return_value = None
+        mock_safety.validate_target.return_value = None
+        mock_safety.validate_duration.return_value = None
+        mock_safety._client = MagicMock()
+
+        mock_docker = MagicMock(spec=DockerController)
+        mock_docker.is_container_running.return_value = True
+
+        runner = ExperimentRunner(
+            db_session=db,
+            safety=mock_safety,
+            docker_controller=mock_docker,
+        )
+
+        mock_injector = MagicMock()
+        mock_injector.inject.return_value = {"stopped_at": "2024-01-01T00:00:00Z"}
+        mock_injector.rollback.return_value = None
+
+        config = ExperimentModel.model_validate({
+            "experiment": {"name": "fresh-pipe-exp"},
+            "target": {"service": "kafka"},
+            "fault": {"type": "container_stop", "duration": 1},
+            "validation": {"max_recovery_time": 10},
+            "repetitions": 2,
+        })
+
+        pipe_ids = [uuid.uuid4(), uuid.uuid4()]
+        launch_mock = MagicMock(side_effect=pipe_ids)
+        runner._launch_fresh_pipeline_run = launch_mock
+        runner._prepare = MagicMock(return_value={"records_processed": 100, "output_location": {"storage_type": "hdfs", "path": "/data"}})
+        runner._validator.validate = MagicMock(return_value={
+            "expected_records": 100, "actual_records": 100,
+            "data_loss": 0, "data_loss_percentage": 0.0,
+            "duplicate_ids_found": 0, "id_column": None,
+            "validation_passed": True,
+        })
+
+        with patch.dict(
+            "app.reliability.experiment_runner.FAULT_INJECTOR_REGISTRY",
+            {"container_stop": lambda dc: mock_injector},
+        ):
+            report = runner.run_experiment(config, associated_pipeline_yaml="dummy: yaml")
+
+        # Two fresh pipeline runs launched
+        assert launch_mock.call_count == 2
+        children = [r for r in db._objects.values() if isinstance(r, ExperimentRun) and r.parent_run_id is not None]
+        assert len(children) == 2
+        assert children[0].pipeline_run_id == pipe_ids[0]
+        assert children[1].pipeline_run_id == pipe_ids[1]
+
+        # Each child pre_fault_accounting references its own pipeline_run_id
+        assert children[0].pre_fault_accounting["pipeline_run_id"] == str(pipe_ids[0])
+        assert children[1].pre_fault_accounting["pipeline_run_id"] == str(pipe_ids[1])
+
+    def test_repetition_in_flight_fault_injection_offset_recorded(self) -> None:
+        """Each repetition records injection_offset_seconds showing fault injection timing."""
+        from app.reliability.experiment_runner import ExperimentRunner
+        from app.reliability.experiment_models import ExperimentModel
+        from app.reliability.safety import SafetyValidator
+        from app.reliability.docker_controller import DockerController
+        from app.models.experiment_run import ExperimentRun
+
+        db = _make_mock_db()
+        mock_safety = MagicMock(spec=SafetyValidator)
+        mock_safety.enforce_max_concurrent_experiments.return_value = None
+        mock_safety.validate_target.return_value = None
+        mock_safety.validate_duration.return_value = None
+        mock_safety._client = MagicMock()
+
+        mock_docker = MagicMock(spec=DockerController)
+        mock_docker.is_container_running.return_value = True
+
+        runner = ExperimentRunner(
+            db_session=db,
+            safety=mock_safety,
+            docker_controller=mock_docker,
+        )
+
+        mock_injector = MagicMock()
+        mock_injector.inject.return_value = {"stopped_at": "2024-01-01T00:00:00Z"}
+        mock_injector.rollback.return_value = None
+
+        config = ExperimentModel.model_validate({
+            "experiment": {"name": "offset-exp"},
+            "target": {"service": "kafka"},
+            "fault": {"type": "container_stop", "duration": 1},
+            "validation": {"max_recovery_time": 10},
+            "repetitions": 2,
+        })
+
+        with patch.dict(
+            "app.reliability.experiment_runner.FAULT_INJECTOR_REGISTRY",
+            {"container_stop": lambda dc: mock_injector},
+        ):
+            report = runner.run_experiment(config)
+
+        children = [r for r in db._objects.values() if isinstance(r, ExperimentRun) and r.parent_run_id is not None]
+        for child in children:
+            assert "injection_offset_seconds" in child.results
+            assert isinstance(child.results["injection_offset_seconds"], (int, float))
+
+
 
 

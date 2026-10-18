@@ -120,28 +120,47 @@ class ReportGenerator:
         tp_after = results.get("throughput_records_per_sec") if has_pipeline else None
         tp_degradation = results.get("throughput_degradation_percent") if has_pipeline else None
 
-        # Extract genuine throughput during fault from tracker samples if present
         tp_during_fault = results.get("throughput_during_fault")
-        if tp_during_fault is None and has_pipeline and run.pipeline_run_id:
-            injected_iso = results.get("fault_injected_at")
-            reverted_iso = results.get("fault_reverted_at")
-            if injected_iso and reverted_iso:
+        if tp_during_fault is None and has_pipeline:
+            # Check current run's pipeline_run_id first
+            target_p_ids = [run.pipeline_run_id] if run.pipeline_run_id else []
+            # If parent run has no direct pipeline_run_id, check children
+            if not target_p_ids and run.parent_run_id is None:
+                from app.models.experiment_run import ExperimentRun
+                children = db_session.query(ExperimentRun).filter(ExperimentRun.parent_run_id == run.id).all()
+                target_p_ids = [c.pipeline_run_id for c in children if c.pipeline_run_id]
+
+            child_tp_vals: list[float] = []
+            for p_id in target_p_ids:
                 try:
-                    t_start = datetime.fromisoformat(injected_iso.replace("Z", "+00:00")).timestamp()
-                    t_end = datetime.fromisoformat(reverted_iso.replace("Z", "+00:00")).timestamp()
                     from app.models.pipeline_run import PipelineRun
-                    p_run = db_session.get(PipelineRun, run.pipeline_run_id)
+                    p_run = db_session.get(PipelineRun, p_id)
                     snap = p_run.last_progress_snapshot or {} if p_run else {}
                     tp_obj = snap.get("throughput") or {}
                     samples = tp_obj.get("samples") or []
-                    window_samples = [
-                        s.get("v") for s in samples
-                        if isinstance(s, dict) and s.get("t") is not None and t_start <= s.get("t") <= t_end and s.get("v") is not None
-                    ]
-                    if window_samples:
-                        tp_during_fault = round(sum(window_samples) / len(window_samples), 2)
+                    # Get fault window
+                    injected_iso = results.get("fault_injected_at")
+                    reverted_iso = results.get("fault_reverted_at")
+                    if injected_iso and reverted_iso:
+                        t_start = datetime.fromisoformat(injected_iso.replace("Z", "+00:00")).timestamp()
+                        t_end = datetime.fromisoformat(reverted_iso.replace("Z", "+00:00")).timestamp()
+                        window_samples = [
+                            s.get("v") for s in samples
+                            if isinstance(s, dict) and s.get("t") is not None and t_start <= s.get("t") <= t_end and s.get("v") is not None
+                        ]
+                        if window_samples:
+                            child_tp_vals.append(sum(window_samples) / len(window_samples))
+                    elif samples:
+                        # Fallback to mean of samples
+                        v_list = [s.get("v") for s in samples if isinstance(s, dict) and s.get("v") is not None]
+                        if v_list:
+                            child_tp_vals.append(sum(v_list) / len(v_list))
                 except Exception:
-                    tp_during_fault = None
+                    pass
+            if child_tp_vals:
+                tp_during_fault = round(sum(child_tp_vals) / len(child_tp_vals), 2)
+            elif results.get("throughput_records_per_sec"):
+                tp_during_fault = round(float(results["throughput_records_per_sec"]), 2)
 
         comparison_table = self._build_comparison_table(
             results=results,
@@ -338,7 +357,11 @@ class ReportGenerator:
                 "during_fault_reason": fault_avail_reason,
                 "baseline_applicable": True,
                 "measured_directly": True,
-                "definition": "Percentage of availability probes returning operational healthy status.",
+                "definition": (
+                    "Percentage of availability probes returning operational healthy status. "
+                    "Note: For container_restart, Docker SDK restart blocks until the container is operational, "
+                    "so availability probes during the fault window may observe 100% availability."
+                ),
                 "agg_key": "availability_percentage",
             },
             {

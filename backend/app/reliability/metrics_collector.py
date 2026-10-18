@@ -104,9 +104,10 @@ class MetricsCollector:
         baseline_tp = None
         if pipeline_run_id and tracker:
             try:
-                snap0 = tracker.get(str(pipeline_run_id))
+                snap0 = tracker.get_progress(str(pipeline_run_id))
                 if snap0:
-                    tracker_rate = (snap0.get("spark") or {}).get("throughput_records_per_sec")
+                    tp_obj = snap0.get("throughput") or {}
+                    tracker_rate = tp_obj.get("recordsPerSecond") or (snap0.get("spark") or {}).get("throughput_records_per_sec")
                     if tracker_rate is not None and float(tracker_rate) > 0:
                         baseline_tp = round(float(tracker_rate), 2)
                     else:
@@ -116,7 +117,7 @@ class MetricsCollector:
                             or (snap0.get("hdfs") or {}).get("rowsWritten")
                         )
                         time.sleep(1.0)
-                        snap1 = tracker.get(str(pipeline_run_id))
+                        snap1 = tracker.get_progress(str(pipeline_run_id))
                         r1 = (
                             (snap1.get("spark") or {}).get("recordsOut")
                             or (snap1.get("kafka") or {}).get("published")

@@ -267,7 +267,7 @@ async def list_experiments(
                 "target": run_params.get("target_service"),
                 "fault_type": run_params.get("fault_type"),
                 "faultType": run_params.get("fault_type"),
-                "status": latest_run.status if latest_run else "pending",
+                "status": latest_run.status if latest_run else None,
                 "result": results.get("result"),
                 "duration": run_params.get("fault_duration"),
                 "startedAt": latest_run.started_at.isoformat() if latest_run and latest_run.started_at else None,

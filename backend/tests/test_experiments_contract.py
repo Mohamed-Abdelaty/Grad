@@ -140,3 +140,38 @@ def test_detail_unknown_experiment_is_404() -> None:
     with pytest.raises(HTTPException) as exc:
         asyncio.run(get_experiment(experiment_id=uuid.uuid4(), db=db))
     assert exc.value.status_code == 404
+
+
+def test_concurrent_experiment_run_rejected_with_409() -> None:
+    """Starting an experiment when one is already active raises 409 Conflict."""
+    from unittest.mock import MagicMock, patch
+    from app.api.routes.experiments import run_experiment
+    from app.reliability.exceptions import TooManyConcurrentExperimentsError
+    from fastapi import BackgroundTasks
+
+    exp_id = uuid.uuid4()
+    mock_db = MagicMock()
+    mock_bg = MagicMock(spec=BackgroundTasks)
+
+    with patch("app.reliability.safety.SafetyValidator.enforce_max_concurrent_experiments") as mock_enforce:
+        mock_enforce.side_effect = TooManyConcurrentExperimentsError(running_count=1)
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(run_experiment(experiment_id=exp_id, background_tasks=mock_bg, db=mock_db))
+        assert exc_info.value.status_code == 409
+        assert "already running" in str(exc_info.value.detail).lower()
+
+
+def test_child_run_cannot_be_targeted_directly_as_experiment() -> None:
+    """Child runs are execution instances under a parent run, not top-level experiments; API returns 404."""
+    exp_id = uuid.uuid4()
+    child_run_id = uuid.uuid4()
+    # A child run has parent_run_id set
+    child_run = _run(exp_id, parent_run_id=uuid.uuid4())
+    child_run.id = child_run_id
+
+    # Querying get_experiment for a child_run ID (not an Experiment ID) returns 404
+    db = _FakeDb([], get_result=None)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(get_experiment(experiment_id=child_run_id, db=db))
+    assert exc.value.status_code == 404
+

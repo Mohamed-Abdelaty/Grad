@@ -285,6 +285,7 @@ test.describe('UI-8 ChaosLab Reliability and Reports E2E', () => {
     // Reset filter
     await filterTarget.selectOption('');
     await expect(page).toHaveURL(/^http:\/\/localhost:3000\/reports(\?.*)?$/);
+    await expect(page.getByText('Loading reports...')).not.toBeVisible();
 
     // Cards vs Table toggle
     const viewTableBtn = page.getByTestId('view-mode-table');
@@ -494,9 +495,11 @@ test.describe('UI-8 ChaosLab Reliability and Reports E2E', () => {
         if (clean.toLowerCase().includes('recovering')) {
           sawRecovering = true;
         }
-        const match = clean.match(/Recovered in ([\d\.]+) s/i);
-        if (match) {
-          recoverySecondsFromOverlay = parseFloat(match[1]);
+        if (sawStopped) {
+          const match = clean.match(/Recovered in ([\d\.]+) s/i);
+          if (match) {
+            recoverySecondsFromOverlay = parseFloat(match[1]);
+          }
         }
       }
       return clean;
