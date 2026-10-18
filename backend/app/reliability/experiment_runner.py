@@ -316,7 +316,9 @@ class ExperimentRunner:
                     "data_loss": rep_report.get("data_loss"),
                     "duplicates": rep_report.get("duplicates"),
                     "availability_percentage": rep_report.get("availability_percentage"),
-                    "throughput_records_per_sec": rep_report.get("average_throughput"),
+                    "throughput_records_per_sec": rep_report.get("average_throughput") or (child_run.results or {}).get("throughput_records_per_sec"),
+                    "error_rate": rep_report.get("error_rate"),
+                    "pre_fault_accounting": child_run.pre_fault_accounting,
                     "error": (child_run.results or {}).get("error"),
                 }
                 repetition_results.append(rep_res)
@@ -1277,6 +1279,7 @@ class ExperimentRunner:
         except Exception:
             pass
 
+        source_info = raw_snapshot.get("source") or {}
         kafka_info = raw_snapshot.get("kafka") or {}
         spark_info = raw_snapshot.get("spark") or {}
         hdfs_info = raw_snapshot.get("hdfs") or {}
@@ -1284,7 +1287,11 @@ class ExperimentRunner:
         records_received = (
             kafka_info.get("published")
             if kafka_info.get("published") is not None
-            else spark_info.get("recordsIn")
+            else (
+                spark_info.get("recordsIn")
+                if spark_info.get("recordsIn") is not None
+                else source_info.get("rowsRead")
+            )
         )
         records_processed = spark_info.get("recordsOut")
         records_written = hdfs_info.get("rowsWritten")
@@ -1306,24 +1313,30 @@ class ExperimentRunner:
 
         For N=1, sample std is 0.0.
         For N>1, sample std is computed with N-1 denominator.
-        For N=0, all stats are None.
+        For N=0, all stats are None with n_samples=0.
         """
-        metric_keys = [
-            "recovery_time_seconds",
-            "data_loss",
-            "duplicates",
-            "availability_percentage",
-            "throughput_records_per_sec",
-        ]
+        metric_aliases: dict[str, list[str]] = {
+            "recovery_time_seconds": ["recovery_time_seconds", "recoveryTimeSeconds"],
+            "data_loss": ["data_loss", "dataLoss"],
+            "duplicates": ["duplicates", "duplicate_ids_found"],
+            "availability_percentage": ["availability_percentage", "availabilityPercentage"],
+            "throughput_records_per_sec": ["throughput_records_per_sec", "average_throughput", "throughputAfter"],
+            "error_rate": ["error_rate", "errorRate"],
+        }
         aggregates: dict[str, Any] = {}
 
-        for key in metric_keys:
+        for key, aliases in metric_aliases.items():
             raw_vals: list[float] = []
             for rep in repetition_reports:
-                val = rep.get(key)
-                if val is None:
-                    # also check nested results or metadata
-                    val = (rep.get("results") or {}).get(key)
+                val = None
+                for alias in aliases:
+                    if alias in rep and rep[alias] is not None:
+                        val = rep[alias]
+                        break
+                    results = rep.get("results") or {}
+                    if alias in results and results[alias] is not None:
+                        val = results[alias]
+                        break
                 if val is not None:
                     try:
                         raw_vals.append(float(val))

@@ -681,6 +681,31 @@ class TestPreFaultAccountingAndRepetitions:
             assert stats["min"] is None
             assert stats["max"] is None
 
+    def test_aggregated_metrics_exact_key_set(self) -> None:
+        """Assert all 5 required metrics plus legacy error_rate are present in aggregated_metrics."""
+        from app.reliability.experiment_runner import ExperimentRunner
+
+        agg = ExperimentRunner._compute_aggregate_metrics([])
+        required_keys = {
+            "recovery_time_seconds",
+            "data_loss",
+            "duplicates",
+            "availability_percentage",
+            "throughput_records_per_sec",
+        }
+        # All 5 required metrics MUST be present
+        assert required_keys.issubset(set(agg.keys())), f"Missing required metrics: {required_keys - set(agg.keys())}"
+        # Legacy error_rate is preserved
+        assert "error_rate" in agg
+        assert set(agg.keys()) == required_keys | {"error_rate"}
+        # And when not measured, every metric has n_samples=0 and all stats None (never zero-filled)
+        for key in required_keys:
+            assert agg[key]["n_samples"] == 0
+            assert agg[key]["mean"] is None
+            assert agg[key]["std"] is None
+            assert agg[key]["min"] is None
+            assert agg[key]["max"] is None
+
     def test_pre_fault_accounting_pipelineless_is_none(self) -> None:
         """When no pipeline is linked, pre-fault accounting is None."""
         from app.reliability.experiment_runner import ExperimentRunner
