@@ -1146,13 +1146,15 @@ class TestComparisonTable:
         assert loss["baseline_applicable"] is False
         assert loss["measured_directly"] is True
 
-        # Duplicates (normal is 0 from baseline, fault is 0)
+        # Duplicates (normal is None, not measured during baseline)
         dups = by_metric["duplicates"]
-        assert dups["normal"] == 0
+        assert dups["normal"] is None
+        assert dups["normal_reason"] == "not measured during baseline"
+        assert dups["normal_n_samples"] is None
         assert dups["during_fault"] == 0
-        assert dups["delta"] == 0.0
-        assert dups["pct_change"] is None  # Zero baseline yields null pct_change (never 0.0)
-        assert dups["baseline_applicable"] is True
+        assert dups["delta"] is None
+        assert dups["pct_change"] is None
+        assert dups["baseline_applicable"] is False
 
         # Recovery time (baseline not applicable by definition)
         rec = by_metric["recovery_time_seconds"]
@@ -1333,9 +1335,9 @@ class TestComparisonTable:
         from app.reliability.report_generator import ReportGenerator
 
         table = ReportGenerator._build_comparison_table(
-            results={"baseline": {"duplicates": 0, "throughput_records_per_sec": 0.0}},
+            results={"baseline": {"throughput_records_per_sec": 0.0, "availability_percentage": 0.0}},
             has_pipeline=True,
-            avail_pct=100.0,
+            avail_pct=0.0,
             tp_baseline=0.0,
             tp_during_fault=0.0,
             avg_throughput=0.0,
@@ -1345,11 +1347,11 @@ class TestComparisonTable:
         )
         by_metric = {r["metric"]: r for r in table}
 
-        # Duplicates baseline is 0: pct_change must be None
-        assert by_metric["duplicates"]["normal"] == 0
-        assert by_metric["duplicates"]["during_fault"] == 0
-        assert by_metric["duplicates"]["delta"] == 0.0
-        assert by_metric["duplicates"]["pct_change"] is None
+        # Availability baseline is 0.0: pct_change must be None
+        assert by_metric["availability_percentage"]["normal"] == 0.0
+        assert by_metric["availability_percentage"]["during_fault"] == 0.0
+        assert by_metric["availability_percentage"]["delta"] == 0.0
+        assert by_metric["availability_percentage"]["pct_change"] is None
 
         # Throughput baseline is 0.0: pct_change must be None
         assert by_metric["throughput_records_per_sec"]["normal"] == 0.0
@@ -1539,6 +1541,97 @@ class TestComparisonTable:
         dup_row = by_metric["duplicates"]
         assert dup_row["during_fault"] is None
         assert dup_row["during_fault_reason"] == "source or output duplicates unmeasured"
+        assert dup_row["delta"] is None
+        assert dup_row["pct_change"] is None
+
+    def test_throughput_counter_and_pipeline_active_at_injection(self) -> None:
+        """Throughput row carries counter_used and pipeline_active_at_injection. When inactive, during_fault is None with reason."""
+        from app.reliability.report_generator import ReportGenerator
+
+        # Active case
+        results_active = {
+            "counter_used": "spark.recordsOut",
+            "pipeline_active_at_injection": True,
+            "baseline": {"throughput_records_per_sec": 5000.0},
+        }
+        table_active = ReportGenerator._build_comparison_table(
+            results=results_active,
+            has_pipeline=True,
+            avail_pct=100.0,
+            tp_baseline=5000.0,
+            tp_during_fault=2000.0,
+            avg_throughput=3000.0,
+            data_loss_val=0,
+            duplicates_val=0,
+            aggregated_metrics=None,
+        )
+        tp_active = {r["metric"]: r for r in table_active}["throughput_records_per_sec"]
+        assert tp_active["counter_used"] == "spark.recordsOut"
+        assert tp_active["pipeline_active_at_injection"] is True
+        assert tp_active["during_fault"] == 2000.0
+        assert tp_active["during_fault_reason"] is None
+
+        # Inactive case: pipeline was not actively progressing at injection
+        results_inactive = {
+            "counter_used": "spark.recordsOut",
+            "pipeline_active_at_injection": False,
+            "baseline": {"throughput_records_per_sec": 5000.0},
+        }
+        table_inactive = ReportGenerator._build_comparison_table(
+            results=results_inactive,
+            has_pipeline=True,
+            avail_pct=100.0,
+            tp_baseline=5000.0,
+            tp_during_fault=0.0,  # Even if 0.0 was captured, inactive pipeline must yield None
+            avg_throughput=3000.0,
+            data_loss_val=0,
+            duplicates_val=0,
+            aggregated_metrics=None,
+        )
+        tp_inactive = {r["metric"]: r for r in table_inactive}["throughput_records_per_sec"]
+        assert tp_inactive["counter_used"] == "spark.recordsOut"
+        assert tp_inactive["pipeline_active_at_injection"] is False
+        assert tp_inactive["during_fault"] is None
+        assert tp_inactive["during_fault_reason"] == "pipeline not active at injection"
+        assert tp_inactive["delta"] is None
+        assert tp_inactive["pct_change"] is None
+
+    def test_data_loss_and_duplicates_null_normal_and_no_samples(self) -> None:
+        """data_loss and duplicates rows have normal=None, delta=None, and normal_n_samples=None."""
+        from app.reliability.report_generator import ReportGenerator
+
+        table = ReportGenerator._build_comparison_table(
+            results={
+                "baseline": {
+                    "availability_percentage": 100.0,
+                    "throughput_records_per_sec": 1000.0,
+                },
+                "output_duplicates": 0,
+                "source_duplicates": 0,
+            },
+            has_pipeline=True,
+            avail_pct=100.0,
+            tp_baseline=1000.0,
+            tp_during_fault=0.0,
+            avg_throughput=500.0,
+            data_loss_val=0,
+            duplicates_val=0,
+            aggregated_metrics=None,
+        )
+        by_metric = {r["metric"]: r for r in table}
+        loss_row = by_metric["data_loss"]
+        assert loss_row["normal"] is None
+        assert loss_row["normal_reason"] == "n/a (by definition)"
+        assert loss_row["normal_n_samples"] is None
+        assert loss_row["baseline_applicable"] is False
+        assert loss_row["delta"] is None
+        assert loss_row["pct_change"] is None
+
+        dup_row = by_metric["duplicates"]
+        assert dup_row["normal"] is None
+        assert dup_row["normal_reason"] == "not measured during baseline"
+        assert dup_row["normal_n_samples"] is None
+        assert dup_row["baseline_applicable"] is False
         assert dup_row["delta"] is None
         assert dup_row["pct_change"] is None
 

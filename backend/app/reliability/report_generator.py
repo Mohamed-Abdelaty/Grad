@@ -335,9 +335,36 @@ class ReportGenerator:
                 baseline_reasons.get("throughput_records_per_sec")
                 or ("no pipeline linked" if not has_pipeline else "pipeline idle / no progress in baseline window")
             )
-        fault_tp_reason = None if tp_during_fault is not None else (
-            "no pipeline linked" if not has_pipeline else "pipeline idle / no progress during fault"
+
+        # Counter provenance and pipeline activity at injection
+        counter_used = results.get("counter_used") or (
+            "spark.recordsOut" if has_pipeline else None
         )
+        pipeline_active_at_injection = results.get("pipeline_active_at_injection")
+        if pipeline_active_at_injection is None and has_pipeline:
+            # Check pre_fault_accounting or repetition results
+            pre_acc = results.get("pre_fault_accounting")
+            if pre_acc is not None:
+                rec_in = pre_acc.get("records_received") or pre_acc.get("records_processed")
+                pipeline_active_at_injection = bool(rec_in and rec_in > 0)
+            else:
+                # If no pre_fault_accounting provided (e.g. synthetic test call), assume True
+                pipeline_active_at_injection = True
+        elif not has_pipeline:
+            pipeline_active_at_injection = None
+
+        if not has_pipeline:
+            fault_tp_val = None
+            fault_tp_reason = "no pipeline linked"
+        elif pipeline_active_at_injection is False:
+            fault_tp_val = None
+            fault_tp_reason = "pipeline not active at injection"
+        elif tp_during_fault is not None:
+            fault_tp_val = tp_during_fault
+            fault_tp_reason = None
+        else:
+            fault_tp_val = None
+            fault_tp_reason = "pipeline idle / no progress during fault"
 
         # 3. Data loss
         # Data loss is a fault-induced delta, baseline has no counterpart
@@ -346,12 +373,11 @@ class ReportGenerator:
         fault_loss_reason = None if data_loss_val is not None else ("no pipeline linked" if not has_pipeline else "not measured")
 
         # 4. Duplicates
-        normal_dups = baseline.get("duplicates")
-        normal_dups_reason = None if normal_dups is not None else (
-            baseline_reasons.get("duplicates") or ("no pipeline linked" if not has_pipeline else "not measured during baseline")
-        )
+        # Duplicates baseline is not measured during baseline phase; normal is null
+        normal_dups = None
+        normal_dups_reason = "not measured during baseline"
         out_dups = results.get("output_duplicates")
-        src_dups = results.get("source_duplicates") if results.get("source_duplicates") is not None else normal_dups
+        src_dups = results.get("source_duplicates")
         if out_dups is not None and src_dups is not None:
             fault_induced_dups = max(0, out_dups - src_dups)
             fault_dups_reason = None
@@ -390,7 +416,7 @@ class ReportGenerator:
                 "unit": "%",
                 "normal": normal_avail,
                 "normal_reason": normal_avail_reason,
-                "normal_n_samples": normal_avail_n,
+                "normal_n_samples": normal_avail_n if normal_avail is not None else None,
                 "during_fault": avail_pct,
                 "during_fault_reason": fault_avail_reason,
                 "baseline_applicable": True,
@@ -404,13 +430,15 @@ class ReportGenerator:
                 "unit": "records/sec",
                 "normal": normal_tp,
                 "normal_reason": normal_tp_reason,
-                "normal_n_samples": normal_tp_n,
-                "during_fault": tp_during_fault,
+                "normal_n_samples": normal_tp_n if normal_tp is not None else None,
+                "during_fault": fault_tp_val,
                 "during_fault_reason": fault_tp_reason,
                 "baseline_applicable": True,
-                "measured_directly": tp_during_fault is not None,
+                "measured_directly": fault_tp_val is not None,
                 "definition": "Pipeline record processing or ingestion throughput during fault window.",
                 "agg_key": "throughput_records_per_sec",
+                "counter_used": counter_used,
+                "pipeline_active_at_injection": pipeline_active_at_injection,
             },
             {
                 "metric": "data_loss",
@@ -418,6 +446,7 @@ class ReportGenerator:
                 "unit": "records",
                 "normal": normal_data_loss,
                 "normal_reason": normal_data_loss_reason,
+                "normal_n_samples": None,
                 "during_fault": data_loss_val,
                 "during_fault_reason": fault_loss_reason,
                 "baseline_applicable": False,
@@ -431,9 +460,10 @@ class ReportGenerator:
                 "unit": "records",
                 "normal": normal_dups,
                 "normal_reason": normal_dups_reason,
+                "normal_n_samples": None,
                 "during_fault": fault_induced_dups,
                 "during_fault_reason": fault_dups_reason,
-                "baseline_applicable": True,
+                "baseline_applicable": False,
                 "measured_directly": True if has_pipeline else False,
                 "definition": "Count of duplicate record identifier keys observed in destination storage.",
                 "agg_key": "duplicates",
@@ -447,6 +477,7 @@ class ReportGenerator:
                 "unit": "seconds",
                 "normal": normal_rec,
                 "normal_reason": normal_rec_reason,
+                "normal_n_samples": None,
                 "during_fault": recovery_time,
                 "during_fault_reason": fault_rec_reason,
                 "baseline_applicable": False,
@@ -485,8 +516,8 @@ class ReportGenerator:
                 "normal": norm,
                 "normal_reason": r.get("normal_reason"),
                 "normalReason": r.get("normal_reason"),
-                "normal_n_samples": r.get("normal_n_samples"),
-                "normalNSamples": r.get("normal_n_samples"),
+                "normal_n_samples": r.get("normal_n_samples") if norm is not None else None,
+                "normalNSamples": r.get("normal_n_samples") if norm is not None else None,
                 "during_fault": fault_val,
                 "duringFault": fault_val,
                 "during_fault_reason": r.get("during_fault_reason"),
@@ -500,6 +531,12 @@ class ReportGenerator:
                 "measuredDirectly": r["measured_directly"],
                 "definition": r["definition"],
             }
+            if r["metric"] == "throughput_records_per_sec":
+                row_entry["counter_used"] = r.get("counter_used")
+                row_entry["counterUsed"] = r.get("counter_used")
+                row_entry["pipeline_active_at_injection"] = r.get("pipeline_active_at_injection")
+                row_entry["pipelineActiveAtInjection"] = r.get("pipeline_active_at_injection")
+
             if r["metric"] == "duplicates":
                 row_entry["output_duplicates"] = r.get("output_duplicates")
                 row_entry["outputDuplicates"] = r.get("output_duplicates")

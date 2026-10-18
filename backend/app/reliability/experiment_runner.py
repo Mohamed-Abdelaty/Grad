@@ -480,13 +480,9 @@ class ExperimentRunner:
                 base_template["availability_percentage"] = None
                 base_template["availability_n_samples"] = 0
 
-            # Duplicates baseline aggregate
-            if base_dups:
-                base_template["duplicates"] = round(sum(base_dups) / len(base_dups))
-                base_template["duplicates_n_samples"] = len(base_dups)
-            else:
-                base_template["duplicates"] = None
-                base_template["duplicates_n_samples"] = 0
+            # Duplicates baseline aggregate: duplicates are not measured in baseline, so normal is null
+            base_template["duplicates"] = None
+            base_template["duplicates_n_samples"] = 0
 
             parent_results["baseline"] = base_template
 
@@ -838,26 +834,45 @@ class ExperimentRunner:
                 # Measure throughput during fault window from progress counter delta
                 tp_during_fault = None
                 fault_delta_records = None
+                counter_used = None
+                pipeline_active_at_injection = None
+
                 if run.pipeline_run_id is not None:
+                    pre_acc = run.pre_fault_accounting or {}
+                    rec_in = pre_acc.get("records_received") or pre_acc.get("records_processed")
+                    pipeline_active_at_injection = bool(rec_in and rec_in > 0)
+
                     try:
                         from app.pipeline.progress import tracker
                         p_snap = tracker.get_progress(str(run.pipeline_run_id))
                         if p_snap:
-                            curr_r = (
-                                (p_snap.get("spark") or {}).get("recordsOut")
-                                or (p_snap.get("kafka") or {}).get("published")
-                                or (p_snap.get("hdfs") or {}).get("rowsWritten")
-                            )
-                            pre_acc = run.pre_fault_accounting or {}
-                            pre_r = (
-                                pre_acc.get("spark_records_out")
-                                or pre_acc.get("kafka_published")
-                                or pre_acc.get("records_received")
-                                or 0
-                            )
+                            spark_out = (p_snap.get("spark") or {}).get("recordsOut")
+                            kafka_pub = (p_snap.get("kafka") or {}).get("published")
+                            hdfs_w = (p_snap.get("hdfs") or {}).get("rowsWritten")
+
+                            if spark_out is not None:
+                                curr_r = spark_out
+                                counter_used = "spark.recordsOut"
+                                pre_r = pre_acc.get("spark_records_out") or pre_acc.get("records_processed") or 0
+                            elif kafka_pub is not None:
+                                curr_r = kafka_pub
+                                counter_used = "kafka.published"
+                                pre_r = pre_acc.get("kafka_published") or pre_acc.get("records_received") or 0
+                            elif hdfs_w is not None:
+                                curr_r = hdfs_w
+                                counter_used = "hdfs.rowsWritten"
+                                pre_r = pre_acc.get("hdfs_rows_written") or pre_acc.get("records_written") or 0
+                            else:
+                                curr_r = None
+                                pre_r = None
+
                             if curr_r is not None and pre_r is not None:
                                 fault_delta_records = max(0, int(curr_r) - int(pre_r))
-                                tp_during_fault = round(float(fault_delta_records) / fault_window_dur, 2)
+                                if pipeline_active_at_injection:
+                                    tp_during_fault = round(float(fault_delta_records) / fault_window_dur, 2)
+                                else:
+                                    # Pipeline was not progressing when fault was injected
+                                    tp_during_fault = None
                     except Exception as tp_exc:
                         logger.debug("Failed measuring during-fault throughput: %s", tp_exc)
 
@@ -866,6 +881,8 @@ class ExperimentRunner:
                     "throughput_during_fault": tp_during_fault,
                     "during_fault_records_delta": fault_delta_records,
                     "during_fault_window_seconds": round(fault_window_dur, 2),
+                    "counter_used": counter_used,
+                    "pipeline_active_at_injection": pipeline_active_at_injection,
                 })
                 fault_state_registry.set_recovering(str(experiment.id))
                 self._emit_event(
