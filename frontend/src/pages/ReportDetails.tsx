@@ -38,6 +38,7 @@ import {
   throughputBars,
 } from '../lib/reliability';
 import { LogViewer } from '../components/ui/LogViewer';
+import { NormalVsFaultComparisonTable } from '../components/reports/NormalVsFaultComparisonTable';
 
 export default function ReportDetails() {
   const { id } = useParams<{ id: string }>();
@@ -300,6 +301,14 @@ export default function ReportDetails() {
               )}
             </div>
           </div>
+        ) : null}
+
+        {/* Normal vs During-Fault Comparison Table */}
+        {((detail.comparisonTable || detail.comparison_table || results.comparisonTable || results.comparison_table)) ? (
+          <NormalVsFaultComparisonTable
+            rows={detail.comparisonTable || detail.comparison_table || results.comparisonTable || results.comparison_table}
+            repetitions={detail.totalRepetitions ?? 1}
+          />
         ) : null}
 
         {/* Criteria Evaluation Table */}

@@ -81,6 +81,31 @@ export interface ResourceSample {
   bytes?: number;
 }
 
+export interface ComparisonTableRow {
+  metric: string;
+  label: string;
+  unit: string;
+  normal: number | null;
+  during_fault: number | null;
+  duringFault?: number | null;
+  delta: number | null;
+  pct_change: number | null;
+  pctChange?: number | null;
+  baseline_applicable: boolean;
+  baselineApplicable?: boolean;
+  measured_directly: boolean;
+  measuredDirectly?: boolean;
+  definition: string;
+  aggregate?: {
+    mean: number | null;
+    std: number | null;
+    min: number | null;
+    max: number | null;
+    n_samples: number;
+    nSamples?: number;
+  } | null;
+}
+
 export interface ExperimentResults {
   recoveryTimeSeconds: number | null;
   dataLoss: number;
@@ -98,6 +123,8 @@ export interface ExperimentResults {
   availabilitySamples: AvailabilitySample[] | null;
   throughputSamples: MetricSample[] | null;
   cpuSamples: ResourceSample[] | null;
+  comparisonTable?: ComparisonTableRow[] | null;
+  comparison_table?: ComparisonTableRow[] | null;
   memorySamples: ResourceSample[] | null;
 
   // Compatibility fields
@@ -168,6 +195,8 @@ export interface ExperimentDetail {
   result: 'PASS' | 'FAIL' | null;
   failedCriteria: string[];
   results: ExperimentResults;
+  comparisonTable?: ComparisonTableRow[] | null;
+  comparison_table?: ComparisonTableRow[] | null;
   preFaultAccounting?: {
     snapshot_timestamp: string;
     pipeline_run_id: string;
