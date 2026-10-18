@@ -597,6 +597,7 @@ class TestPreFaultAccountingAndRepetitions:
 
     def test_compute_aggregate_metrics(self) -> None:
         """Verify statistical aggregation with N=0, N=1, and N>1."""
+        import math
         from app.reliability.experiment_runner import ExperimentRunner
 
         # N=0
@@ -604,15 +605,23 @@ class TestPreFaultAccountingAndRepetitions:
         assert agg0["recovery_time_seconds"]["n_samples"] == 0
         assert agg0["recovery_time_seconds"]["mean"] is None
         assert agg0["recovery_time_seconds"]["std"] is None
+        assert agg0["recovery_time_seconds"]["min"] is None
+        assert agg0["recovery_time_seconds"]["max"] is None
 
-        # N=1
+        # N=1 (sample std is 0.0)
         rep1 = [{"recovery_time_seconds": 5.0, "data_loss": 0}]
         agg1 = ExperimentRunner._compute_aggregate_metrics(rep1)
         assert agg1["recovery_time_seconds"]["n_samples"] == 1
         assert agg1["recovery_time_seconds"]["mean"] == 5.0
         assert agg1["recovery_time_seconds"]["std"] == 0.0
+        assert agg1["recovery_time_seconds"]["min"] == 5.0
+        assert agg1["recovery_time_seconds"]["max"] == 5.0
 
-        # N=3
+        # N=3 known hand-calculated values:
+        # values: [2.0, 4.0, 6.0]
+        # mean = (2 + 4 + 6) / 3 = 4.0
+        # variance (N-1 = 2): ((2-4)^2 + (4-4)^2 + (6-4)^2) / 2 = (4 + 0 + 4) / 2 = 4.0
+        # std = sqrt(4.0) = 2.0
         reps = [
             {"recovery_time_seconds": 2.0, "data_loss": 0},
             {"recovery_time_seconds": 4.0, "data_loss": 0},
@@ -623,8 +632,54 @@ class TestPreFaultAccountingAndRepetitions:
         assert agg3["recovery_time_seconds"]["mean"] == 4.0
         assert agg3["recovery_time_seconds"]["min"] == 2.0
         assert agg3["recovery_time_seconds"]["max"] == 6.0
-        # Sample std with N-1: sqrt(((2-4)^2 + (4-4)^2 + (6-4)^2)/2) = sqrt(8/2) = 2.0
         assert agg3["recovery_time_seconds"]["std"] == 2.0
+
+        # Identical results: std is 0.0
+        reps_identical = [
+            {"recovery_time_seconds": 12.5, "data_loss": 0},
+            {"recovery_time_seconds": 12.5, "data_loss": 0},
+            {"recovery_time_seconds": 12.5, "data_loss": 0},
+        ]
+        agg_id = ExperimentRunner._compute_aggregate_metrics(reps_identical)
+        assert agg_id["recovery_time_seconds"]["n_samples"] == 3
+        assert agg_id["recovery_time_seconds"]["mean"] == 12.5
+        assert agg_id["recovery_time_seconds"]["std"] == 0.0
+        assert agg_id["recovery_time_seconds"]["min"] == 12.5
+        assert agg_id["recovery_time_seconds"]["max"] == 12.5
+
+        # None exclusion with per-metric n_samples
+        # recovery_time_seconds present in 2, data_loss present in 1, throughput present in 0
+        reps_mixed = [
+            {"recovery_time_seconds": 10.0, "data_loss": 5},
+            {"recovery_time_seconds": 20.0, "data_loss": None},
+            {"recovery_time_seconds": None, "data_loss": None},
+        ]
+        agg_mixed = ExperimentRunner._compute_aggregate_metrics(reps_mixed)
+        assert agg_mixed["recovery_time_seconds"]["n_samples"] == 2
+        assert agg_mixed["recovery_time_seconds"]["mean"] == 15.0
+        # std for [10, 20]: mean=15, diffs=[-5, 5], var=(25+25)/1 = 50, std=sqrt(50)=7.0711
+        assert agg_mixed["recovery_time_seconds"]["std"] == round(math.sqrt(50), 4)
+
+        assert agg_mixed["data_loss"]["n_samples"] == 1
+        assert agg_mixed["data_loss"]["mean"] == 5.0
+        assert agg_mixed["data_loss"]["std"] == 0.0
+
+        assert agg_mixed["throughput_records_per_sec"]["n_samples"] == 0
+        assert agg_mixed["throughput_records_per_sec"]["mean"] is None
+        assert agg_mixed["throughput_records_per_sec"]["std"] is None
+
+        # All-None: all stats null
+        reps_all_none = [
+            {"recovery_time_seconds": None, "data_loss": None},
+            {"recovery_time_seconds": None, "data_loss": None},
+        ]
+        agg_all_none = ExperimentRunner._compute_aggregate_metrics(reps_all_none)
+        for metric, stats in agg_all_none.items():
+            assert stats["n_samples"] == 0
+            assert stats["mean"] is None
+            assert stats["std"] is None
+            assert stats["min"] is None
+            assert stats["max"] is None
 
     def test_pre_fault_accounting_pipelineless_is_none(self) -> None:
         """When no pipeline is linked, pre-fault accounting is None."""
@@ -825,5 +880,187 @@ class TestPreFaultAccountingAndRepetitions:
         assert report["repetitions"] == 3
         # 1 completed, 2 skipped
         assert report["aggregate_statistics"]["recovery_time_seconds"]["n_samples"] == 1
+
+    def test_repetitions_validation_bounds(self) -> None:
+        """Verify repetitions validation: 0 rejected, 1 valid, 10 valid, 11 rejected, missing defaults to 1."""
+        import pydantic
+        import pytest
+        from app.reliability.experiment_models import ExperimentModel
+
+        base_raw = {
+            "experiment": {"name": "bounds-test"},
+            "target": {"service": "kafka"},
+            "fault": {"type": "container_stop", "duration": 5},
+            "validation": {"max_recovery_time": 30},
+        }
+
+        # Missing repetitions defaults to 1
+        m_def = ExperimentModel.model_validate(base_raw)
+        assert m_def.repetitions == 1
+
+        # repetitions=1 valid
+        m1 = ExperimentModel.model_validate({**base_raw, "repetitions": 1})
+        assert m1.repetitions == 1
+
+        # repetitions=10 valid
+        m10 = ExperimentModel.model_validate({**base_raw, "repetitions": 10})
+        assert m10.repetitions == 10
+
+        # repetitions=0 rejected (ge=1)
+        with pytest.raises(pydantic.ValidationError) as exc0:
+            ExperimentModel.model_validate({**base_raw, "repetitions": 0})
+        assert "greater than or equal to 1" in str(exc0.value)
+
+        # repetitions=11 rejected (le=10)
+        with pytest.raises(pydantic.ValidationError) as exc11:
+            ExperimentModel.model_validate({**base_raw, "repetitions": 11})
+        assert "less than or equal to 10" in str(exc11.value)
+
+    def test_safety_validator_invoked_per_repetition(self) -> None:
+        """SafetyValidator is invoked exactly once per repetition."""
+        from app.reliability.experiment_runner import ExperimentRunner
+        from app.reliability.experiment_models import ExperimentModel
+        from app.reliability.safety import SafetyValidator
+        from app.reliability.docker_controller import DockerController
+
+        db = _make_mock_db()
+        mock_safety = MagicMock(spec=SafetyValidator)
+        mock_safety.enforce_max_concurrent_experiments.return_value = None
+        mock_safety.validate_target.return_value = None
+        mock_safety.validate_duration.return_value = None
+        mock_safety._client = MagicMock()
+
+        mock_docker = MagicMock(spec=DockerController)
+        mock_docker.is_container_running.return_value = True
+
+        runner = ExperimentRunner(
+            db_session=db,
+            safety=mock_safety,
+            docker_controller=mock_docker,
+        )
+
+        mock_injector = MagicMock()
+        mock_injector.inject.return_value = {"stopped_at": "2024-01-01T00:00:00Z"}
+        mock_injector.rollback.return_value = None
+
+        config = ExperimentModel.model_validate({
+            "experiment": {"name": "safety-rep-exp"},
+            "target": {"service": "kafka"},
+            "fault": {"type": "container_stop", "duration": 1},
+            "validation": {"max_recovery_time": 10},
+            "repetitions": 3,
+        })
+
+        with patch.dict(
+            "app.reliability.experiment_runner.FAULT_INJECTOR_REGISTRY",
+            {"container_stop": lambda dc: mock_injector},
+        ):
+            runner.run_experiment(config)
+
+        # Safety validation called once during run initialization, plus once per repetition (3 times in _validate)
+        # Specifically, validate_target and validate_duration called exactly 3 times (once per repetition in _execute_single_run)
+        assert mock_safety.validate_target.call_count == 3
+        assert mock_safety.validate_duration.call_count == 3
+
+    def test_repetitions_one_legacy_shape_no_parent_child(self) -> None:
+        """When repetitions=1, no parent/child relationship is created (parent_run_id is None)."""
+        from app.reliability.experiment_runner import ExperimentRunner
+        from app.reliability.experiment_models import ExperimentModel
+        from app.reliability.safety import SafetyValidator
+        from app.reliability.docker_controller import DockerController
+        from app.models.experiment_run import ExperimentRun
+
+        db = _make_mock_db()
+        mock_safety = MagicMock(spec=SafetyValidator)
+        mock_safety.enforce_max_concurrent_experiments.return_value = None
+        mock_safety.validate_target.return_value = None
+        mock_safety.validate_duration.return_value = None
+        mock_safety._client = MagicMock()
+
+        mock_docker = MagicMock(spec=DockerController)
+        mock_docker.is_container_running.return_value = True
+
+        runner = ExperimentRunner(
+            db_session=db,
+            safety=mock_safety,
+            docker_controller=mock_docker,
+        )
+
+        mock_injector = MagicMock()
+        mock_injector.inject.return_value = {"stopped_at": "2024-01-01T00:00:00Z"}
+        mock_injector.rollback.return_value = None
+
+        config = ExperimentModel.model_validate({
+            "experiment": {"name": "rep-one-exp"},
+            "target": {"service": "kafka"},
+            "fault": {"type": "container_stop", "duration": 1},
+            "validation": {"max_recovery_time": 10},
+            "repetitions": 1,
+        })
+
+        with patch.dict(
+            "app.reliability.experiment_runner.FAULT_INJECTOR_REGISTRY",
+            {"container_stop": lambda dc: mock_injector},
+        ):
+            report = runner.run_experiment(config)
+
+        # Only 1 ExperimentRun row created, parent_run_id is None
+        runs = [obj for obj in db._objects.values() if isinstance(obj, ExperimentRun)]
+        assert len(runs) == 1
+        assert runs[0].parent_run_id is None
+        assert runs[0].repetition_count == 1
+        assert runs[0].repetition_index is None
+        assert report["result"] == "PASS"
+
+    def test_deleting_parent_run_cascades_children(self) -> None:
+        """Deleting a parent ExperimentRun cascades and removes all child runs with no orphans."""
+        from app.models.experiment import Experiment
+        from app.models.experiment_run import ExperimentRun
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+        from app.database.base import Base
+
+        # Use in-memory SQLite to test real SQLAlchemy cascade deletion
+        engine = create_engine("sqlite:///:memory:")
+        Experiment.__table__.create(engine)
+        ExperimentRun.__table__.create(engine)
+
+        with Session(engine) as session:
+            exp = Experiment(name="cascade-test", experiment_yaml="test")
+            session.add(exp)
+            session.flush()
+
+            parent = ExperimentRun(
+                experiment_id=exp.id,
+                status="succeeded",
+                repetition_count=2,
+            )
+            session.add(parent)
+            session.flush()
+
+            child1 = ExperimentRun(
+                experiment_id=exp.id,
+                parent_run_id=parent.id,
+                repetition_index=1,
+                status="succeeded",
+            )
+            child2 = ExperimentRun(
+                experiment_id=exp.id,
+                parent_run_id=parent.id,
+                repetition_index=2,
+                status="succeeded",
+            )
+            session.add_all([child1, child2])
+            session.commit()
+
+            # Confirm parent and children exist
+            assert session.query(ExperimentRun).count() == 3
+
+            # Delete parent run
+            session.delete(parent)
+            session.commit()
+
+            # Verify both children were cascaded and removed, no orphans remain
+            assert session.query(ExperimentRun).count() == 0
 
 

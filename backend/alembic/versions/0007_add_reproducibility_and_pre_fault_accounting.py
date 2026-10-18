@@ -81,9 +81,21 @@ def upgrade() -> None:
             comment="Statistical aggregation across completed repetitions (parent run only).",
         ),
     )
+    # Update single-active unique index so it only constrains top-level parent runs.
+    # Child repetitions belong to their parent and run under its serialized lifecycle.
+    op.drop_index("uq_experiment_runs_single_active", table_name="experiment_runs")
+    op.execute(
+        "CREATE UNIQUE INDEX uq_experiment_runs_single_active ON experiment_runs "
+        "((1)) WHERE status IN ('pending', 'running') AND parent_run_id IS NULL"
+    )
 
 
 def downgrade() -> None:
+    op.drop_index("uq_experiment_runs_single_active", table_name="experiment_runs")
+    op.execute(
+        "CREATE UNIQUE INDEX uq_experiment_runs_single_active ON experiment_runs "
+        "((1)) WHERE status IN ('pending', 'running')"
+    )
     op.drop_column("experiment_runs", "aggregated_metrics")
     op.drop_column("experiment_runs", "pre_fault_accounting")
     op.drop_column("experiment_runs", "repetition_count")
