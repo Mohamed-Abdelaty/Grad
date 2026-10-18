@@ -248,3 +248,76 @@ class TestStreamingDataConsistencyValidation:
         assert result["duplicate_ids_found"] == 0
         assert result["validation_passed"] is True
 
+
+class TestSourceDuplicatesSubtraction:
+    """Tests for fault-induced duplicates accounting (output duplicates - source duplicates)."""
+
+    def test_data_loss_when_actual_less_than_expected(
+        self, validator, parquet_fixture
+    ) -> None:
+        """When actual < expected, data_loss must equal expected - actual."""
+        # 85 actual records written
+        df = pd.DataFrame({"transaction_id": [f"t{i}" for i in range(85)]})
+        path = parquet_fixture(df)
+        result = validator.validate(
+            expected_records=100,
+            output_location={"storage_type": "local", "path": path},
+        )
+        assert result["expected_records"] == 100
+        assert result["actual_records"] == 85
+        assert result["data_loss"] == 15
+        assert result["data_loss_percentage"] == 15.0
+        assert result["validation_passed"] is False
+
+    def test_net_duplicates_subtracts_source_duplicates(
+        self, validator, parquet_fixture
+    ) -> None:
+        """
+        When source file contains duplicate IDs, net fault-induced duplicates
+        must be max(0, output_duplicates - source_duplicates).
+        """
+        # Output has 5 unique IDs, but id1 appears 3 times, id2 appears 2 times -> 3 duplicate records
+        # Total rows = 7: id1, id1, id1, id2, id2, id3, id4
+        out_df = pd.DataFrame({"transaction_id": ["id1", "id1", "id1", "id2", "id2", "id3", "id4"]})
+        out_path = parquet_fixture(out_df, "output.parquet")
+
+        # Source has 1 duplicate: id1 appears 2 times -> 1 duplicate record
+        src_df = pd.DataFrame({"transaction_id": ["id1", "id1", "id3", "id4"]})
+        src_path = parquet_fixture(src_df, "source.parquet")
+
+        result = validator.validate(
+            expected_records=7,
+            output_location={"storage_type": "local", "path": out_path},
+            source_location={"storage_type": "local", "path": src_path},
+        )
+        assert result["output_duplicates"] == 3
+        assert result["source_duplicates"] == 1
+        assert result["fault_induced_duplicates"] == 2
+        assert result["duplicate_ids_found"] == 2  # Net reported
+        assert result["duplicates"] == 2
+
+    def test_no_negative_duplicates_when_source_has_more(
+        self, validator, parquet_fixture
+    ) -> None:
+        """
+        If source had 5 duplicates but output only retained 2, net fault-induced
+        duplicates must be 0 (never negative).
+        """
+        out_df = pd.DataFrame({"transaction_id": ["id1", "id1", "id2"]})
+        out_path = parquet_fixture(out_df, "output.parquet")
+
+        # Source had 3 duplicates
+        src_df = pd.DataFrame({"transaction_id": ["id1", "id1", "id1", "id1"]})
+        src_path = parquet_fixture(src_df, "source.parquet")
+
+        result = validator.validate(
+            expected_records=3,
+            output_location={"storage_type": "local", "path": out_path},
+            source_location={"storage_type": "local", "path": src_path},
+        )
+        assert result["output_duplicates"] == 1
+        assert result["source_duplicates"] == 3
+        assert result["fault_induced_duplicates"] == 0
+        assert result["duplicate_ids_found"] == 0
+        assert result["duplicates"] == 0
+

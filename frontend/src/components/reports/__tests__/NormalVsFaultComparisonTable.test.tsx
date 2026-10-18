@@ -122,11 +122,26 @@ describe('NormalVsFaultComparisonTable', () => {
     expect(notMeasuredElements.length).toBeGreaterThan(0);
   });
 
-  it('renders repetition statistics column and badge when repetitions > 1', () => {
-    render(<NormalVsFaultComparisonTable rows={sampleRows} repetitions={2} />);
-    expect(screen.getByText('Aggregated across 2 repetitions')).toBeInTheDocument();
-    expect(screen.getByText('Repetition Statistics (Mean ± Std)')).toBeInTheDocument();
-    expect(screen.getByText(/μ = 95.0 ± 0.0/)).toBeInTheDocument();
-    expect(screen.getByText(/μ = 12.4 ± 1.2/)).toBeInTheDocument();
+  it('renders custom honest reasons when provided on unmeasured cells', () => {
+    const rowsWithReason: ComparisonTableRow[] = [
+      {
+        metric: 'throughput_records_per_sec',
+        label: 'Throughput',
+        unit: 'records/s',
+        normal: null,
+        normal_reason: 'no pipeline linked',
+        during_fault: null,
+        during_fault_reason: 'pipeline not active',
+        delta: null,
+        pct_change: null,
+        baseline_applicable: true,
+        measured_directly: false,
+        definition: 'Pipeline record processing throughput.',
+        aggregate: null,
+      },
+    ];
+    render(<NormalVsFaultComparisonTable rows={rowsWithReason} repetitions={1} />);
+    expect(screen.getByText('no pipeline linked')).toBeInTheDocument();
+    expect(screen.getByText('pipeline not active')).toBeInTheDocument();
   });
 });

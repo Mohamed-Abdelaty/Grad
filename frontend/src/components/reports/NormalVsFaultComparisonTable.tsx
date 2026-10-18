@@ -15,26 +15,42 @@ export const NormalVsFaultComparisonTable: React.FC<NormalVsFaultComparisonTable
     return null;
   }
 
-  const formatValue = (val: number | null | undefined, unit: string) => {
+  const formatValue = (
+    val: number | null | undefined,
+    unit: string,
+    reason?: string | null,
+    subText?: string | null
+  ) => {
     if (val === null || val === undefined) {
-      return <span className="text-slate-400 italic font-sans text-xs">not measured</span>;
+      return (
+        <span className="text-slate-400 italic font-sans text-xs">
+          {reason || 'not measured'}
+        </span>
+      );
     }
-    if (unit === 'seconds') return `${val.toFixed(1)} s`;
-    if (unit === '%') return `${val.toFixed(1)}%`;
-    if (unit === 'records/s') return `${val.toLocaleString()} rec/s`;
-    if (unit === 'records') return `${val.toLocaleString()} records`;
-    return `${val} ${unit}`;
+    let rendered = `${val} ${unit}`;
+    if (unit === 'seconds') rendered = `${val.toFixed(1)} s`;
+    else if (unit === '%') rendered = `${val.toFixed(1)}%`;
+    else if (unit === 'records/s' || unit === 'records/sec') rendered = `${val.toLocaleString()} rec/s`;
+    else if (unit === 'records') rendered = `${val.toLocaleString()} records`;
+
+    return (
+      <div className="flex flex-col">
+        <span>{rendered}</span>
+        {subText && <span className="text-[10px] text-slate-400 font-sans">{subText}</span>}
+      </div>
+    );
   };
 
   const formatDelta = (delta: number | null | undefined, pctChange: number | null | undefined, unit: string) => {
     if (delta === null || delta === undefined) {
-      return <span className="text-slate-400 italic font-sans text-xs">not measured</span>;
+      return <span className="text-slate-400 italic font-sans text-xs">-</span>;
     }
     const sign = delta > 0 ? '+' : '';
     let deltaFormatted = `${sign}${delta} ${unit}`;
     if (unit === 'seconds') deltaFormatted = `${sign}${delta.toFixed(1)} s`;
     if (unit === '%') deltaFormatted = `${sign}${delta.toFixed(1)}%`;
-    if (unit === 'records/s') deltaFormatted = `${sign}${delta.toLocaleString()} rec/s`;
+    if (unit === 'records/s' || unit === 'records/sec') deltaFormatted = `${sign}${delta.toLocaleString()} rec/s`;
     if (unit === 'records') deltaFormatted = `${sign}${delta.toLocaleString()} records`;
 
     const pctText = pctChange !== null && pctChange !== undefined ? ` (${pctChange > 0 ? '+' : ''}${pctChange.toFixed(1)}%)` : '';
@@ -82,7 +98,12 @@ export const NormalVsFaultComparisonTable: React.FC<NormalVsFaultComparisonTable
               const deltaVal = row.delta;
               const pctChangeVal = row.pct_change !== undefined ? row.pct_change : row.pctChange;
               const baselineApplicable = row.baseline_applicable !== undefined ? row.baseline_applicable : row.baselineApplicable;
+              const normalReason = row.normal_reason || row.normalReason;
+              const faultReason = row.during_fault_reason || row.duringFaultReason;
               const agg = row.aggregate;
+              const dupDetails = row.metric === 'duplicates' && (row.output_duplicates !== undefined || row.outputDuplicates !== undefined)
+                ? `(output: ${row.output_duplicates ?? row.outputDuplicates ?? 0}, source: ${row.source_duplicates ?? row.sourceDuplicates ?? 0})`
+                : null;
 
               return (
                 <tr key={row.metric} className="hover:bg-slate-800/30">
@@ -96,10 +117,10 @@ export const NormalVsFaultComparisonTable: React.FC<NormalVsFaultComparisonTable
                     {!baselineApplicable ? (
                       <span className="text-slate-400 italic font-sans text-xs">n/a (by definition)</span>
                     ) : (
-                      formatValue(normalVal, row.unit)
+                      formatValue(normalVal, row.unit, normalReason)
                     )}
                   </td>
-                  <td className="py-2.5 px-4 font-bold">{formatValue(faultVal, row.unit)}</td>
+                  <td className="py-2.5 px-4 font-bold">{formatValue(faultVal, row.unit, faultReason, dupDetails)}</td>
                   <td className="py-2.5 px-4">
                     {!baselineApplicable ? (
                       <span className="text-slate-400 italic font-sans text-xs">n/a</span>

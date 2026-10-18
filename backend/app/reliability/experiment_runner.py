@@ -397,6 +397,12 @@ class ExperimentRunner:
         parent_results["repetition_results"] = repetition_results
         parent_results["aggregated_metrics"] = aggregated_stats
 
+        if repetition_reports:
+            first_rep_res = repetition_reports[0].get("results") or {}
+            base_data = first_rep_res.get("baseline") or repetition_reports[0].get("baseline")
+            if base_data:
+                parent_results["baseline"] = base_data
+
         # Surface representative mean metrics on parent run results
         if aggregated_stats:
             rec_stat = aggregated_stats.get("recovery_time_seconds", {})
@@ -532,14 +538,26 @@ class ExperimentRunner:
                 "baseline",
                 "Capturing pre-fault operational baseline.",
             )
-            baseline = self._metrics.capture_baseline(pipeline_context)
-            self._merge_results(run, baseline)
+            health_fn = self._get_health_check_fn(target_service, timeout_seconds=0.5)
+            from app.pipeline.progress import tracker
+            p_id = str(run.pipeline_run_id) if run.pipeline_run_id else None
+            baseline = self._metrics.capture_baseline(
+                pipeline_run_context=pipeline_context,
+                target_service=target_service,
+                docker_controller=self._docker,
+                baseline_duration_seconds=3,
+                health_check_fn=health_fn,
+                pipeline_run_id=p_id,
+                tracker=tracker,
+                is_cancelled_fn=lambda: self._cancelled,
+            )
+            self._merge_results(run, {"baseline": baseline, **baseline})
             expected_records = baseline.get("expected_record_count", 0)
             self._emit_event(
                 experiment.id,
                 run_id,
                 "baseline",
-                f"Baseline captured. Expected record count: {expected_records}.",
+                f"Baseline captured. Availability: {baseline.get('availability_percentage')}%, Throughput: {baseline.get('throughput_records_per_sec')}, Expected records: {expected_records}.",
             )
 
             # ── Get the fault injector ─────────────────────────────────────────
@@ -785,7 +803,19 @@ class ExperimentRunner:
                     raise RuntimeError(
                         "Post-recovery pipeline run completed without an output location."
                     )
-                consistency = self._validator.validate(expected_records, output_location)
+                source_loc = None
+                try:
+                    p_cfg = yaml.safe_load(associated_pipeline_yaml) or {}
+                    s_path = p_cfg.get("source", {}).get("path")
+                    if s_path:
+                        source_loc = {"path": s_path}
+                except Exception:
+                    pass
+                consistency = self._validator.validate(
+                    expected_records,
+                    output_location,
+                    source_location=source_loc,
+                )
                 consistency["data_validation"] = "completed"
             elif run.pipeline_run_id:
                 # Step 8.3: Data consistency validation for active / streaming pipeline runs
@@ -803,34 +833,35 @@ class ExperimentRunner:
                     time.sleep(2)
                     self._db.refresh(p_run)
 
-                # Expected records equals verified pipeline output (Spark output_rows / HDFS rowsWritten),
-                # NOT raw input rows, so filters/dedupes that legitimately reduce rows do not count as data loss.
+                # Expected records must come from an independent source: Spark output_rows
+                # (or fault-free baseline expected records), NEVER hdfs_written (to prevent tautological comparisons).
                 snapshot = p_run.last_progress_snapshot or {} if p_run else {}
                 spark_out = (snapshot.get("spark") or {}).get("recordsOut")
-                hdfs_written = (snapshot.get("hdfs") or {}).get("rowsWritten")
-                k_published = (snapshot.get("kafka") or {}).get("published")
-                if spark_out is None and hdfs_written is None and p_run:
+                if spark_out is None and p_run:
                     try:
                         from app.pipeline.progress import tracker
                         snap = tracker.get(str(p_run.id))
                         if snap:
                             spark_out = (snap.get("spark") or {}).get("recordsOut")
-                            hdfs_written = (snap.get("hdfs") or {}).get("rowsWritten")
-                            k_published = (snap.get("kafka") or {}).get("published")
                     except Exception:
                         pass
                 if spark_out is not None:
                     expected_records = int(spark_out)
-                elif hdfs_written is not None:
-                    expected_records = int(hdfs_written)
+                elif baseline.get("output_records") is not None:
+                    expected_records = int(baseline["output_records"])
+                elif p_run and p_run.records_processed is not None:
+                    expected_records = int(p_run.records_processed)
                 else:
-                    expected_records = int(k_published or 0)
+                    expected_records = 0
 
                 out_path = p_run.output_path if p_run else None
-                if not out_path and p_run and p_run.config_yaml:
+                source_path = None
+                if p_run and p_run.config_yaml:
                     try:
                         p_cfg = yaml.safe_load(p_run.config_yaml) or {}
-                        out_path = p_cfg.get("storage", {}).get("path")
+                        if not out_path:
+                            out_path = p_cfg.get("storage", {}).get("path")
+                        source_path = p_cfg.get("source", {}).get("path")
                     except Exception:
                         pass
                 if not out_path:
@@ -838,8 +869,13 @@ class ExperimentRunner:
 
                 storage_type = "hdfs" if (out_path.startswith("hdfs://") or out_path.startswith("/data")) else "local"
                 output_location = {"storage_type": storage_type, "path": out_path}
+                source_loc = {"path": source_path} if source_path else None
 
-                consistency = self._validator.validate(expected_records, output_location)
+                consistency = self._validator.validate(
+                    expected_records,
+                    output_location,
+                    source_location=source_loc,
+                )
                 consistency["data_validation"] = "completed"
                 consistency["expected_record_count"] = expected_records
                 consistency["expected_records"] = expected_records

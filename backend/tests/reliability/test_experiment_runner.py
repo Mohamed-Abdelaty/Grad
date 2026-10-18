@@ -1099,6 +1099,12 @@ class TestComparisonTable:
         table = ReportGenerator._build_comparison_table(
             results={
                 "recovery_time_seconds": 10.5,
+                "baseline": {
+                    "availability_percentage": 100.0,
+                    "throughput_records_per_sec": 1000.0,
+                    "output_records": 1000,
+                    "duplicates": 0,
+                },
             },
             has_pipeline=True,
             avail_pct=95.0,
@@ -1130,26 +1136,28 @@ class TestComparisonTable:
         assert tp["baseline_applicable"] is True
         assert tp["measured_directly"] is True
 
-        # Data Loss (normal is 0, zero baseline gives pct_change=None)
+        # Data Loss (baseline not applicable by definition)
         loss = by_metric["data_loss"]
-        assert loss["normal"] == 0
+        assert loss["normal"] is None
+        assert loss["normal_reason"] == "n/a (by definition)"
         assert loss["during_fault"] == 50
-        assert loss["delta"] == 50.0
-        assert loss["pct_change"] is None  # no division by zero!
-        assert loss["baseline_applicable"] is True
+        assert loss["delta"] is None
+        assert loss["pct_change"] is None
+        assert loss["baseline_applicable"] is False
         assert loss["measured_directly"] is True
 
-        # Duplicates (normal is 0, fault is 0)
+        # Duplicates (normal is 0 from baseline, fault is 0)
         dups = by_metric["duplicates"]
         assert dups["normal"] == 0
         assert dups["during_fault"] == 0
         assert dups["delta"] == 0.0
-        assert dups["pct_change"] is None
+        assert dups["pct_change"] == 0.0
         assert dups["baseline_applicable"] is True
 
         # Recovery time (baseline not applicable by definition)
         rec = by_metric["recovery_time_seconds"]
         assert rec["normal"] is None
+        assert rec["normal_reason"] == "n/a (by definition)"
         assert rec["during_fault"] == 10.5
         assert rec["delta"] is None
         assert rec["pct_change"] is None

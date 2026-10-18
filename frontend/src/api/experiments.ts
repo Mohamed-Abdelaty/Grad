@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import {
   AllowedService,
+  ComparisonTableRow,
   Experiment,
   ExperimentDetail,
   ExperimentEvent,
@@ -69,6 +70,13 @@ interface RawExperimentRecord {
   createdAt?: string;
   created_at?: string;
   logs?: string[];
+  comparisonTable?: ComparisonTableRow[] | null;
+  comparison_table?: ComparisonTableRow[] | null;
+  preFaultAccounting?: ExperimentDetail['preFaultAccounting'];
+  pre_fault_accounting?: ExperimentDetail['preFaultAccounting'];
+  repetitions?: number;
+  totalRepetitions?: number;
+  [key: string]: unknown;
 }
 
 // Converts the raw API list item to the canonical Experiment type.
@@ -207,6 +215,10 @@ export function mapToExperimentDetail(raw: Record<string, unknown>): ExperimentD
     lifecycleStage: String(r.lifecycleStage || r.currentPhase || 'pending'),
     createdAt: r.createdAt || r.created_at || '',
     logs: Array.isArray(r.logs) ? r.logs : [],
+    comparisonTable: r.comparisonTable || r.comparison_table || (results as Record<string, unknown>).comparisonTable as ComparisonTableRow[] || (results as Record<string, unknown>).comparison_table as ComparisonTableRow[] || undefined,
+    comparison_table: r.comparisonTable || r.comparison_table || (results as Record<string, unknown>).comparisonTable as ComparisonTableRow[] || (results as Record<string, unknown>).comparison_table as ComparisonTableRow[] || undefined,
+    preFaultAccounting: r.preFaultAccounting || r.pre_fault_accounting || undefined,
+    totalRepetitions: r.repetitions ?? r.totalRepetitions ?? undefined,
   };
 }
 

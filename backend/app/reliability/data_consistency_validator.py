@@ -36,6 +36,7 @@ class DataConsistencyValidator:
         self,
         expected_records: int,
         output_location: dict,
+        source_location: dict | str | None = None,
     ) -> dict[str, Any]:
         """
         Read the pipeline output and verify data completeness and consistency.
@@ -49,14 +50,18 @@ class DataConsistencyValidator:
             Must contain at least:
             - ``"storage_type"`` (str): ``"local"`` or ``"hdfs"``
             - ``"path"`` (str): file or directory path
+        source_location : dict | str | None
+            Optional input source location to distinguish pre-existing source
+            duplicates from fault-induced duplicates.
 
         Returns
         -------
         dict
             ``{"expected_records": int, "actual_records": int,
             "data_loss": int, "data_loss_percentage": float,
-            "duplicate_ids_found": int, "id_column": str | None,
-            "validation_passed": bool}``
+            "duplicate_ids_found": int, "duplicates": int,
+            "output_duplicates": int, "source_duplicates": int,
+            "id_column": str | None, "validation_passed": bool}``
         """
         storage_type = output_location.get("storage_type", "local")
         path = output_location.get("path", "")
@@ -77,6 +82,9 @@ class DataConsistencyValidator:
                 "data_loss": expected_records,
                 "data_loss_percentage": 100.0,
                 "duplicate_ids_found": 0,
+                "duplicates": 0,
+                "output_duplicates": 0,
+                "source_duplicates": 0,
                 "id_column": None,
                 "validation_passed": False,
                 "read_error": str(exc),
@@ -90,17 +98,41 @@ class DataConsistencyValidator:
             else 0.0
         )
 
-        # ── Duplicate ID detection ─────────────────────────────────────────────
-        id_column, duplicate_ids = self._find_duplicates(df)
+        # ── Duplicate ID detection (output vs source baseline) ─────────────────
+        id_column, output_duplicates = self._find_duplicates(df)
 
-        validation_passed = data_loss == 0 and duplicate_ids == 0
+        source_duplicates = 0
+        if source_location:
+            try:
+                if isinstance(source_location, str):
+                    s_type = "hdfs" if (source_location.startswith("hdfs://") or source_location.startswith("/data")) else "local"
+                    s_path = source_location
+                else:
+                    s_type = source_location.get("storage_type", "local")
+                    s_path = source_location.get("path", "")
+                if s_path:
+                    source_df = self._read_output(s_type, s_path)
+                    _, source_duplicates = self._find_duplicates(source_df)
+            except Exception as exc:
+                logger.debug(
+                    "DataConsistencyValidator: could not inspect source duplicates at '%s': %s",
+                    source_location,
+                    exc,
+                )
+
+        fault_induced_duplicates = max(0, output_duplicates - source_duplicates)
+        validation_passed = data_loss == 0 and fault_induced_duplicates == 0
 
         result = {
             "expected_records": expected_records,
             "actual_records": actual_records,
             "data_loss": data_loss,
             "data_loss_percentage": data_loss_pct,
-            "duplicate_ids_found": duplicate_ids,
+            "duplicate_ids_found": fault_induced_duplicates,
+            "duplicates": fault_induced_duplicates,
+            "fault_induced_duplicates": fault_induced_duplicates,
+            "output_duplicates": output_duplicates,
+            "source_duplicates": source_duplicates,
             "id_column": id_column,
             "validation_passed": validation_passed,
         }
@@ -145,9 +177,9 @@ class DataConsistencyValidator:
                 ignore_index=True,
             )
         else:
-            parquet_path = path
-
-        return pd.read_parquet(parquet_path)
+            if path.endswith(".csv"):
+                return pd.read_csv(path)
+            return pd.read_parquet(path)
 
     def _find_duplicates(self, df) -> tuple[str | None, int]:
         """

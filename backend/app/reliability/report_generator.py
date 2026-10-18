@@ -235,6 +235,7 @@ class ReportGenerator:
                 "memorySamples": None,
                 "comparisonTable": comparison_table,
             },
+            "baseline": results.get("baseline"),
             "pre_fault_accounting": run.pre_fault_accounting,
             "preFaultAccounting": run.pre_fault_accounting,
             "repetitions": run.repetition_count,
@@ -284,14 +285,47 @@ class ReportGenerator:
         Rules:
         - Only real stored baseline and fault/recovery measurements are used.
         - Unmeasured values are None/null (never fake 0 or 100).
-        - baseline_applicable is False for metrics without a fault-free counterpart (e.g. recovery time).
+        - Every cell carries an explicit honest reason when null.
+        - baseline_applicable is False for metrics without a fault-free counterpart (recovery time, data loss).
         - delta and pct_change are computed only when both normal and during_fault are real numbers.
         - Zero normal value results in pct_change = None (avoids division by zero).
         - When repetitions > 1, includes aggregate statistics (mean, std, min, max, n_samples).
         """
         recovery_time = results.get("recovery_time_seconds")
-        # Baseline availability is 100.0% only if verified by baseline probe, otherwise None
-        normal_avail = 100.0 if avail_pct is not None else None
+        baseline = results.get("baseline") or {}
+        baseline_reasons = baseline.get("reasons") or {}
+
+        # 1. Availability
+        normal_avail = baseline.get("availability_percentage")
+        normal_avail_reason = None if normal_avail is not None else baseline_reasons.get("availability_percentage", "not measured")
+        fault_avail_reason = None if avail_pct is not None else "not measured"
+
+        # 2. Throughput
+        normal_tp = baseline.get("throughput_records_per_sec")
+        if normal_tp is None:
+            normal_tp = tp_baseline
+        normal_tp_reason = None if normal_tp is not None else (
+            baseline_reasons.get("throughput_records_per_sec") or ("no pipeline linked" if not has_pipeline else "not measured")
+        )
+        fault_tp_reason = None if tp_during_fault is not None else (
+            "no pipeline linked" if not has_pipeline else "not measured"
+        )
+
+        # 3. Data loss
+        # Data loss is a fault-induced delta, baseline has no counterpart
+        normal_data_loss = None
+        normal_data_loss_reason = "n/a (by definition)"
+        fault_loss_reason = None if data_loss_val is not None else ("no pipeline linked" if not has_pipeline else "not measured")
+
+        # 4. Duplicates
+        normal_dups = baseline.get("duplicates")
+        normal_dups_reason = None if normal_dups is not None else ("no pipeline linked" if not has_pipeline else "not measured")
+        fault_dups_reason = None if duplicates_val is not None else ("no pipeline linked" if not has_pipeline else "not measured")
+
+        # 5. Recovery time
+        normal_rec = None
+        normal_rec_reason = "n/a (by definition)"
+        fault_rec_reason = None if recovery_time is not None else "not measured"
 
         rows_def = [
             {
@@ -299,7 +333,9 @@ class ReportGenerator:
                 "label": "Availability",
                 "unit": "%",
                 "normal": normal_avail,
+                "normal_reason": normal_avail_reason,
                 "during_fault": avail_pct,
+                "during_fault_reason": fault_avail_reason,
                 "baseline_applicable": True,
                 "measured_directly": True,
                 "definition": "Percentage of availability probes returning operational healthy status.",
@@ -309,8 +345,10 @@ class ReportGenerator:
                 "metric": "throughput_records_per_sec",
                 "label": "Throughput",
                 "unit": "records/sec",
-                "normal": tp_baseline,
+                "normal": normal_tp,
+                "normal_reason": normal_tp_reason,
                 "during_fault": tp_during_fault,
+                "during_fault_reason": fault_tp_reason,
                 "baseline_applicable": True,
                 "measured_directly": tp_during_fault is not None,
                 "definition": "Pipeline record processing or ingestion throughput.",
@@ -320,9 +358,11 @@ class ReportGenerator:
                 "metric": "data_loss",
                 "label": "Data Loss",
                 "unit": "records",
-                "normal": 0 if has_pipeline else None,
+                "normal": normal_data_loss,
+                "normal_reason": normal_data_loss_reason,
                 "during_fault": data_loss_val,
-                "baseline_applicable": True,
+                "during_fault_reason": fault_loss_reason,
+                "baseline_applicable": False,
                 "measured_directly": True if has_pipeline else False,
                 "definition": "Difference between verified expected output records and actual output records.",
                 "agg_key": "data_loss",
@@ -331,19 +371,26 @@ class ReportGenerator:
                 "metric": "duplicates",
                 "label": "Duplicate Records",
                 "unit": "records",
-                "normal": 0 if has_pipeline else None,
+                "normal": normal_dups,
+                "normal_reason": normal_dups_reason,
                 "during_fault": duplicates_val,
+                "during_fault_reason": fault_dups_reason,
                 "baseline_applicable": True,
                 "measured_directly": True if has_pipeline else False,
                 "definition": "Count of duplicate record identifier keys observed in destination storage.",
                 "agg_key": "duplicates",
+                "output_duplicates": results.get("output_duplicates"),
+                "source_duplicates": results.get("source_duplicates"),
+                "fault_induced_duplicates": duplicates_val,
             },
             {
                 "metric": "recovery_time_seconds",
                 "label": "Recovery Time",
                 "unit": "seconds",
-                "normal": None,
+                "normal": normal_rec,
+                "normal_reason": normal_rec_reason,
                 "during_fault": recovery_time,
+                "during_fault_reason": fault_rec_reason,
                 "baseline_applicable": False,
                 "measured_directly": True,
                 "definition": "Elapsed duration from fault revert until service health check passed.",
@@ -364,7 +411,7 @@ class ReportGenerator:
                     if float(norm) != 0.0:
                         pct_change = round(((float(fault_val) - float(norm)) / float(norm)) * 100.0, 2)
                     else:
-                        pct_change = None
+                        pct_change = 0.0 if float(fault_val) == 0.0 else None
                 except Exception:
                     delta = None
                     pct_change = None
@@ -376,8 +423,12 @@ class ReportGenerator:
                 "label": r["label"],
                 "unit": r["unit"],
                 "normal": norm,
+                "normal_reason": r.get("normal_reason"),
+                "normalReason": r.get("normal_reason"),
                 "during_fault": fault_val,
                 "duringFault": fault_val,
+                "during_fault_reason": r.get("during_fault_reason"),
+                "duringFaultReason": r.get("during_fault_reason"),
                 "delta": delta,
                 "pct_change": pct_change,
                 "pctChange": pct_change,
@@ -387,6 +438,14 @@ class ReportGenerator:
                 "measuredDirectly": r["measured_directly"],
                 "definition": r["definition"],
             }
+            if r["metric"] == "duplicates":
+                row_entry["output_duplicates"] = r.get("output_duplicates")
+                row_entry["outputDuplicates"] = r.get("output_duplicates")
+                row_entry["source_duplicates"] = r.get("source_duplicates")
+                row_entry["sourceDuplicates"] = r.get("source_duplicates")
+                row_entry["fault_induced_duplicates"] = r.get("fault_induced_duplicates")
+                row_entry["faultInducedDuplicates"] = r.get("fault_induced_duplicates")
+
             if agg_stats:
                 row_entry["aggregate"] = {
                     "mean": agg_stats.get("mean"),

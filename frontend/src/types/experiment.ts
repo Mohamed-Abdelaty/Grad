@@ -86,8 +86,12 @@ export interface ComparisonTableRow {
   label: string;
   unit: string;
   normal: number | null;
+  normal_reason?: string | null;
+  normalReason?: string | null;
   during_fault: number | null;
   duringFault?: number | null;
+  during_fault_reason?: string | null;
+  duringFaultReason?: string | null;
   delta: number | null;
   pct_change: number | null;
   pctChange?: number | null;
@@ -96,6 +100,12 @@ export interface ComparisonTableRow {
   measured_directly: boolean;
   measuredDirectly?: boolean;
   definition: string;
+  output_duplicates?: number | null;
+  outputDuplicates?: number | null;
+  source_duplicates?: number | null;
+  sourceDuplicates?: number | null;
+  fault_induced_duplicates?: number | null;
+  faultInducedDuplicates?: number | null;
   aggregate?: {
     mean: number | null;
     std: number | null;

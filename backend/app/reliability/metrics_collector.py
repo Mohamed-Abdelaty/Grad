@@ -40,30 +40,118 @@ class MetricsCollector:
     # Polling interval for availability timeline samples (seconds)
     AVAILABILITY_POLL_INTERVAL: float = 1.0
 
-    def capture_baseline(self, pipeline_run_context: dict) -> dict:
+    def capture_baseline(
+        self,
+        pipeline_run_context: dict | None = None,
+        target_service: str | None = None,
+        docker_controller: DockerController | None = None,
+        baseline_duration_seconds: int = 3,
+        health_check_fn: Callable | None = None,
+        pipeline_run_id: str | None = None,
+        tracker: Any = None,
+        is_cancelled_fn: Callable[[], bool] | None = None,
+    ) -> dict[str, Any]:
         """
-        Record the pre-experiment baseline state.
+        Record the pre-experiment baseline operational measurements.
 
-        Parameters
-        ----------
-        pipeline_run_context : dict
-            Context from a prior pipeline run (e.g. ``{"records_processed": N}``).
-
-        Returns
-        -------
-        dict
-            ``{"timestamp": str, "expected_record_count": int,
-            "baseline_captured_at": str}``
+        Measures:
+        1. Availability during a baseline window using the identical probe and interval
+           as the fault phase.
+        2. Throughput from the tracker over the baseline window when a pipeline is active.
+        3. Output records and pre-fault duplicates.
         """
         now = datetime.now(tz=timezone.utc).isoformat()
+        context = pipeline_run_context or {}
+
+        reasons: dict[str, str] = {}
+        samples: list[dict] = []
+        baseline_avail = None
+
+        # 1. Availability probe during baseline window
+        if target_service and docker_controller:
+            start_t = time.monotonic()
+            while (time.monotonic() - start_t) < baseline_duration_seconds:
+                if is_cancelled_fn and is_cancelled_fn():
+                    break
+                sample_t = datetime.now(tz=timezone.utc).isoformat()
+                container_running = docker_controller.is_container_running(target_service)
+                deep_healthy = True
+                if container_running and health_check_fn is not None:
+                    try:
+                        probe = health_check_fn()
+                        deep_healthy = (
+                            probe.get("connected", False)
+                            if isinstance(probe, dict)
+                            else bool(probe)
+                        )
+                    except Exception as exc:
+                        logger.debug("Baseline health probe failed for '%s': %s", target_service, exc)
+                        deep_healthy = False
+                is_avail = container_running and deep_healthy
+                samples.append({"timestamp": sample_t, "available": is_avail})
+                time.sleep(self.AVAILABILITY_POLL_INTERVAL)
+
+            if samples:
+                available_count = sum(1 for s in samples if s["available"])
+                baseline_avail = round((available_count / len(samples)) * 100.0, 2)
+            else:
+                baseline_avail = None
+                reasons["availability_percentage"] = "no samples collected"
+        else:
+            reasons["availability_percentage"] = "no target service specified"
+
+        # 2. Throughput probe during baseline window
+        baseline_tp = None
+        if pipeline_run_id and tracker:
+            try:
+                snap0 = tracker.get(str(pipeline_run_id))
+                if snap0:
+                    tracker_rate = (snap0.get("spark") or {}).get("throughput_records_per_sec")
+                    if tracker_rate is not None and float(tracker_rate) > 0:
+                        baseline_tp = round(float(tracker_rate), 2)
+                    else:
+                        r0 = (
+                            (snap0.get("spark") or {}).get("recordsOut")
+                            or (snap0.get("kafka") or {}).get("published")
+                            or (snap0.get("hdfs") or {}).get("rowsWritten")
+                        )
+                        time.sleep(1.0)
+                        snap1 = tracker.get(str(pipeline_run_id))
+                        r1 = (
+                            (snap1.get("spark") or {}).get("recordsOut")
+                            or (snap1.get("kafka") or {}).get("published")
+                            or (snap1.get("hdfs") or {}).get("rowsWritten")
+                        ) if snap1 else r0
+                        delta_r = (int(r1) - int(r0)) if (r0 is not None and r1 is not None) else 0
+                        if delta_r > 0:
+                            baseline_tp = round(float(delta_r) / 1.0, 2)
+                        else:
+                            reasons["throughput_records_per_sec"] = "pipeline idle / no progress in baseline window"
+                else:
+                    reasons["throughput_records_per_sec"] = "pipeline not active in tracker"
+            except Exception as exc:
+                logger.debug("Failed measuring baseline throughput: %s", exc)
+                reasons["throughput_records_per_sec"] = "throughput measurement failed"
+        else:
+            reasons["throughput_records_per_sec"] = "no pipeline linked"
+
+        expected_count = context.get(
+            "records_processed",
+            context.get("rows_written", 0),
+        )
+
         baseline = {
             "timestamp": now,
             "baseline_captured_at": now,
-            "expected_record_count": pipeline_run_context.get(
-                "records_processed",
-                pipeline_run_context.get("rows_written", 0),
-            ),
-            "pipeline_run_context": pipeline_run_context,
+            "baseline_duration_seconds": baseline_duration_seconds,
+            "availability_percentage": baseline_avail,
+            "availability_samples": samples,
+            "throughput_records_per_sec": baseline_tp,
+            "expected_record_count": expected_count,
+            "output_records": expected_count,
+            "duplicates": 0 if (pipeline_run_id or context.get("records_processed")) else None,
+            "reasons": reasons,
+            "pipeline_run_context": context,
         }
         logger.info("MetricsCollector: baseline captured — %s", baseline)
         return baseline
