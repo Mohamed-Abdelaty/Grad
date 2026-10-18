@@ -222,3 +222,20 @@ class TestCaptureDuringExperiment:
         assert res["available_samples"] == 0
         assert res["availability_percentage"] == 0.0
 
+    def test_zero_samples_returns_none(self) -> None:
+        """When 0 samples are collected (e.g. cancelled immediately), availability is None, not 0.0."""
+        collector = MetricsCollector()
+        mock_docker = MagicMock()
+        # Cancelled immediately
+        res = collector.capture_during_experiment(
+            target_service="kafka",
+            docker_controller=mock_docker,
+            duration_seconds=5,
+            is_cancelled_fn=lambda: True,
+        )
+        assert res["total_samples"] == 0
+        assert res["available_samples"] == 0
+        assert res["availability_percentage"] is None
+        assert res["availability_during_fault"] is None
+
+

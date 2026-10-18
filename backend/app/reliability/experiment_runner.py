@@ -776,18 +776,28 @@ class ExperimentRunner:
                     time.sleep(2)
                     self._db.refresh(p_run)
 
-                # Step 8.3: expected equals kafka.published, processed equals rows read back from output
+                # Expected records equals verified pipeline output (Spark output_rows / HDFS rowsWritten),
+                # NOT raw input rows, so filters/dedupes that legitimately reduce rows do not count as data loss.
                 snapshot = p_run.last_progress_snapshot or {} if p_run else {}
+                spark_out = (snapshot.get("spark") or {}).get("recordsOut")
+                hdfs_written = (snapshot.get("hdfs") or {}).get("rowsWritten")
                 k_published = (snapshot.get("kafka") or {}).get("published")
-                if k_published is None and p_run:
+                if spark_out is None and hdfs_written is None and p_run:
                     try:
                         from app.pipeline.progress import tracker
                         snap = tracker.get(str(p_run.id))
                         if snap:
+                            spark_out = (snap.get("spark") or {}).get("recordsOut")
+                            hdfs_written = (snap.get("hdfs") or {}).get("rowsWritten")
                             k_published = (snap.get("kafka") or {}).get("published")
                     except Exception:
                         pass
-                expected_records = int(k_published or 0)
+                if spark_out is not None:
+                    expected_records = int(spark_out)
+                elif hdfs_written is not None:
+                    expected_records = int(hdfs_written)
+                else:
+                    expected_records = int(k_published or 0)
 
                 out_path = p_run.output_path if p_run else None
                 if not out_path and p_run and p_run.config_yaml:

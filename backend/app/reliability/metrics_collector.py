@@ -137,20 +137,24 @@ class MetricsCollector:
 
         total = len(samples)
         available_count = sum(1 for s in samples if s["available"])
-        availability_pct = (available_count / total * 100.0) if total > 0 else 0.0
+        availability_pct = round(available_count / total * 100.0, 2) if total > 0 else None
 
         result = {
             "samples": samples,
             "total_samples": total,
             "available_samples": available_count,
-            "availability_percentage": round(availability_pct, 2),
+            "availability_percentage": availability_pct,
+            "availability_during_fault": availability_pct,
         }
-        logger.info(
-            "MetricsCollector: availability during experiment = %.2f%% (%d/%d samples)",
-            availability_pct,
-            available_count,
-            total,
-        )
+        if availability_pct is not None:
+            logger.info(
+                "MetricsCollector: availability during experiment = %.2f%% (%d/%d samples)",
+                availability_pct,
+                available_count,
+                total,
+            )
+        else:
+            logger.info("MetricsCollector: no availability samples collected (availability=None).")
         return result
 
     def measure_recovery_time(

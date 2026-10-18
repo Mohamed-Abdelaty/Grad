@@ -96,6 +96,33 @@ class TestValidateRecordCount:
         assert result["validation_passed"] is False
         assert "read_error" in result
 
+    def test_filter_pipeline_reduces_rows_without_counting_as_data_loss(
+        self, validator, parquet_fixture
+    ) -> None:
+        """
+        A pipeline with a filter (input 20 rows, output 14 rows, no fault)
+        must validate with data_loss=0 because expected_records is the Spark
+        output count (14), NOT the raw input rows (20).
+        """
+        # Pipeline written output: 14 rows that survived the filter
+        filtered_output_df = pd.DataFrame({
+            "transaction_id": [f"t{i}" for i in range(14)],
+            "amount": [10.0 + i for i in range(14)],
+        })
+        path = parquet_fixture(filtered_output_df)
+
+        # Expected records is verified Spark output (14), NOT input (20)
+        result = validator.validate(
+            expected_records=14,
+            output_location={"storage_type": "local", "path": path},
+        )
+        assert result["actual_records"] == 14
+        assert result["expected_records"] == 14
+        assert result["data_loss"] == 0
+        assert result["data_loss_percentage"] == 0.0
+        assert result["validation_passed"] is True
+
+
 
 class TestDuplicateIdDetection:
     """Duplicate ID detection in *_id columns."""
