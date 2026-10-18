@@ -1458,6 +1458,91 @@ class TestComparisonTable:
         assert rec_row["during_fault"] == mean_rec
         assert rec_row["aggregate"]["mean"] == mean_rec
 
+    def test_parent_baseline_aggregates_non_none_child_measurements(self) -> None:
+        """When child baselines have [None, 120000.0], parent baseline throughput is 120000.0 with normal_n_samples=1."""
+        from app.reliability.report_generator import ReportGenerator
+
+        parent_results = {
+            "repetitions": 2,
+            "baseline": {
+                "throughput_records_per_sec": 120000.0,
+                "throughput_n_samples": 1,
+                "availability_percentage": 100.0,
+                "availability_n_samples": 2,
+            },
+        }
+        table = ReportGenerator._build_comparison_table(
+            results=parent_results,
+            has_pipeline=True,
+            avail_pct=0.0,
+            tp_baseline=120000.0,
+            tp_during_fault=0.0,
+            avg_throughput=1000.0,
+            data_loss_val=0,
+            duplicates_val=0,
+            aggregated_metrics=None,
+        )
+        by_metric = {r["metric"]: r for r in table}
+        tp_row = by_metric["throughput_records_per_sec"]
+        assert tp_row["normal"] == 120000.0
+        assert tp_row["normal_n_samples"] == 1
+        assert "measured in 1 of 2 repetitions" in tp_row["normal_reason"]
+        assert tp_row["delta"] == -120000.0
+        assert tp_row["pct_change"] == -100.0
+
+    def test_availability_definition_uses_dynamic_sample_counts(self) -> None:
+        """Availability definition string reports total observed samples from repetitions dynamically."""
+        from app.reliability.report_generator import ReportGenerator
+
+        parent_results = {
+            "repetitions": 2,
+            "repetition_results": [
+                {"samples": [{"timestamp": "t1", "available": False}, {"timestamp": "t2", "available": False}]},
+                {"samples": [{"timestamp": "t3", "available": False}, {"timestamp": "t4", "available": False}, {"timestamp": "t5", "available": False}]},
+            ],
+        }
+        table = ReportGenerator._build_comparison_table(
+            results=parent_results,
+            has_pipeline=True,
+            avail_pct=0.0,
+            tp_baseline=None,
+            tp_during_fault=0.0,
+            avg_throughput=None,
+            data_loss_val=None,
+            duplicates_val=None,
+            aggregated_metrics=None,
+        )
+        by_metric = {r["metric"]: r for r in table}
+        avail_row = by_metric["availability_percentage"]
+        assert "observed samples: 5" in avail_row["definition"]
+
+    def test_duplicate_row_reports_none_when_unmeasured(self) -> None:
+        """Duplicate row in comparison table reports during_fault=None when output or source duplicates are unmeasured."""
+        from app.reliability.report_generator import ReportGenerator
+
+        parent_results = {
+            "output_duplicates": None,
+            "source_duplicates": None,
+        }
+        table = ReportGenerator._build_comparison_table(
+            results=parent_results,
+            has_pipeline=True,
+            avail_pct=100.0,
+            tp_baseline=None,
+            tp_during_fault=None,
+            avg_throughput=None,
+            data_loss_val=None,
+            duplicates_val=None,
+            aggregated_metrics=None,
+        )
+        by_metric = {r["metric"]: r for r in table}
+        dup_row = by_metric["duplicates"]
+        assert dup_row["during_fault"] is None
+        assert dup_row["during_fault_reason"] == "source or output duplicates unmeasured"
+        assert dup_row["delta"] is None
+        assert dup_row["pct_change"] is None
+
+
 
 
 

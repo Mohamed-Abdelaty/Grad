@@ -175,3 +175,9 @@ class ExperimentModel(BaseModel):
         le=10,
         description="Number of sequential experiment repetitions for reproducibility.",
     )
+    baseline_seconds: int = Field(
+        default=3,
+        ge=1,
+        le=60,
+        description="Duration in seconds for pre-fault baseline measurement window.",
+    )

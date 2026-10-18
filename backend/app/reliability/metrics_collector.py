@@ -112,7 +112,8 @@ class MetricsCollector:
                         or (snap0.get("hdfs") or {}).get("rowsWritten")
                     )
                     t0 = time.monotonic()
-                    time.sleep(1.0)
+                    window_sleep = max(1.0, float(baseline_duration_seconds))
+                    time.sleep(window_sleep)
                     snap1 = tracker.get_progress(str(pipeline_run_id))
                     t1 = time.monotonic()
                     r1 = (

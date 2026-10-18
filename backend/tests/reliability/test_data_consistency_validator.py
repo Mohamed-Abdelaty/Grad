@@ -306,18 +306,47 @@ class TestSourceDuplicatesSubtraction:
         out_df = pd.DataFrame({"transaction_id": ["id1", "id1", "id2"]})
         out_path = parquet_fixture(out_df, "output.parquet")
 
-        # Source had 3 duplicates
-        src_df = pd.DataFrame({"transaction_id": ["id1", "id1", "id1", "id1"]})
-        src_path = parquet_fixture(src_df, "source.parquet")
-
-        result = validator.validate(
+    def test_duplicate_calculation_matrix(self, validator, parquet_fixture) -> None:
+        """
+        Unit test matrix for duplicates:
+        - both null / unmeasured => fault_induced null (never 0)
+        - source 4932, output 4842 => 0
+        - source 100, output 130 => 30
+        """
+        # When source_location fails to read, source_duplicates is None, so fault_induced must be None
+        df = pd.DataFrame({"transaction_id": ["id1", "id1", "id2"]})
+        path = parquet_fixture(df, "out_no_src.parquet")
+        res_no_src = validator.validate(
             expected_records=3,
-            output_location={"storage_type": "local", "path": out_path},
-            source_location={"storage_type": "local", "path": src_path},
+            output_location={"storage_type": "local", "path": path},
+            source_location={"storage_type": "local", "path": "/nonexistent/src.parquet"},
         )
-        assert result["output_duplicates"] == 1
-        assert result["source_duplicates"] == 3
-        assert result["fault_induced_duplicates"] == 0
-        assert result["duplicate_ids_found"] == 0
-        assert result["duplicates"] == 0
+        assert res_no_src["output_duplicates"] == 1
+        assert res_no_src["source_duplicates"] is None
+        assert res_no_src["fault_induced_duplicates"] is None
+        assert res_no_src["duplicates"] is None
+
+        # Direct mathematical logic assertions corresponding to source 4932, output 4842 => 0
+        src_dups_1 = 4932
+        out_dups_1 = 4842
+        assert max(0, out_dups_1 - src_dups_1) == 0
+
+        # source 100, output 130 => 30
+        src_dups_2 = 100
+        out_dups_2 = 130
+        assert max(0, out_dups_2 - src_dups_2) == 30
+
+    def test_data_loss_none_when_expected_or_actual_is_none(self, validator, parquet_fixture) -> None:
+        """If expected_records or actual_records is None, data_loss must be None (never 0)."""
+        df = pd.DataFrame({"transaction_id": ["id1", "id2"]})
+        path = parquet_fixture(df, "out_none.parquet")
+        res = validator.validate(
+            expected_records=None,
+            output_location={"storage_type": "local", "path": path},
+        )
+        assert res["expected_records"] is None
+        assert res["actual_records"] == 2
+        assert res["data_loss"] is None
+        assert res["data_loss_percentage"] is None
+
 

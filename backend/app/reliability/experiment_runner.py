@@ -333,6 +333,7 @@ class ExperimentRunner:
                     "error_rate": rep_report.get("error_rate"),
                     "pre_fault_accounting": child_run.pre_fault_accounting,
                     "injection_offset_seconds": (child_run.results or {}).get("injection_offset_seconds"),
+                    "samples": (child_run.results or {}).get("samples") or rep_report.get("samples") or [],
                     "error": (child_run.results or {}).get("error"),
                 }
                 repetition_results.append(rep_res)
@@ -412,12 +413,96 @@ class ExperimentRunner:
         parent_results["aggregated_metrics"] = aggregated_stats
 
         if repetition_reports:
-            first_rep_res = repetition_reports[0].get("results") or {}
-            base_data = first_rep_res.get("baseline") or repetition_reports[0].get("baseline")
-            if base_data:
-                parent_results["baseline"] = base_data
+            # Aggregate baseline measurements across all completed child repetitions
+            base_tps: list[float] = []
+            base_avails: list[float] = []
+            base_dups: list[float] = []
+            out_dups: list[float] = []
+            src_dups: list[float] = []
+            expected_recs_list: list[int] = []
 
-        # Surface representative mean metrics on parent run results
+            for rep in repetition_reports:
+                r_res = rep.get("results") or {}
+                b = r_res.get("baseline") or rep.get("baseline") or {}
+                tp = b.get("throughput_records_per_sec")
+                if tp is not None:
+                    try:
+                        base_tps.append(float(tp))
+                    except (ValueError, TypeError):
+                        pass
+                av = b.get("availability_percentage")
+                if av is not None:
+                    try:
+                        base_avails.append(float(av))
+                    except (ValueError, TypeError):
+                        pass
+                dp = b.get("duplicates")
+                if dp is not None:
+                    try:
+                        base_dups.append(float(dp))
+                    except (ValueError, TypeError):
+                        pass
+                o_dp = r_res.get("output_duplicates") if r_res.get("output_duplicates") is not None else rep.get("output_duplicates")
+                if o_dp is not None:
+                    try:
+                        out_dups.append(float(o_dp))
+                    except (ValueError, TypeError):
+                        pass
+                s_dp = r_res.get("source_duplicates") if r_res.get("source_duplicates") is not None else rep.get("source_duplicates")
+                if s_dp is not None:
+                    try:
+                        src_dups.append(float(s_dp))
+                    except (ValueError, TypeError):
+                        pass
+                exp_r = r_res.get("expected_records") if r_res.get("expected_records") is not None else rep.get("expected_records")
+                if exp_r is not None:
+                    try:
+                        expected_recs_list.append(int(exp_r))
+                    except (ValueError, TypeError):
+                        pass
+
+            first_rep_res = repetition_reports[0].get("results") or {}
+            base_template = dict(first_rep_res.get("baseline") or repetition_reports[0].get("baseline") or {})
+            
+            # Throughput baseline aggregate
+            if base_tps:
+                base_template["throughput_records_per_sec"] = round(sum(base_tps) / len(base_tps), 2)
+                base_template["throughput_n_samples"] = len(base_tps)
+            else:
+                base_template["throughput_records_per_sec"] = None
+                base_template["throughput_n_samples"] = 0
+
+            # Availability baseline aggregate
+            if base_avails:
+                base_template["availability_percentage"] = round(sum(base_avails) / len(base_avails), 2)
+                base_template["availability_n_samples"] = len(base_avails)
+            else:
+                base_template["availability_percentage"] = None
+                base_template["availability_n_samples"] = 0
+
+            # Duplicates baseline aggregate
+            if base_dups:
+                base_template["duplicates"] = round(sum(base_dups) / len(base_dups))
+                base_template["duplicates_n_samples"] = len(base_dups)
+            else:
+                base_template["duplicates"] = None
+                base_template["duplicates_n_samples"] = 0
+
+            parent_results["baseline"] = base_template
+
+            # Also aggregate output_duplicates and source_duplicates on parent_results
+            if out_dups:
+                parent_results["output_duplicates"] = round(sum(out_dups) / len(out_dups))
+            else:
+                parent_results["output_duplicates"] = None
+
+            if src_dups:
+                parent_results["source_duplicates"] = round(sum(src_dups) / len(src_dups))
+            else:
+                parent_results["source_duplicates"] = None
+
+            if expected_recs_list:
+                parent_results["expected_records"] = round(sum(expected_recs_list) / len(expected_recs_list))
         if aggregated_stats:
             rec_stat = aggregated_stats.get("recovery_time_seconds", {})
             if rec_stat and rec_stat.get("mean") is not None:
@@ -563,11 +648,12 @@ class ExperimentRunner:
             health_fn = self._get_health_check_fn(target_service, timeout_seconds=0.5)
             from app.pipeline.progress import tracker
             p_id = str(run.pipeline_run_id) if run.pipeline_run_id else None
+            b_secs = getattr(experiment_config, "baseline_seconds", 3) or 3
             baseline = self._metrics.capture_baseline(
                 pipeline_run_context=pipeline_context,
                 target_service=target_service,
                 docker_controller=self._docker,
-                baseline_duration_seconds=3,
+                baseline_duration_seconds=b_secs,
                 health_check_fn=health_fn,
                 pipeline_run_id=p_id,
                 tracker=tracker,

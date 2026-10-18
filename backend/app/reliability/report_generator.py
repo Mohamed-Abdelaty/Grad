@@ -122,7 +122,7 @@ class ReportGenerator:
 
         tp_during_fault = results.get("throughput_during_fault")
         if tp_during_fault is None and has_pipeline:
-            # For parent run, average child runs' throughput_during_fault
+            # For parent run, average child runs' throughput_during_fault and gather child samples
             if run.parent_run_id is None:
                 from app.models.experiment_run import ExperimentRun
                 children = db_session.query(ExperimentRun).filter(ExperimentRun.parent_run_id == run.id).all()
@@ -133,6 +133,33 @@ class ReportGenerator:
                 ]
                 if child_fault_tp_vals:
                     tp_during_fault = round(sum(child_fault_tp_vals) / len(child_fault_tp_vals), 2)
+                
+                # If parent results has no samples, collect total samples from children
+                if not results.get("samples"):
+                    child_samples = []
+                    for c in children:
+                        c_samps = (c.results or {}).get("samples") or []
+                        child_samples.extend(c_samps)
+                    if child_samples:
+                        results["samples"] = child_samples
+
+                if results.get("output_duplicates") is None:
+                    c_out_dups = [
+                        (c.results or {}).get("output_duplicates")
+                        for c in children
+                        if (c.results or {}).get("output_duplicates") is not None
+                    ]
+                    if c_out_dups:
+                        results["output_duplicates"] = round(sum(c_out_dups) / len(c_out_dups))
+
+                if results.get("source_duplicates") is None:
+                    c_src_dups = [
+                        (c.results or {}).get("source_duplicates")
+                        for c in children
+                        if (c.results or {}).get("source_duplicates") is not None
+                    ]
+                    if c_src_dups:
+                        results["source_duplicates"] = round(sum(c_src_dups) / len(c_src_dups))
 
         comparison_table = self._build_comparison_table(
             results=results,
@@ -229,6 +256,8 @@ class ReportGenerator:
             "baseline": results.get("baseline"),
             "pre_fault_accounting": run.pre_fault_accounting,
             "preFaultAccounting": run.pre_fault_accounting,
+            "output_duplicates": results.get("output_duplicates"),
+            "source_duplicates": results.get("source_duplicates"),
             "repetitions": run.repetition_count,
             "repetition_results": results.get("repetition_results"),
             "repetitionResults": results.get("repetition_results"),
@@ -288,14 +317,24 @@ class ReportGenerator:
 
         # 1. Availability
         normal_avail = baseline.get("availability_percentage")
+        normal_avail_n = baseline.get("availability_n_samples")
         normal_avail_reason = None if normal_avail is not None else baseline_reasons.get("availability_percentage", "not measured")
         fault_avail_reason = None if avail_pct is not None else "not measured"
 
         # 2. Throughput
         normal_tp = baseline.get("throughput_records_per_sec")
-        normal_tp_reason = None if normal_tp is not None else (
-            baseline_reasons.get("throughput_records_per_sec") or ("no pipeline linked" if not has_pipeline else "pipeline idle / no progress in baseline window")
-        )
+        normal_tp_n = baseline.get("throughput_n_samples")
+        reps_cnt = results.get("repetitions") or 1
+        if normal_tp is not None:
+            if normal_tp_n == 1 and reps_cnt > 1:
+                normal_tp_reason = f"measured in 1 of {reps_cnt} repetitions"
+            else:
+                normal_tp_reason = None
+        else:
+            normal_tp_reason = (
+                baseline_reasons.get("throughput_records_per_sec")
+                or ("no pipeline linked" if not has_pipeline else "pipeline idle / no progress in baseline window")
+            )
         fault_tp_reason = None if tp_during_fault is not None else (
             "no pipeline linked" if not has_pipeline else "pipeline idle / no progress during fault"
         )
@@ -311,16 +350,32 @@ class ReportGenerator:
         normal_dups_reason = None if normal_dups is not None else (
             baseline_reasons.get("duplicates") or ("no pipeline linked" if not has_pipeline else "not measured during baseline")
         )
-        fault_dups_reason = None if duplicates_val is not None else ("no pipeline linked" if not has_pipeline else "not measured")
+        out_dups = results.get("output_duplicates")
+        src_dups = results.get("source_duplicates") if results.get("source_duplicates") is not None else normal_dups
+        if out_dups is not None and src_dups is not None:
+            fault_induced_dups = max(0, out_dups - src_dups)
+            fault_dups_reason = None
+        elif duplicates_val is not None:
+            fault_induced_dups = duplicates_val
+            fault_dups_reason = None
+        else:
+            fault_induced_dups = None
+            fault_dups_reason = "source or output duplicates unmeasured" if has_pipeline else "no pipeline linked"
 
         # 5. Recovery time
         normal_rec = None
         normal_rec_reason = "n/a (by definition)"
         fault_rec_reason = None if recovery_time is not None else "not measured"
 
-        # Count availability samples if present in results
+        # Count availability samples dynamically from stored run/child samples
         raw_samples = results.get("samples") or []
         n_avail_samples = len(raw_samples) if raw_samples else (results.get("total_samples") or 0)
+        rep_results = results.get("repetition_results") or []
+        if not n_avail_samples and rep_results:
+            n_avail_samples = sum(
+                len(r.get("samples") or []) if isinstance(r, dict) else 0
+                for r in rep_results
+            )
         avail_def = (
             f"Percentage of availability probes returning operational healthy status during fault window "
             f"(target poll interval: 1.0s, deep probe timeout up to 5.0s when service unresponsive, observed samples: {n_avail_samples}). "
@@ -335,6 +390,7 @@ class ReportGenerator:
                 "unit": "%",
                 "normal": normal_avail,
                 "normal_reason": normal_avail_reason,
+                "normal_n_samples": normal_avail_n,
                 "during_fault": avail_pct,
                 "during_fault_reason": fault_avail_reason,
                 "baseline_applicable": True,
@@ -348,6 +404,7 @@ class ReportGenerator:
                 "unit": "records/sec",
                 "normal": normal_tp,
                 "normal_reason": normal_tp_reason,
+                "normal_n_samples": normal_tp_n,
                 "during_fault": tp_during_fault,
                 "during_fault_reason": fault_tp_reason,
                 "baseline_applicable": True,
@@ -374,15 +431,15 @@ class ReportGenerator:
                 "unit": "records",
                 "normal": normal_dups,
                 "normal_reason": normal_dups_reason,
-                "during_fault": duplicates_val,
+                "during_fault": fault_induced_dups,
                 "during_fault_reason": fault_dups_reason,
                 "baseline_applicable": True,
                 "measured_directly": True if has_pipeline else False,
                 "definition": "Count of duplicate record identifier keys observed in destination storage.",
                 "agg_key": "duplicates",
-                "output_duplicates": results.get("output_duplicates"),
-                "source_duplicates": results.get("source_duplicates"),
-                "fault_induced_duplicates": duplicates_val,
+                "output_duplicates": out_dups,
+                "source_duplicates": src_dups,
+                "fault_induced_duplicates": fault_induced_dups,
             },
             {
                 "metric": "recovery_time_seconds",
@@ -428,6 +485,8 @@ class ReportGenerator:
                 "normal": norm,
                 "normal_reason": r.get("normal_reason"),
                 "normalReason": r.get("normal_reason"),
+                "normal_n_samples": r.get("normal_n_samples"),
+                "normalNSamples": r.get("normal_n_samples"),
                 "during_fault": fault_val,
                 "duringFault": fault_val,
                 "during_fault_reason": r.get("during_fault_reason"),

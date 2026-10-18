@@ -91,18 +91,22 @@ class DataConsistencyValidator:
             }
 
         # ── Record count check ─────────────────────────────────────────────────
-        data_loss = max(0, expected_records - actual_records)
-        data_loss_pct = (
-            round(data_loss / expected_records * 100.0, 4)
-            if expected_records > 0
-            else 0.0
-        )
+        if expected_records is not None and actual_records is not None:
+            data_loss = max(0, expected_records - actual_records)
+            data_loss_pct = (
+                round(data_loss / expected_records * 100.0, 4)
+                if expected_records > 0
+                else 0.0
+            )
+        else:
+            data_loss = None
+            data_loss_pct = None
 
         # ── Duplicate ID detection (output vs source baseline) ─────────────────
         id_column, output_duplicates = self._find_duplicates(df)
 
-        source_duplicates = 0
-        if source_location:
+        source_duplicates = None
+        if source_location is not None:
             try:
                 if isinstance(source_location, str):
                     s_type = "hdfs" if (source_location.startswith("hdfs://") or source_location.startswith("/data")) else "local"
@@ -119,9 +123,23 @@ class DataConsistencyValidator:
                     source_location,
                     exc,
                 )
+                source_duplicates = None
+        else:
+            # When no source location is provided (e.g. basic unit test on output alone),
+            # assume 0 pre-existing source duplicates so output_duplicates equals fault_induced_duplicates
+            source_duplicates = 0
 
-        fault_induced_duplicates = max(0, output_duplicates - source_duplicates)
-        validation_passed = data_loss == 0 and fault_induced_duplicates == 0
+        if output_duplicates is not None and source_duplicates is not None:
+            fault_induced_duplicates = max(0, output_duplicates - source_duplicates)
+        else:
+            fault_induced_duplicates = None
+
+        if data_loss is not None and fault_induced_duplicates is not None:
+            validation_passed = data_loss == 0 and fault_induced_duplicates == 0
+        elif data_loss is not None:
+            validation_passed = data_loss == 0
+        else:
+            validation_passed = False
 
         result = {
             "expected_records": expected_records,
