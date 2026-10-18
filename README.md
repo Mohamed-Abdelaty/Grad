@@ -61,9 +61,17 @@ Start-Process "http://localhost:3000"
 
 ---
 
-## Sample Pipelines
+## Pipeline Configuration & Ingestion Options
 
-ChaosFlow ships with 4 pre-configured declarative pipeline definitions available in the Templates modal:
+Pipelines are declared using declarative YAML definitions. 
+
+### Batch and Streaming Ingestion
+- **Standard Batch Source**: Reads directly from storage paths (CSV, JSON, Parquet) into Apache Spark batch jobs.
+- **`batch_kafka_ingestion`**: Configurable boolean flag on pipelines. When enabled for high-throughput batch workloads, the platform streams batches into an ephemeral Kafka topic before ingestion, enabling real-time Kafka buffer stress testing during fault scenarios.
+- **Streaming Ingestion**: Continuous ingestion from Apache Kafka with watermarking, checkpointing, and structured streaming micro-batches.
+
+### Sample Pipelines
+ChaosFlow ships with pre-configured declarative pipeline definitions:
 
 | Template Name | Source Format | Engine | Destination | Streaming | Key Features |
 |---|---|---|---|---|---|
@@ -87,7 +95,36 @@ ChaosLab enables controlled, safety-validated fault injection against live clust
 | `cpu_burn` | `kafka`, `spark-worker`, `datanode` | CPU core saturation | Stress-ng process terminated on revert |
 | `memory_stress` | `kafka`, `spark-worker`, `datanode` | Memory pressure | Stress-ng worker killed and memory reclaimed |
 
-*Safety Validator prevents concurrent experiments, enforces maximum durations, and rejects forbidden targets (`postgres`, `backend`, `frontend`).*
+### Safety Rules & Platform Concurrency
+- **Platform-Wide Concurrency Lock**: Only **one** experiment run can be active platform-wide at any given moment. Starting any second experiment while one is pending or running (regardless of target service) is strictly rejected with HTTP `409 Conflict`.
+- **Database Partial Unique Index**: Concurrency is enforced at the database level by a partial unique index on active states (`uq_experiment_runs_active_target`), preventing race conditions.
+- **Forbidden Targets**: Core platform services (`postgres`, `backend`, `frontend`, `namenode`) cannot be targeted for fault injection.
+- **Maximum Duration**: Experiment durations are capped by `SAFETY_MAX_FAULT_DURATION_SECONDS` (default: 300s).
+
+### Multi-Repetition Experiments & In-Flight Ingestion
+- **Repetitions (1–10)**: Experiments support executing 1 to 10 repetitions to compute rigorous statistical confidence intervals (mean, std, min, max).
+- **Repetition Pipeline Execution**: For experiments linked to a pipeline with `repetitions > 1`, **each repetition launches its own fresh pipeline run**, injecting the fault while that specific pipeline run is actively in-flight.
+- **`baseline_seconds` Configuration**: Configurable baseline measurement window duration (default: 3.0s, bounded [1, 60] seconds) over which pre-fault availability and throughput are established.
+- **`pre_fault_accounting`**: Every repetition captures a pre-fault accounting snapshot containing its unique `pipeline_run_id`, active counter snapshots, and pre-fault record counts.
+
+---
+
+## Resilience Metrics & Normal vs During-Fault Comparison
+
+Resilience reports feature a side-by-side **Comparison Table** comparing baseline (normal) operation against active fault conditions:
+
+| Metric | Normal (Baseline) | During Fault | Delta / Pct Change | Provenance & Rules |
+|---|---|---|---|---|
+| **Availability** | Mean % operational | % operational during fault | Delta & % Change | Probed at 1.0s intervals with 5s timeout on hung probes. |
+| **Throughput** | Measured rate (records/sec) | Measured rate (records/sec) | Delta & % Change | Uses `spark.recordsOut` or `kafka.published`. Set to `null` with `"pipeline not active at injection"` if pipeline was not progressing. |
+| **Recovery Time (MTTR)**| `null` ("n/a (by definition)") | Measured elapsed seconds | `null` | No fault-free baseline counterpart exists by definition. |
+| **Data Loss** | `null` ("n/a (by definition)") | Physical unwritten rows | `null` | Derived independently: $\max(0, \text{Expected} - \text{Actual})$. Expected from driver, actual from post-recovery HDFS scan. |
+| **Duplicates** | `null` ("not measured") | Net fault-induced duplicates | `null` | Fault-induced: $\max(0, \text{Output Dups} - \text{Source Dups})$. Source duplicates are excluded so inherent data duplicates do not count against resilience. |
+
+> Detailed formulas, counters, window definitions, and edge conditions are fully documented in [`docs/metrics-definitions.md`](docs/metrics-definitions.md).
+
+### Known Measurement Limitations
+- **`container_restart` Availability Limitation**: Under `container_restart`, the Docker daemon restart call blocks synchronously until the target container is operational. Availability probes dispatched immediately upon return will observe 100% availability during the subsequent fault window.
 
 ---
 
@@ -108,42 +145,23 @@ python scripts/generate_sales_data.py --rows 1000000
    npm run build
    ```
 
-2. **Unit Tests**:
+2. **Backend Unit & Integration Tests**:
    ```bash
    docker exec platform-backend pytest -q -m "not integration"
-   cd frontend && npm run test -- --run
-   ```
-
-3. **Backend Integration Tests**:
-   ```bash
    docker exec platform-backend pytest -q -m integration
    ```
 
-4. **End-to-End Playwright Tests**:
+3. **Frontend Vitest Suite**:
+   ```bash
+   cd frontend
+   npm run test -- --run
+   ```
+
+4. **End-to-End Playwright Tests (59 Tests)**:
    ```bash
    cd frontend
    npx playwright test --workers=1 --reporter=line
    ```
-   *Note: Playwright tests automatically invoke `global-setup.ts` to generate any missing sample datasets on demand.*
-
----
-
-## Screenshots Gallery
-
-### Dashboard Overview
-![Dashboard Overview](docs/screenshots/final/desktop-dashboard.png)
-
-### Pipeline Authoring & Validation
-![Pipeline Editor](docs/screenshots/final/desktop-pipelines-valid.png)
-
-### Succeeded Pipeline Run Details
-![Run Details](docs/screenshots/final/desktop-run-succeeded.png)
-
-### ChaosLab Reliability Testing
-![ChaosLab Console](docs/screenshots/final/desktop-reliability.png)
-
-### Automated Resilience Report
-![Resilience Report](docs/screenshots/final/desktop-report-passed.png)
 
 ---
 
@@ -152,11 +170,11 @@ python scripts/generate_sales_data.py --rows 1000000
 | Verification Gate | Requirement | Clean-Clone Result | Status |
 |---|---|---|---|
 | Static Analysis | ESLint & TypeCheck | 0 errors, 0 warnings | **PASS** |
-| Frontend Unit Tests | Vitest suite | 24 files, 244 tests passed | **PASS** |
 | Production Bundle | Client bundle size | 320.06 kB (< 323.06 kB limit) | **PASS** |
-| Backend Unit Tests | Pytest unit suite | 540 passed, 16 skipped | **PASS** |
-| Backend Integration | Pytest integration suite | 38 passed | **PASS** |
-| Full E2E Playwright | Complete test suite | 58 tests passed in 10 files | **PASS** |
+| Backend Unit Tests | Pytest unit suite | 589 passed, 16 skipped | **PASS** |
+| Backend Integration | Pytest integration suite | 44 passed | **PASS** |
+| Frontend Unit Tests | Vitest suite | 25 files, 249 tests passed | **PASS** |
+| Full E2E Playwright | Complete test suite | 59 tests passed in 10 files | **PASS** |
 | Automated Demo | 9-Stage Chaos Scenario | Result PASS, MTTR < 60s | **PASS** |
 | Checkpoint Hygiene | HDFS `/checkpoints` | 0 leftover directories | **PASS** |
 
