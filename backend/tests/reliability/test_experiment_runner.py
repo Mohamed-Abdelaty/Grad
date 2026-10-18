@@ -1089,3 +1089,126 @@ class TestPreFaultAccountingAndRepetitions:
             assert session.query(ExperimentRun).count() == 0
 
 
+class TestComparisonTable:
+    """Unit tests for Normal vs During-Fault comparison table generation."""
+
+    def test_comparison_table_populated(self) -> None:
+        """Fully populated pipeline experiment produces real normal, during_fault, delta, and pct_change."""
+        from app.reliability.report_generator import ReportGenerator
+
+        table = ReportGenerator._build_comparison_table(
+            results={
+                "recovery_time_seconds": 10.5,
+            },
+            has_pipeline=True,
+            avail_pct=95.0,
+            tp_baseline=1000.0,
+            tp_during_fault=200.0,
+            avg_throughput=800.0,
+            data_loss_val=50,
+            duplicates_val=0,
+            aggregated_metrics=None,
+        )
+        assert len(table) == 5
+        by_metric = {r["metric"]: r for r in table}
+
+        # Availability
+        avail = by_metric["availability_percentage"]
+        assert avail["normal"] == 100.0
+        assert avail["during_fault"] == 95.0
+        assert avail["delta"] == -5.0
+        assert avail["pct_change"] == -5.0
+        assert avail["baseline_applicable"] is True
+        assert avail["measured_directly"] is True
+
+        # Throughput
+        tp = by_metric["throughput_records_per_sec"]
+        assert tp["normal"] == 1000.0
+        assert tp["during_fault"] == 200.0
+        assert tp["delta"] == -800.0
+        assert tp["pct_change"] == -80.0
+        assert tp["baseline_applicable"] is True
+        assert tp["measured_directly"] is True
+
+        # Data Loss (normal is 0, zero baseline gives pct_change=None)
+        loss = by_metric["data_loss"]
+        assert loss["normal"] == 0
+        assert loss["during_fault"] == 50
+        assert loss["delta"] == 50.0
+        assert loss["pct_change"] is None  # no division by zero!
+        assert loss["baseline_applicable"] is True
+        assert loss["measured_directly"] is True
+
+        # Duplicates (normal is 0, fault is 0)
+        dups = by_metric["duplicates"]
+        assert dups["normal"] == 0
+        assert dups["during_fault"] == 0
+        assert dups["delta"] == 0.0
+        assert dups["pct_change"] is None
+        assert dups["baseline_applicable"] is True
+
+        # Recovery time (baseline not applicable by definition)
+        rec = by_metric["recovery_time_seconds"]
+        assert rec["normal"] is None
+        assert rec["during_fault"] == 10.5
+        assert rec["delta"] is None
+        assert rec["pct_change"] is None
+        assert rec["baseline_applicable"] is False
+        assert rec["measured_directly"] is True
+
+    def test_comparison_table_unmeasured_nulls(self) -> None:
+        """When metrics are not measured (e.g. no pipeline, no during-fault throughput), nulls are preserved, never 0 or 100."""
+        from app.reliability.report_generator import ReportGenerator
+
+        table = ReportGenerator._build_comparison_table(
+            results={},
+            has_pipeline=False,
+            avail_pct=None,
+            tp_baseline=None,
+            tp_during_fault=None,
+            avg_throughput=None,
+            data_loss_val=None,
+            duplicates_val=None,
+            aggregated_metrics=None,
+        )
+        by_metric = {r["metric"]: r for r in table}
+
+        # Pipelineless unmeasured metrics must be None
+        for m in ["availability_percentage", "throughput_records_per_sec", "data_loss", "duplicates", "recovery_time_seconds"]:
+            row = by_metric[m]
+            assert row["during_fault"] is None
+            assert row["delta"] is None
+            assert row["pct_change"] is None
+            if m != "recovery_time_seconds":
+                assert row["normal"] is None or (row["normal"] == 0 and row["baseline_applicable"] is False)
+
+    def test_comparison_table_with_repetitions_aggregates(self) -> None:
+        """When repetitions > 1, aggregate stats (mean, std, min, max, n_samples) are attached to each row."""
+        from app.reliability.report_generator import ReportGenerator
+
+        agg = {
+            "recovery_time_seconds": {"mean": 10.2, "std": 1.1, "min": 9.1, "max": 11.3, "n_samples": 2},
+            "availability_percentage": {"mean": 98.0, "std": 1.0, "min": 97.0, "max": 99.0, "n_samples": 2},
+            "throughput_records_per_sec": {"mean": 500.0, "std": 50.0, "min": 450.0, "max": 550.0, "n_samples": 2},
+            "data_loss": {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0, "n_samples": 2},
+            "duplicates": {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0, "n_samples": 2},
+        }
+        table = ReportGenerator._build_comparison_table(
+            results={"recovery_time_seconds": 10.2},
+            has_pipeline=True,
+            avail_pct=98.0,
+            tp_baseline=600.0,
+            tp_during_fault=500.0,
+            avg_throughput=550.0,
+            data_loss_val=0,
+            duplicates_val=0,
+            aggregated_metrics=agg,
+        )
+        for row in table:
+            assert row["aggregate"] is not None
+            assert "mean" in row["aggregate"]
+            assert "std" in row["aggregate"]
+            assert row["aggregate"]["n_samples"] == 2
+
+
+

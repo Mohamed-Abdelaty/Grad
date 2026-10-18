@@ -427,6 +427,8 @@ async def get_experiment(
         "currentRepetition": results.get("current_repetition") or (1 if latest_run else None),
         "aggregatedMetrics": latest_run.aggregated_metrics if latest_run else None,
         "repetitionResults": results.get("repetition_results"),
+        "comparisonTable": results.get("comparison_table") or results.get("comparisonTable"),
+        "comparison_table": results.get("comparison_table") or results.get("comparisonTable"),
         "results": results_payload,
         "logs": execution_logs,
     }

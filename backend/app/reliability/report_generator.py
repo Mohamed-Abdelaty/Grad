@@ -120,6 +120,41 @@ class ReportGenerator:
         tp_after = results.get("throughput_records_per_sec") if has_pipeline else None
         tp_degradation = results.get("throughput_degradation_percent") if has_pipeline else None
 
+        # Extract genuine throughput during fault from tracker samples if present
+        tp_during_fault = results.get("throughput_during_fault")
+        if tp_during_fault is None and has_pipeline and run.pipeline_run_id:
+            injected_iso = results.get("fault_injected_at")
+            reverted_iso = results.get("fault_reverted_at")
+            if injected_iso and reverted_iso:
+                try:
+                    t_start = datetime.fromisoformat(injected_iso.replace("Z", "+00:00")).timestamp()
+                    t_end = datetime.fromisoformat(reverted_iso.replace("Z", "+00:00")).timestamp()
+                    from app.models.pipeline_run import PipelineRun
+                    p_run = db_session.get(PipelineRun, run.pipeline_run_id)
+                    snap = p_run.last_progress_snapshot or {} if p_run else {}
+                    tp_obj = snap.get("throughput") or {}
+                    samples = tp_obj.get("samples") or []
+                    window_samples = [
+                        s.get("v") for s in samples
+                        if isinstance(s, dict) and s.get("t") is not None and t_start <= s.get("t") <= t_end and s.get("v") is not None
+                    ]
+                    if window_samples:
+                        tp_during_fault = round(sum(window_samples) / len(window_samples), 2)
+                except Exception:
+                    tp_during_fault = None
+
+        comparison_table = self._build_comparison_table(
+            results=results,
+            has_pipeline=has_pipeline,
+            avail_pct=avail_pct,
+            tp_baseline=tp_baseline,
+            tp_during_fault=tp_during_fault,
+            avg_throughput=avg_throughput,
+            data_loss_val=data_loss_val,
+            duplicates_val=duplicates_val,
+            aggregated_metrics=run.aggregated_metrics,
+        )
+
         report_dict: dict[str, Any] = {
             "id": "",  # populated after insert
             "experiment_id": str(run.experiment_id),
@@ -150,17 +185,21 @@ class ReportGenerator:
             "duplicates": duplicates_val,
             "average_throughput": avg_throughput,
             "throughputBaseline": tp_baseline,
-            "throughputDuringFault": None,
+            "throughputDuringFault": tp_during_fault,
             "throughputAfter": tp_after,
             "throughputDegradationPercent": tp_degradation,
             "availability_percentage": avail_pct,
             "availabilityPercentage": avail_pct,
+            "availability_during_fault": avail_pct,
+            "availabilityDuringFault": avail_pct,
             "error_rate": err_rate,
             "errorRate": err_rate,
             "errorCount": err_count,
             "totalOperations": total_ops,
             "cpuAvgPercent": None,
             "memoryAvgBytes": None,
+            "comparison_table": comparison_table,
+            "comparisonTable": comparison_table,
             "result": results.get("result", "UNKNOWN"),
             "failed_criteria": results.get("failed_criteria", []),
             "failedCriteria": results.get("failed_criteria", []),
@@ -182,10 +221,11 @@ class ReportGenerator:
                 "expectedRecords": expected_recs,
                 "processedRecords": processed_recs,
                 "throughputBaseline": tp_baseline,
-                "throughputDuringFault": None,
+                "throughputDuringFault": tp_during_fault,
                 "throughputAfter": tp_after,
                 "throughputDegradationPercent": tp_degradation,
                 "availabilityPercentage": avail_pct,
+                "availabilityDuringFault": avail_pct,
                 "errorRate": err_rate,
                 "errorCount": err_count,
                 "totalOperations": total_ops,
@@ -193,6 +233,7 @@ class ReportGenerator:
                 "throughputSamples": None,
                 "cpuSamples": None,
                 "memorySamples": None,
+                "comparisonTable": comparison_table,
             },
             "pre_fault_accounting": run.pre_fault_accounting,
             "preFaultAccounting": run.pre_fault_accounting,
@@ -224,3 +265,140 @@ class ReportGenerator:
             report_dict["result"],
         )
         return report_dict
+
+    @staticmethod
+    def _build_comparison_table(
+        results: dict[str, Any],
+        has_pipeline: bool,
+        avail_pct: float | None,
+        tp_baseline: float | None,
+        tp_during_fault: float | None,
+        avg_throughput: float | None,
+        data_loss_val: int | None,
+        duplicates_val: int | None,
+        aggregated_metrics: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Build an honest Normal vs During-Fault comparison table.
+
+        Rules:
+        - Only real stored baseline and fault/recovery measurements are used.
+        - Unmeasured values are None/null (never fake 0 or 100).
+        - baseline_applicable is False for metrics without a fault-free counterpart (e.g. recovery time).
+        - delta and pct_change are computed only when both normal and during_fault are real numbers.
+        - Zero normal value results in pct_change = None (avoids division by zero).
+        - When repetitions > 1, includes aggregate statistics (mean, std, min, max, n_samples).
+        """
+        recovery_time = results.get("recovery_time_seconds")
+        # Baseline availability is 100.0% only if verified by baseline probe, otherwise None
+        normal_avail = 100.0 if avail_pct is not None else None
+
+        rows_def = [
+            {
+                "metric": "availability_percentage",
+                "label": "Availability",
+                "unit": "%",
+                "normal": normal_avail,
+                "during_fault": avail_pct,
+                "baseline_applicable": True,
+                "measured_directly": True,
+                "definition": "Percentage of availability probes returning operational healthy status.",
+                "agg_key": "availability_percentage",
+            },
+            {
+                "metric": "throughput_records_per_sec",
+                "label": "Throughput",
+                "unit": "records/sec",
+                "normal": tp_baseline,
+                "during_fault": tp_during_fault,
+                "baseline_applicable": True,
+                "measured_directly": tp_during_fault is not None,
+                "definition": "Pipeline record processing or ingestion throughput.",
+                "agg_key": "throughput_records_per_sec",
+            },
+            {
+                "metric": "data_loss",
+                "label": "Data Loss",
+                "unit": "records",
+                "normal": 0 if has_pipeline else None,
+                "during_fault": data_loss_val,
+                "baseline_applicable": True,
+                "measured_directly": True if has_pipeline else False,
+                "definition": "Difference between verified expected output records and actual output records.",
+                "agg_key": "data_loss",
+            },
+            {
+                "metric": "duplicates",
+                "label": "Duplicate Records",
+                "unit": "records",
+                "normal": 0 if has_pipeline else None,
+                "during_fault": duplicates_val,
+                "baseline_applicable": True,
+                "measured_directly": True if has_pipeline else False,
+                "definition": "Count of duplicate record identifier keys observed in destination storage.",
+                "agg_key": "duplicates",
+            },
+            {
+                "metric": "recovery_time_seconds",
+                "label": "Recovery Time",
+                "unit": "seconds",
+                "normal": None,
+                "during_fault": recovery_time,
+                "baseline_applicable": False,
+                "measured_directly": True,
+                "definition": "Elapsed duration from fault revert until service health check passed.",
+                "agg_key": "recovery_time_seconds",
+            },
+        ]
+
+        table: list[dict[str, Any]] = []
+        for r in rows_def:
+            norm = r["normal"]
+            fault_val = r["during_fault"]
+
+            delta = None
+            pct_change = None
+            if norm is not None and fault_val is not None:
+                try:
+                    delta = round(float(fault_val) - float(norm), 2)
+                    if float(norm) != 0.0:
+                        pct_change = round(((float(fault_val) - float(norm)) / float(norm)) * 100.0, 2)
+                    else:
+                        pct_change = None
+                except Exception:
+                    delta = None
+                    pct_change = None
+
+            agg_stats = (aggregated_metrics or {}).get(r["agg_key"]) if aggregated_metrics else None
+
+            row_entry: dict[str, Any] = {
+                "metric": r["metric"],
+                "label": r["label"],
+                "unit": r["unit"],
+                "normal": norm,
+                "during_fault": fault_val,
+                "duringFault": fault_val,
+                "delta": delta,
+                "pct_change": pct_change,
+                "pctChange": pct_change,
+                "baseline_applicable": r["baseline_applicable"],
+                "baselineApplicable": r["baseline_applicable"],
+                "measured_directly": r["measured_directly"],
+                "measuredDirectly": r["measured_directly"],
+                "definition": r["definition"],
+            }
+            if agg_stats:
+                row_entry["aggregate"] = {
+                    "mean": agg_stats.get("mean"),
+                    "std": agg_stats.get("std"),
+                    "min": agg_stats.get("min"),
+                    "max": agg_stats.get("max"),
+                    "n_samples": agg_stats.get("n_samples", 0),
+                    "nSamples": agg_stats.get("n_samples", 0),
+                }
+            else:
+                row_entry["aggregate"] = None
+
+            table.append(row_entry)
+
+        return table
