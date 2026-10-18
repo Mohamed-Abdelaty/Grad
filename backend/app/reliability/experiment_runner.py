@@ -397,6 +397,33 @@ class ExperimentRunner:
         parent_results["repetition_results"] = repetition_results
         parent_results["aggregated_metrics"] = aggregated_stats
 
+        # Surface representative mean metrics on parent run results
+        if aggregated_stats:
+            rec_stat = aggregated_stats.get("recovery_time_seconds", {})
+            if rec_stat and rec_stat.get("mean") is not None:
+                parent_results["recovery_time_seconds"] = rec_stat["mean"]
+                parent_results["recoveryTimeSeconds"] = rec_stat["mean"]
+
+            avail_stat = aggregated_stats.get("availability_percentage", {})
+            if avail_stat and avail_stat.get("mean") is not None:
+                parent_results["availability_percentage"] = avail_stat["mean"]
+                parent_results["availabilityPercentage"] = avail_stat["mean"]
+
+            loss_stat = aggregated_stats.get("data_loss", {})
+            if loss_stat and loss_stat.get("mean") is not None:
+                parent_results["data_loss"] = round(loss_stat["mean"])
+                parent_results["dataLoss"] = round(loss_stat["mean"])
+
+            dups_stat = aggregated_stats.get("duplicates", {})
+            if dups_stat and dups_stat.get("mean") is not None:
+                parent_results["duplicate_ids_found"] = round(dups_stat["mean"])
+                parent_results["duplicates"] = round(dups_stat["mean"])
+
+            tp_stat = aggregated_stats.get("throughput_records_per_sec", {})
+            if tp_stat and tp_stat.get("mean") is not None:
+                parent_results["throughput_records_per_sec"] = tp_stat["mean"]
+                parent_results["throughputDuringFault"] = tp_stat["mean"]
+
         phases = list(parent_results.get("phases") or [])
         fin_iso = run.finished_at.isoformat()
         for p in phases:

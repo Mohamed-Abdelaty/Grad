@@ -87,7 +87,7 @@ class ReportGenerator:
         ] if raw_samples else None
 
         avail_pct = results.get("availability_percentage")
-        has_pipeline = bool(run.pipeline_run_id)
+        has_pipeline = bool(run.pipeline_run_id) or bool(experiment and experiment.pipeline_yaml)
 
         if has_pipeline and avail_pct is not None:
             err_rate = round(max(0.0, min(1.0, (100.0 - float(avail_pct)) / 100.0)), 4)
