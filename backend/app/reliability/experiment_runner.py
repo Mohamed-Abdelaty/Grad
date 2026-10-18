@@ -329,6 +329,7 @@ class ExperimentRunner:
                     "duplicates": rep_report.get("duplicates"),
                     "availability_percentage": rep_report.get("availability_percentage"),
                     "throughput_records_per_sec": rep_report.get("average_throughput") or (child_run.results or {}).get("throughput_records_per_sec"),
+                    "throughput_during_fault": rep_report.get("throughput_during_fault") or (child_run.results or {}).get("throughput_during_fault"),
                     "error_rate": rep_report.get("error_rate"),
                     "pre_fault_accounting": child_run.pre_fault_accounting,
                     "injection_offset_seconds": (child_run.results or {}).get("injection_offset_seconds"),
@@ -441,7 +442,11 @@ class ExperimentRunner:
             tp_stat = aggregated_stats.get("throughput_records_per_sec", {})
             if tp_stat and tp_stat.get("mean") is not None:
                 parent_results["throughput_records_per_sec"] = tp_stat["mean"]
-                parent_results["throughputDuringFault"] = tp_stat["mean"]
+
+            tp_fault_stat = aggregated_stats.get("throughput_during_fault", {})
+            if tp_fault_stat and tp_fault_stat.get("mean") is not None:
+                parent_results["throughput_during_fault"] = tp_fault_stat["mean"]
+                parent_results["throughputDuringFault"] = tp_fault_stat["mean"]
 
         phases = list(parent_results.get("phases") or [])
         fin_iso = run.finished_at.isoformat()
@@ -618,6 +623,7 @@ class ExperimentRunner:
             self._db.add(run)
             self._db.flush()
 
+            fault_injected_monotonic = time.monotonic()
             try:
                 # ── INJECT FAILURE ─────────────────────────────────────────────
                 self._update_status(run, "injecting")
@@ -630,6 +636,7 @@ class ExperimentRunner:
                 )
                 params = experiment_config.fault.model_dump()
                 injection_offset = round(time.monotonic() - experiment_start, 2)
+                fault_injected_monotonic = time.monotonic()
                 try:
                     injection_metadata = injector.inject(target_service, params)
                     injection_metadata["injection_offset_seconds"] = injection_offset
@@ -740,7 +747,40 @@ class ExperimentRunner:
                 self._update_status(run, "rolling_back")
                 reverted_at = datetime.now(tz=timezone.utc).isoformat()
                 fault_revert_monotonic = time.monotonic()
-                self._merge_results(run, {"fault_reverted_at": reverted_at})
+                fault_window_dur = max(0.001, fault_revert_monotonic - fault_injected_monotonic)
+
+                # Measure throughput during fault window from progress counter delta
+                tp_during_fault = None
+                fault_delta_records = None
+                if run.pipeline_run_id is not None:
+                    try:
+                        from app.pipeline.progress import tracker
+                        p_snap = tracker.get_progress(str(run.pipeline_run_id))
+                        if p_snap:
+                            curr_r = (
+                                (p_snap.get("spark") or {}).get("recordsOut")
+                                or (p_snap.get("kafka") or {}).get("published")
+                                or (p_snap.get("hdfs") or {}).get("rowsWritten")
+                            )
+                            pre_acc = run.pre_fault_accounting or {}
+                            pre_r = (
+                                pre_acc.get("spark_records_out")
+                                or pre_acc.get("kafka_published")
+                                or pre_acc.get("records_received")
+                                or 0
+                            )
+                            if curr_r is not None and pre_r is not None:
+                                fault_delta_records = max(0, int(curr_r) - int(pre_r))
+                                tp_during_fault = round(float(fault_delta_records) / fault_window_dur, 2)
+                    except Exception as tp_exc:
+                        logger.debug("Failed measuring during-fault throughput: %s", tp_exc)
+
+                self._merge_results(run, {
+                    "fault_reverted_at": reverted_at,
+                    "throughput_during_fault": tp_during_fault,
+                    "during_fault_records_delta": fault_delta_records,
+                    "during_fault_window_seconds": round(fault_window_dur, 2),
+                })
                 fault_state_registry.set_recovering(str(experiment.id))
                 self._emit_event(
                     experiment.id,
@@ -1556,7 +1596,13 @@ class ExperimentRunner:
             "data_loss": ["data_loss", "dataLoss"],
             "duplicates": ["duplicates", "duplicate_ids_found"],
             "availability_percentage": ["availability_percentage", "availabilityPercentage"],
-            "throughput_records_per_sec": ["throughput_records_per_sec", "average_throughput", "throughputAfter"],
+            "throughput_records_per_sec": [
+                "throughput_during_fault",
+                "throughputDuringFault",
+                "throughput_records_per_sec",
+                "average_throughput",
+                "throughputAfter",
+            ],
             "error_rate": ["error_rate", "errorRate"],
         }
         aggregates: dict[str, Any] = {}

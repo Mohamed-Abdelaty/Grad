@@ -122,45 +122,17 @@ class ReportGenerator:
 
         tp_during_fault = results.get("throughput_during_fault")
         if tp_during_fault is None and has_pipeline:
-            # Check current run's pipeline_run_id first
-            target_p_ids = [run.pipeline_run_id] if run.pipeline_run_id else []
-            # If parent run has no direct pipeline_run_id, check children
-            if not target_p_ids and run.parent_run_id is None:
+            # For parent run, average child runs' throughput_during_fault
+            if run.parent_run_id is None:
                 from app.models.experiment_run import ExperimentRun
                 children = db_session.query(ExperimentRun).filter(ExperimentRun.parent_run_id == run.id).all()
-                target_p_ids = [c.pipeline_run_id for c in children if c.pipeline_run_id]
-
-            child_tp_vals: list[float] = []
-            for p_id in target_p_ids:
-                try:
-                    from app.models.pipeline_run import PipelineRun
-                    p_run = db_session.get(PipelineRun, p_id)
-                    snap = p_run.last_progress_snapshot or {} if p_run else {}
-                    tp_obj = snap.get("throughput") or {}
-                    samples = tp_obj.get("samples") or []
-                    # Get fault window
-                    injected_iso = results.get("fault_injected_at")
-                    reverted_iso = results.get("fault_reverted_at")
-                    if injected_iso and reverted_iso:
-                        t_start = datetime.fromisoformat(injected_iso.replace("Z", "+00:00")).timestamp()
-                        t_end = datetime.fromisoformat(reverted_iso.replace("Z", "+00:00")).timestamp()
-                        window_samples = [
-                            s.get("v") for s in samples
-                            if isinstance(s, dict) and s.get("t") is not None and t_start <= s.get("t") <= t_end and s.get("v") is not None
-                        ]
-                        if window_samples:
-                            child_tp_vals.append(sum(window_samples) / len(window_samples))
-                    elif samples:
-                        # Fallback to mean of samples
-                        v_list = [s.get("v") for s in samples if isinstance(s, dict) and s.get("v") is not None]
-                        if v_list:
-                            child_tp_vals.append(sum(v_list) / len(v_list))
-                except Exception:
-                    pass
-            if child_tp_vals:
-                tp_during_fault = round(sum(child_tp_vals) / len(child_tp_vals), 2)
-            elif results.get("throughput_records_per_sec"):
-                tp_during_fault = round(float(results["throughput_records_per_sec"]), 2)
+                child_fault_tp_vals = [
+                    (c.results or {}).get("throughput_during_fault")
+                    for c in children
+                    if (c.results or {}).get("throughput_during_fault") is not None
+                ]
+                if child_fault_tp_vals:
+                    tp_during_fault = round(sum(child_fault_tp_vals) / len(child_fault_tp_vals), 2)
 
         comparison_table = self._build_comparison_table(
             results=results,
@@ -321,13 +293,11 @@ class ReportGenerator:
 
         # 2. Throughput
         normal_tp = baseline.get("throughput_records_per_sec")
-        if normal_tp is None:
-            normal_tp = tp_baseline
         normal_tp_reason = None if normal_tp is not None else (
-            baseline_reasons.get("throughput_records_per_sec") or ("no pipeline linked" if not has_pipeline else "not measured")
+            baseline_reasons.get("throughput_records_per_sec") or ("no pipeline linked" if not has_pipeline else "pipeline idle / no progress in baseline window")
         )
         fault_tp_reason = None if tp_during_fault is not None else (
-            "no pipeline linked" if not has_pipeline else "not measured"
+            "no pipeline linked" if not has_pipeline else "pipeline idle / no progress during fault"
         )
 
         # 3. Data loss
@@ -338,13 +308,25 @@ class ReportGenerator:
 
         # 4. Duplicates
         normal_dups = baseline.get("duplicates")
-        normal_dups_reason = None if normal_dups is not None else ("no pipeline linked" if not has_pipeline else "not measured")
+        normal_dups_reason = None if normal_dups is not None else (
+            baseline_reasons.get("duplicates") or ("no pipeline linked" if not has_pipeline else "not measured during baseline")
+        )
         fault_dups_reason = None if duplicates_val is not None else ("no pipeline linked" if not has_pipeline else "not measured")
 
         # 5. Recovery time
         normal_rec = None
         normal_rec_reason = "n/a (by definition)"
         fault_rec_reason = None if recovery_time is not None else "not measured"
+
+        # Count availability samples if present in results
+        raw_samples = results.get("samples") or []
+        n_avail_samples = len(raw_samples) if raw_samples else (results.get("total_samples") or 0)
+        avail_def = (
+            f"Percentage of availability probes returning operational healthy status during fault window "
+            f"(target poll interval: 1.0s, deep probe timeout up to 5.0s when service unresponsive, observed samples: {n_avail_samples}). "
+            "Note: For container_restart, Docker SDK restart blocks until the container is operational, "
+            "so availability probes during the fault window may observe 100% availability."
+        )
 
         rows_def = [
             {
@@ -357,11 +339,7 @@ class ReportGenerator:
                 "during_fault_reason": fault_avail_reason,
                 "baseline_applicable": True,
                 "measured_directly": True,
-                "definition": (
-                    "Percentage of availability probes returning operational healthy status. "
-                    "Note: For container_restart, Docker SDK restart blocks until the container is operational, "
-                    "so availability probes during the fault window may observe 100% availability."
-                ),
+                "definition": avail_def,
                 "agg_key": "availability_percentage",
             },
             {
@@ -374,7 +352,7 @@ class ReportGenerator:
                 "during_fault_reason": fault_tp_reason,
                 "baseline_applicable": True,
                 "measured_directly": tp_during_fault is not None,
-                "definition": "Pipeline record processing or ingestion throughput.",
+                "definition": "Pipeline record processing or ingestion throughput during fault window.",
                 "agg_key": "throughput_records_per_sec",
             },
             {
@@ -428,18 +406,20 @@ class ReportGenerator:
 
             delta = None
             pct_change = None
-            if norm is not None and fault_val is not None:
+            if r.get("baseline_applicable", True) and norm is not None and fault_val is not None:
                 try:
                     delta = round(float(fault_val) - float(norm), 2)
                     if float(norm) != 0.0:
                         pct_change = round(((float(fault_val) - float(norm)) / float(norm)) * 100.0, 2)
                     else:
-                        pct_change = 0.0 if float(fault_val) == 0.0 else None
+                        pct_change = None  # Zero baseline MUST always result in null pct_change (never 0.0)
                 except Exception:
                     delta = None
                     pct_change = None
 
             agg_stats = (aggregated_metrics or {}).get(r["agg_key"]) if aggregated_metrics else None
+            if agg_stats is None and r["agg_key"] == "throughput_during_fault" and aggregated_metrics:
+                agg_stats = aggregated_metrics.get("throughput_records_per_sec")
 
             row_entry: dict[str, Any] = {
                 "metric": r["metric"],

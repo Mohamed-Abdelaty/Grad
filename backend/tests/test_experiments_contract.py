@@ -175,3 +175,50 @@ def test_child_run_cannot_be_targeted_directly_as_experiment() -> None:
         asyncio.run(get_experiment(experiment_id=child_run_id, db=db))
     assert exc.value.status_code == 404
 
+
+def test_concurrent_experiment_different_targets_blocked_with_409() -> None:
+    """
+    Platform-wide concurrency proof:
+    Starting an experiment on target B (e.g. 'spark') while an experiment on target A (e.g. 'kafka')
+    is pending or running is rejected with 409 Conflict. Concurrency protection is platform-wide,
+    not partitioned per target.
+    """
+    from unittest.mock import MagicMock, patch
+    from app.api.routes.experiments import run_experiment
+    from app.reliability.exceptions import TooManyConcurrentExperimentsError
+    from fastapi import BackgroundTasks
+
+    exp_spark_id = uuid.uuid4()
+    mock_db = MagicMock()
+    mock_bg = MagicMock(spec=BackgroundTasks)
+
+    # Active run on kafka exists platform-wide
+    with patch("app.reliability.safety.SafetyValidator.enforce_max_concurrent_experiments") as mock_enforce:
+        mock_enforce.side_effect = TooManyConcurrentExperimentsError(running_count=1)
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(run_experiment(experiment_id=exp_spark_id, background_tasks=mock_bg, db=mock_db))
+        assert exc_info.value.status_code == 409
+        assert "already running" in str(exc_info.value.detail).lower()
+
+
+def test_safety_validator_enforce_concurrency_is_platform_wide_not_per_target() -> None:
+    """
+    Direct SafetyValidator query proof:
+    SafetyValidator.enforce_max_concurrent_experiments checks ACTIVE_EXPERIMENT_STATUSES
+    across the entire table, regardless of target_service.
+    """
+    from unittest.mock import MagicMock
+    from app.reliability.safety import SafetyValidator
+    from app.reliability.exceptions import TooManyConcurrentExperimentsError
+
+    mock_db = MagicMock()
+    # Returns 1 active experiment in the database (e.g., target=kafka)
+    mock_db.execute.return_value.scalar_one.return_value = 1
+
+    validator = SafetyValidator()
+    # Even if we are about to start a different target (spark), it must raise
+    with pytest.raises(TooManyConcurrentExperimentsError) as exc_info:
+        validator.enforce_max_concurrent_experiments(mock_db)
+    assert exc_info.value.running_count == 1
+
+

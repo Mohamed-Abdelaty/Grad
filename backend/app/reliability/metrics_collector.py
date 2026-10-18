@@ -106,28 +106,26 @@ class MetricsCollector:
             try:
                 snap0 = tracker.get_progress(str(pipeline_run_id))
                 if snap0:
-                    tp_obj = snap0.get("throughput") or {}
-                    tracker_rate = tp_obj.get("recordsPerSecond") or (snap0.get("spark") or {}).get("throughput_records_per_sec")
-                    if tracker_rate is not None and float(tracker_rate) > 0:
-                        baseline_tp = round(float(tracker_rate), 2)
+                    r0 = (
+                        (snap0.get("spark") or {}).get("recordsOut")
+                        or (snap0.get("kafka") or {}).get("published")
+                        or (snap0.get("hdfs") or {}).get("rowsWritten")
+                    )
+                    t0 = time.monotonic()
+                    time.sleep(1.0)
+                    snap1 = tracker.get_progress(str(pipeline_run_id))
+                    t1 = time.monotonic()
+                    r1 = (
+                        (snap1.get("spark") or {}).get("recordsOut")
+                        or (snap1.get("kafka") or {}).get("published")
+                        or (snap1.get("hdfs") or {}).get("rowsWritten")
+                    ) if snap1 else r0
+                    dt = max(0.001, t1 - t0)
+                    delta_r = (int(r1) - int(r0)) if (r0 is not None and r1 is not None) else 0
+                    if delta_r > 0:
+                        baseline_tp = round(float(delta_r) / dt, 2)
                     else:
-                        r0 = (
-                            (snap0.get("spark") or {}).get("recordsOut")
-                            or (snap0.get("kafka") or {}).get("published")
-                            or (snap0.get("hdfs") or {}).get("rowsWritten")
-                        )
-                        time.sleep(1.0)
-                        snap1 = tracker.get_progress(str(pipeline_run_id))
-                        r1 = (
-                            (snap1.get("spark") or {}).get("recordsOut")
-                            or (snap1.get("kafka") or {}).get("published")
-                            or (snap1.get("hdfs") or {}).get("rowsWritten")
-                        ) if snap1 else r0
-                        delta_r = (int(r1) - int(r0)) if (r0 is not None and r1 is not None) else 0
-                        if delta_r > 0:
-                            baseline_tp = round(float(delta_r) / 1.0, 2)
-                        else:
-                            reasons["throughput_records_per_sec"] = "pipeline idle / no progress in baseline window"
+                        reasons["throughput_records_per_sec"] = "pipeline idle / no progress in baseline window"
                 else:
                     reasons["throughput_records_per_sec"] = "pipeline not active in tracker"
             except Exception as exc:
@@ -141,6 +139,11 @@ class MetricsCollector:
             context.get("rows_written", 0),
         )
 
+        # Duplicates can only be a number if actually scanned/counted in baseline dataset
+        measured_baseline_dups = context.get("source_duplicates") if isinstance(context, dict) else None
+        if measured_baseline_dups is None:
+            reasons.setdefault("duplicates", "not measured during baseline")
+
         baseline = {
             "timestamp": now,
             "baseline_captured_at": now,
@@ -150,7 +153,7 @@ class MetricsCollector:
             "throughput_records_per_sec": baseline_tp,
             "expected_record_count": expected_count,
             "output_records": expected_count,
-            "duplicates": 0 if (pipeline_run_id or context.get("records_processed")) else None,
+            "duplicates": measured_baseline_dups,
             "reasons": reasons,
             "pipeline_run_context": context,
         }

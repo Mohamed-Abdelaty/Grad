@@ -1151,7 +1151,7 @@ class TestComparisonTable:
         assert dups["normal"] == 0
         assert dups["during_fault"] == 0
         assert dups["delta"] == 0.0
-        assert dups["pct_change"] == 0.0
+        assert dups["pct_change"] is None  # Zero baseline yields null pct_change (never 0.0)
         assert dups["baseline_applicable"] is True
 
         # Recovery time (baseline not applicable by definition)
@@ -1187,8 +1187,7 @@ class TestComparisonTable:
             assert row["during_fault"] is None
             assert row["delta"] is None
             assert row["pct_change"] is None
-            if m != "recovery_time_seconds":
-                assert row["normal"] is None or (row["normal"] == 0 and row["baseline_applicable"] is False)
+            assert row["normal"] is None
 
     def test_comparison_table_with_repetitions_aggregates(self) -> None:
         """When repetitions > 1, aggregate stats (mean, std, min, max, n_samples) are attached to each row."""
@@ -1328,6 +1327,137 @@ class TestComparisonTable:
         for child in children:
             assert "injection_offset_seconds" in child.results
             assert isinstance(child.results["injection_offset_seconds"], (int, float))
+
+    def test_zero_baseline_yields_null_pct_change(self) -> None:
+        """When normal/baseline is 0 (or 0.0), pct_change MUST be None (never 0.0 or zero-division)."""
+        from app.reliability.report_generator import ReportGenerator
+
+        table = ReportGenerator._build_comparison_table(
+            results={"baseline": {"duplicates": 0, "throughput_records_per_sec": 0.0}},
+            has_pipeline=True,
+            avail_pct=100.0,
+            tp_baseline=0.0,
+            tp_during_fault=0.0,
+            avg_throughput=0.0,
+            data_loss_val=0,
+            duplicates_val=0,
+            aggregated_metrics=None,
+        )
+        by_metric = {r["metric"]: r for r in table}
+
+        # Duplicates baseline is 0: pct_change must be None
+        assert by_metric["duplicates"]["normal"] == 0
+        assert by_metric["duplicates"]["during_fault"] == 0
+        assert by_metric["duplicates"]["delta"] == 0.0
+        assert by_metric["duplicates"]["pct_change"] is None
+
+        # Throughput baseline is 0.0: pct_change must be None
+        assert by_metric["throughput_records_per_sec"]["normal"] == 0.0
+        assert by_metric["throughput_records_per_sec"]["during_fault"] == 0.0
+        assert by_metric["throughput_records_per_sec"]["delta"] == 0.0
+        assert by_metric["throughput_records_per_sec"]["pct_change"] is None
+
+    def test_unmeasured_baseline_yields_null_never_zero(self) -> None:
+        """Unmeasured baseline values must be None/null with an honest reason, never zero-filled."""
+        from app.reliability.report_generator import ReportGenerator
+
+        table = ReportGenerator._build_comparison_table(
+            results={"baseline": {"reasons": {"throughput_records_per_sec": "pipeline idle / no progress in baseline window"}}},
+            has_pipeline=True,
+            avail_pct=95.0,
+            tp_baseline=None,
+            tp_during_fault=None,
+            avg_throughput=None,
+            data_loss_val=None,
+            duplicates_val=None,
+            aggregated_metrics=None,
+        )
+        by_metric = {r["metric"]: r for r in table}
+
+        tp_row = by_metric["throughput_records_per_sec"]
+        assert tp_row["normal"] is None
+        assert tp_row["normal_reason"] == "pipeline idle / no progress in baseline window"
+        assert tp_row["during_fault"] is None
+        assert tp_row["delta"] is None
+        assert tp_row["pct_change"] is None
+
+        dup_row = by_metric["duplicates"]
+        assert dup_row["normal"] is None
+        assert "not measured" in dup_row["normal_reason"]
+        assert dup_row["during_fault"] is None
+        assert dup_row["delta"] is None
+        assert dup_row["pct_change"] is None
+
+    def test_recovery_time_and_data_loss_have_null_baseline_and_delta(self) -> None:
+        """recovery_time and data_loss have no fault-free counterpart; normal and delta must be None with baseline_applicable=False."""
+        from app.reliability.report_generator import ReportGenerator
+
+        table = ReportGenerator._build_comparison_table(
+            results={"recovery_time_seconds": 15.2},
+            has_pipeline=True,
+            avail_pct=90.0,
+            tp_baseline=500.0,
+            tp_during_fault=0.0,
+            avg_throughput=400.0,
+            data_loss_val=10,
+            duplicates_val=2,
+            aggregated_metrics=None,
+        )
+        by_metric = {r["metric"]: r for r in table}
+
+        rec_row = by_metric["recovery_time_seconds"]
+        assert rec_row["normal"] is None
+        assert rec_row["normal_reason"] == "n/a (by definition)"
+        assert rec_row["baseline_applicable"] is False
+        assert rec_row["delta"] is None
+        assert rec_row["pct_change"] is None
+        assert rec_row["during_fault"] == 15.2
+
+        loss_row = by_metric["data_loss"]
+        assert loss_row["normal"] is None
+        assert loss_row["normal_reason"] == "n/a (by definition)"
+        assert loss_row["baseline_applicable"] is False
+        assert loss_row["delta"] is None
+        assert loss_row["pct_change"] is None
+        assert loss_row["during_fault"] == 10
+
+    def test_comparison_table_matches_stored_child_values(self) -> None:
+        """Verify comparison table during_fault and aggregate match the child repetition values."""
+        from app.reliability.report_generator import ReportGenerator
+
+        child1_results = {"throughput_during_fault": 0.0, "recovery_time_seconds": 12.0}
+        child2_results = {"throughput_during_fault": 0.0, "recovery_time_seconds": 14.0}
+        mean_tp_during_fault = 0.0
+        mean_rec = 13.0
+
+        agg = {
+            "throughput_records_per_sec": {"mean": mean_tp_during_fault, "std": 0.0, "min": 0.0, "max": 0.0, "n_samples": 2},
+            "recovery_time_seconds": {"mean": mean_rec, "std": 1.41, "min": 12.0, "max": 14.0, "n_samples": 2},
+        }
+
+        table = ReportGenerator._build_comparison_table(
+            results={"recovery_time_seconds": mean_rec},
+            has_pipeline=True,
+            avail_pct=100.0,
+            tp_baseline=None,
+            tp_during_fault=mean_tp_during_fault,
+            avg_throughput=500.0,
+            data_loss_val=0,
+            duplicates_val=0,
+            aggregated_metrics=agg,
+        )
+        by_metric = {r["metric"]: r for r in table}
+
+        # Throughput row uses agg_key throughput_during_fault and matches child values
+        tp_row = by_metric["throughput_records_per_sec"]
+        assert tp_row["during_fault"] == mean_tp_during_fault
+        assert tp_row["aggregate"]["mean"] == mean_tp_during_fault
+        assert tp_row["aggregate"]["mean"] == (child1_results["throughput_during_fault"] + child2_results["throughput_during_fault"]) / 2
+
+        rec_row = by_metric["recovery_time_seconds"]
+        assert rec_row["during_fault"] == mean_rec
+        assert rec_row["aggregate"]["mean"] == mean_rec
+
 
 
 
