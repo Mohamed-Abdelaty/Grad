@@ -130,13 +130,19 @@ Resilience reports feature a side-by-side **Comparison Table** comparing baselin
 
 ## Verification & Tests
 
-### Run the tests
+### Dataset Generation (Prerequisites for Large/Reliability Tests)
 
-Before running integration tests or test suites requiring the 1M-row dataset, generate the local dataset:
+ChaosFlow includes a deterministic data generator for large-scale and reliability testing:
 ```powershell
-# Generate large dataset for integration & streaming tests
-python scripts/generate_sales_data.py --rows 1000000
+# Generate 1M-row dataset for integration & streaming tests
+python scripts/generate_sales_data.py --rows 1000000 --out backend/sample-data/sales_large.csv
+
+# Generate 300k-row dataset for fault injection evidence & multi-repetition tests
+# (produces exactly 300,000 rows, 4,932 duplicate extra rows, 4,842 duplicated IDs)
+python scripts/generate_sales_data.py --rows 300000 --seed 42 --out backend/sample-data/sales_300k.csv
 ```
+*(Note: Playwright's global setup automatically runs the generator if these files are absent.)*
+
 
 1. **Static Analysis & Linting**:
    ```bash

@@ -131,7 +131,8 @@ test.describe('UI-10 Structured Streaming E2E', () => {
     await clickNav(page, 'Pipelines');
     await expect(page).toHaveURL(/pipelines/, { timeout: 10_000 });
 
-    await setEditorContent(page, STREAMING_SAMPLE_YAML);
+    const uniqueTopic = `streaming-e2e-${Date.now()}`;
+    await setEditorContent(page, STREAMING_SAMPLE_YAML.replace('streaming-e2e-events', uniqueTopic));
     await page.getByTestId('btn-validate').click();
     await expect(page.getByTestId('validation-state')).toHaveText('Valid', { timeout: 15_000 });
 
@@ -164,7 +165,8 @@ test.describe('UI-10 Structured Streaming E2E', () => {
     await clickNav(page, 'Pipelines');
     await expect(page).toHaveURL(/pipelines/, { timeout: 10_000 });
 
-    await setEditorContent(page, STREAMING_1M_YAML);
+    const unique1MTopic = `streaming-1m-${Date.now()}`;
+    await setEditorContent(page, STREAMING_1M_YAML.replace('streaming-1m-events', unique1MTopic));
     await page.getByTestId('btn-validate').click();
     await expect(page.getByTestId('validation-state')).toHaveText('Valid', { timeout: 15_000 });
 
@@ -299,7 +301,8 @@ test.describe('UI-10 Structured Streaming E2E', () => {
     await expect(page).toHaveURL(/pipelines/, { timeout: 10_000 });
 
     // Validate and launch sample streaming run
-    await setEditorContent(page, STREAMING_SAMPLE_YAML);
+    const uniqueAxeTopic = `streaming-axe-${Date.now()}`;
+    await setEditorContent(page, STREAMING_SAMPLE_YAML.replace('streaming-e2e-events', uniqueAxeTopic));
     await page.getByTestId('btn-validate').click();
     await expect(page.getByTestId('validation-state')).toHaveText('Valid', { timeout: 15_000 });
 
