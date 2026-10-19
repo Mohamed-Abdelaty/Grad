@@ -2,20 +2,29 @@
 
 This directory contains the automated, reproducible evaluation harness for the ChaosFlow platform's graduation research evaluation phase.
 
+## Experimental Design Note
+
+> **Baseline Design Statement**: There is no standalone "fault-free control" experiment. The experimental design evaluates resilience through within-run, phase-by-phase comparison: a calibrated baseline window (`[run_start, fault_injected_at]`) measures unperturbed pipeline throughput and component availability, against which during-fault degradation (`[fault_injected_at, fault_reverted_at]`) and post-fault recovery time (`[fault_reverted_at, recovered_at]`) are directly benchmarked.
+
+---
+
 ## Architecture & Guarantees
 
 1. **REST API Exclusivity**: All interactions (experiment creation, pipeline registration, execution triggering, metrics retrieval) run strictly through the platform's public REST API (`/api/experiments`, `/api/pipelines`, `/api/reports`). No backend backdoors or raw database mutations are performed during evaluation.
 2. **100% Kafka Topic Isolation**: To prevent cross-repetition contamination (e.g. repetition 2 draining leftover records from repetition 1), every repetition is submitted as an independent experiment (`eval-<experiment_id>-r<rep_idx>`) with a fresh, dedicated Kafka topic (`eval-stream-<experiment_id>-r<rep_idx>`) and independent HDFS sink directory.
-3. **Quiescence & Cool-Down Verification**:
+3. **Strict Quiescence & Cool-Down Verification**:
    - Asserts `/health` status is 200 OK across all platform components.
-   - Asserts active pipeline runs == 0 and running experiment runs == 0.
-   - Enforces a pre-flight free RAM safety check on the host OS.
-   - Sleeps for the configured cool-down duration (default: 15s) between repetitions.
+   - Asserts active pipeline runs == 0.
+   - Asserts pending/running experiment runs == 0.
+   - Asserts Spark worker cores are completely free (`coresUsed == 0` via Spark Master JSON API).
+   - Asserts consumer lag on previous evaluation topic == 0.
+   - Asserts free host RAM >= 1500 MB.
+   - If any check fails to settle after 3 minutes, the harness immediately **ABORTS** the matrix run.
 4. **Resumable & Non-Destructive**: Checks for existing `report.json` in `docs/evaluation/raw/<name>/` before running. Existing successful runs are never overwritten, re-executed, or deleted.
 5. **Verbatim Provenance Artifacts**: Each repetition generates:
    - `report.json`: Full API response from `/api/reports/{id}` including comparison table.
    - `children.json`: Raw child run records with measured availability, throughput, data loss, and recovery time.
-   - `environment.json`: Git commit hash, timestamps, target service, fault parameters, and memory state.
+   - `environment.json`: Git commit hash, timestamps, target service, fault parameters, host free RAM before/after, Spark cores free, Kafka data size, topic count, total message count, and full docker stats snapshot.
 
 ---
 
@@ -25,6 +34,7 @@ This directory contains the automated, reproducible evaluation harness for the C
 scripts/evaluation/
 ├── matrix.yaml          # Evaluation matrix: 5 fault scenarios, baseline, fault durations
 ├── run_evaluation.py    # Python CLI evaluation runner
+├── aggregate.py         # Deterministic statistical aggregator (computes n, mean, sample std N-1, min, max)
 └── README.md            # Usage and architectural documentation
 ```
 
@@ -33,7 +43,7 @@ scripts/evaluation/
 ## Prerequisites
 
 1. **Active Stack**: Ensure all 13 Docker Compose services are healthy (`docker compose ps`).
-2. **Host RAM**: A minimum of 500 MB (default threshold in `matrix.yaml`) free physical memory is recommended. For maximum stability on 16 GB machines, close non-essential desktop applications (e.g. Chrome, Claude) during test runs.
+2. **Host RAM**: A minimum of 1500 MB free physical memory is enforced by the harness. Close non-essential desktop applications (e.g. Chrome, Claude) during test runs to ensure stability.
 3. **Environment Credentials**: Set credentials in your environment or use the defaults:
    ```bash
    export ADMIN_USERNAME="admin"
@@ -45,9 +55,9 @@ scripts/evaluation/
 ## CLI Usage
 
 ### 1. Run the Evaluation Matrix Tests
-Before running live experiments, execute the harness unit and contract test suite:
+Before running live experiments, execute the harness and aggregator unit test suite:
 ```powershell
-py -3.11 -m pytest backend/tests/evaluation/test_evaluation_harness.py -v
+py -3.11 -m pytest tests/evaluation/ -v
 ```
 
 ### 2. Execute Phase 2 Pilot (1 Experiment, 2 Repetitions)
@@ -62,11 +72,11 @@ To execute all 25 runs defined in `matrix.yaml`:
 py -3.11 scripts/evaluation/run_evaluation.py
 ```
 
-### CLI Arguments
-- `--matrix <path>`: Path to custom matrix configuration YAML (default: `scripts/evaluation/matrix.yaml`).
-- `--pilot`: Execute only the first experiment for 2 repetitions (pilot mode).
-- `--repetitions <N>`: Override the repetition count configured in `matrix.yaml`.
-- `--base-url <url>`: Override the platform API base URL (default: `http://localhost:8000`).
+### 4. Aggregate Results into Deterministic Summary CSV
+To aggregate all completed runs across scenarios:
+```powershell
+py -3.11 scripts/evaluation/aggregate.py --raw-dir docs/evaluation/raw --output docs/evaluation/summary_table.csv
+```
 
 ---
 
