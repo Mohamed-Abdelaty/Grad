@@ -1,0 +1,54 @@
+# scripts/evaluation/matrix.yaml
+# Evaluation matrix for graduation research paper
+# Each experiment defines a fault against an allowed target service.
+# Repetitions are executed sequentially as individual runs (eval-<name>-r<i>)
+# with run-scoped Kafka topics to guarantee 100% topic isolation without backlogs.
+
+settings:
+  baseline_seconds: 10
+  fault_duration_seconds: 20
+  repetitions_per_experiment: 5
+  max_recovery_threshold_seconds: 60.0
+  expected_data_loss: 0
+  min_host_free_ram_mb: 1500
+  cool_down_seconds: 15
+  cool_down_timeout_seconds: 180
+
+pipeline_template:
+  name: "eval-streaming-300k"
+  source_path: "/app/sample-data/sales_300k.csv"
+  max_offsets_per_trigger: 10000
+  trigger_interval_seconds: 2
+  idle_timeout_seconds: 20
+  max_runtime_seconds: 600
+
+experiments:
+  - id: "kafka-stop"
+    name: "Kafka Broker Container Stop"
+    target_service: "kafka"
+    fault_type: "container_stop"
+    description: "Evaluates buffer backpressure and consumer lag recovery under message broker stoppage."
+
+  - id: "kafka-restart"
+    name: "Kafka Broker Container Restart"
+    target_service: "kafka"
+    fault_type: "container_restart"
+    description: "Evaluates transient broker restart dynamics and KRaft log reload overhead."
+
+  - id: "spark-worker-stop"
+    name: "Spark Worker Container Stop"
+    target_service: "spark-worker"
+    fault_type: "container_stop"
+    description: "Evaluates distributed stream compute resilience and task rescheduling upon worker loss."
+
+  - id: "spark-worker-restart"
+    name: "Spark Worker Container Restart"
+    target_service: "spark-worker"
+    fault_type: "container_restart"
+    description: "Evaluates executor reconnection and state recovery after transient worker restart."
+
+  - id: "datanode-stop"
+    name: "HDFS DataNode Container Stop"
+    target_service: "datanode"
+    fault_type: "container_stop"
+    description: "Evaluates sink write behavior and failure semantics when storage data block host is halted."
