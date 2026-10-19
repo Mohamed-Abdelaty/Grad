@@ -99,6 +99,19 @@ def get_docker_stats_snapshot() -> list[dict[str, Any]]:
         return []
 
 
+def get_host_page_faults_per_sec() -> float:
+    """Measure Windows host hard page faults per second via Performance Counter."""
+    if sys.platform == "win32":
+        try:
+            cmd = "powershell -Command \"(Get-Counter '\\Memory\\Pages/sec' -MaxSamples 1).CounterSamples[0].CookedValue\""
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
+            return float(res.stdout.strip().splitlines()[-1])
+        except Exception as exc:
+            logger.warning("Failed to query Windows Memory\\Pages/sec: %s", exc)
+            return 0.0
+    return 0.0
+
+
 def get_kafka_metrics() -> dict[str, Any]:
     """Capture Kafka data directory size, topic count, and total message count."""
     metrics: dict[str, Any] = {
@@ -521,12 +534,37 @@ class EvaluationHarness:
             raise RuntimeError(f"Experiment run trigger failed ({run_res.status_code}): {run_res.text}")
         logger.info("Execution triggered with pipeline_run_id=%s. Polling for terminal state...", pipeline_run_id)
 
-        # Step 4: Poll until terminal state
+        # Step 4: Poll until terminal state with 15s telemetry sampling
         poll_start = time.monotonic()
         terminal_status = None
         max_poll_time = 450.0
 
+        telemetry_samples: list[dict[str, Any]] = []
+        last_sample_time = 0.0
+        consecutive_high_pages_sec_count = 0
+        host_memory_pressure_flag = False
+
         while time.monotonic() - poll_start < max_poll_time:
+            now = time.monotonic()
+            if now - last_sample_time >= 15.0:
+                cur_ram = get_free_ram_mb()
+                cur_pages = get_host_page_faults_per_sec()
+                last_sample_time = now
+                telemetry_samples.append({
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                    "elapsed_seconds": round(now - poll_start, 1),
+                    "free_ram_mb": cur_ram,
+                    "pages_per_sec": cur_pages,
+                })
+                logger.info("Telemetry [t+%.0fs]: Free RAM=%.1f MB | Pages/sec=%.1f", now - poll_start, cur_ram, cur_pages)
+                if cur_pages > 100.0:
+                    consecutive_high_pages_sec_count += 1
+                    # 2 consecutive samples at 15s interval = >= 30 consecutive seconds
+                    if consecutive_high_pages_sec_count >= 2:
+                        host_memory_pressure_flag = True
+                else:
+                    consecutive_high_pages_sec_count = 0
+
             time.sleep(2.0)
             status_res = self.client.get(f"/api/experiments/{experiment_uuid}")
             if status_res.status_code == 200:
@@ -540,7 +578,7 @@ class EvaluationHarness:
             raise TimeoutError(f"Experiment {exp_name} timed out after {max_poll_time}s without reaching terminal state.")
 
         t_end = datetime.now(tz=timezone.utc).isoformat()
-        logger.info("Run %s reached terminal state: %s", exp_name, terminal_status)
+        logger.info("Run %s reached terminal state: %s (memory_pressure=%s)", exp_name, terminal_status, host_memory_pressure_flag)
 
         # Step 4: Fetch report and children
         rep_res = self.client.get(f"/api/reports/{experiment_uuid}")
@@ -571,6 +609,8 @@ class EvaluationHarness:
             "terminal_status": terminal_status,
             "host_free_ram_start_mb": ram_start,
             "host_free_ram_end_mb": get_free_ram_mb(),
+            "host_memory_pressure": host_memory_pressure_flag,
+            "telemetry_samples": telemetry_samples,
             "spark_worker_cores_free_start": spark_metrics_start.get("cores_free"),
             "kafka_data_dir_size_start": kafka_metrics_start.get("kafka_data_dir_size"),
             "kafka_topic_count_start": kafka_metrics_start.get("topic_count"),
