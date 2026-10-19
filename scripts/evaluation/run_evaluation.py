@@ -466,27 +466,62 @@ class EvaluationHarness:
 
         t_start = datetime.now(tz=timezone.utc).isoformat()
 
-        # Step 1: Create experiment
+        # Step 1: Launch pipeline in background (wait=false)
+        p_res = self.client.post("/api/pipelines/run?wait=false", json={"yaml_content": p_yaml})
+        if p_res.status_code not in (200, 202):
+            raise RuntimeError(f"Pipeline launch failed ({p_res.status_code}): {p_res.text}")
+        p_data = p_res.json()
+        pipeline_run_id = p_data["pipeline_run_id"]
+        logger.info("Launched Pipeline Run ID: %s", pipeline_run_id)
+
+        # Step 1b: Poll pipeline progress until records are flowing
+        p_flow_start = time.monotonic()
+        records_flowing = False
+        max_flow_wait = 90.0
+        while time.monotonic() - p_flow_start < max_flow_wait:
+            time.sleep(1.0)
+            prog_res = self.client.get(f"/api/pipeline-runs/{pipeline_run_id}/progress")
+            if prog_res.status_code == 200:
+                prog = prog_res.json()
+                pub = (prog.get("kafka") or {}).get("published")
+                rows_read = (prog.get("source") or {}).get("rowsRead")
+                recs_in = (prog.get("spark") or {}).get("recordsIn")
+                if (pub is not None and pub > 0) or (rows_read is not None and rows_read > 0) or (recs_in is not None and recs_in > 0):
+                    records_flowing = True
+                    break
+
+        pipeline_to_experiment_delay = round(time.monotonic() - p_flow_start, 2)
+        logger.info(
+            "Pipeline records flowing=%s after %ss delay. Creating experiment...",
+            records_flowing,
+            pipeline_to_experiment_delay,
+        )
+
+        # Step 2: Create experiment
         create_res = self.client.post(
             "/api/experiments",
             json={"yaml_content": e_yaml, "pipeline_yaml": p_yaml},
         )
-        if create_res.status_code != 200:
+        if create_res.status_code not in (200, 201):
             raise RuntimeError(f"Experiment creation failed ({create_res.status_code}): {create_res.text}")
         exp_data = create_res.json()
         experiment_uuid = exp_data["experiment_id"]
         logger.info("Created Experiment ID: %s", experiment_uuid)
 
-        # Step 2: Trigger experiment execution
+        # Step 3: Trigger experiment execution linked to running pipeline
         run_res = self.client.post(
             f"/api/experiments/{experiment_uuid}/run",
-            json={"yaml_content": e_yaml, "pipeline_yaml": p_yaml},
+            json={
+                "yaml_content": e_yaml,
+                "pipeline_yaml": p_yaml,
+                "pipeline_run_id": pipeline_run_id,
+            },
         )
         if run_res.status_code != 202:
             raise RuntimeError(f"Experiment run trigger failed ({run_res.status_code}): {run_res.text}")
-        logger.info("Execution triggered. Polling for terminal state...")
+        logger.info("Execution triggered with pipeline_run_id=%s. Polling for terminal state...", pipeline_run_id)
 
-        # Step 3: Poll until terminal state
+        # Step 4: Poll until terminal state
         poll_start = time.monotonic()
         terminal_status = None
         max_poll_time = 450.0
@@ -528,6 +563,8 @@ class EvaluationHarness:
             "fault_type": fault_type,
             "repetition_index": rep_idx,
             "topic_name": topic_name,
+            "pipeline_run_id": pipeline_run_id,
+            "pipeline_to_experiment_delay_seconds": pipeline_to_experiment_delay,
             "git_commit": git_commit,
             "started_at": t_start,
             "finished_at": t_end,

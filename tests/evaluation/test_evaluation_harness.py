@@ -301,3 +301,84 @@ def test_deterministic_csv_output(tmp_path):
 
     assert bytes1 == bytes2
     assert b"12.3457" in bytes1  # Rounded to 4 decimal places
+
+
+def test_harness_pipeline_first_orchestration_contract(monkeypatch, tmp_path):
+    """Verify evaluation harness launches pipeline first, waits for progress, then triggers experiment."""
+    from run_evaluation import EvaluationHarness
+    from unittest.mock import MagicMock
+
+    call_order = []
+
+    mock_client = MagicMock()
+
+    # Mock POST /api/pipelines/run?wait=false
+    def mock_post(url, *args, **kwargs):
+        resp = MagicMock()
+        if "api/pipelines/run" in url:
+            call_order.append(("pipeline_launch", kwargs.get("json", {})))
+            resp.status_code = 202
+            resp.json.return_value = {"pipeline_run_id": "test-p-run-123", "status": "running"}
+        elif url == "/api/experiments":
+            call_order.append(("experiment_create", kwargs.get("json", {})))
+            resp.status_code = 201
+            resp.json.return_value = {"experiment_id": "test-exp-uuid-456"}
+        elif "/api/experiments/test-exp-uuid-456/run" in url:
+            call_order.append(("experiment_run", kwargs.get("json", {})))
+            resp.status_code = 202
+            resp.json.return_value = {"status": "pending"}
+        return resp
+
+    def mock_get(url, *args, **kwargs):
+        resp = MagicMock()
+        if "progress" in url:
+            call_order.append(("progress_poll", url))
+            resp.status_code = 200
+            resp.json.return_value = {
+                "runId": "test-p-run-123",
+                "kafka": {"published": 500},
+                "source": {"rowsRead": 500},
+            }
+        elif "/api/experiments/test-exp-uuid-456" in url:
+            resp.status_code = 200
+            resp.json.return_value = {"latest_run_status": "succeeded"}
+        elif "/api/reports/test-exp-uuid-456" in url:
+            resp.status_code = 200
+            resp.json.return_value = {"experiment_id": "test-exp-uuid-456", "comparison_table": []}
+        return resp
+
+    mock_client.post = mock_post
+    mock_client.get = mock_get
+
+    harness = EvaluationHarness(raw_output_dir=str(tmp_path / "raw"))
+    harness.client = mock_client
+
+    monkeypatch.setattr("run_evaluation.get_free_ram_mb", lambda: 3000.0)
+    monkeypatch.setattr("run_evaluation.get_docker_stats_snapshot", lambda: [])
+    monkeypatch.setattr("run_evaluation.get_kafka_metrics", lambda: {})
+    monkeypatch.setattr("run_evaluation.get_spark_master_metrics", lambda: {})
+
+    res = harness.run_repetition(
+        exp_id="kafka-stop",
+        target_service="kafka",
+        fault_type="container_stop",
+        rep_idx=1,
+        settings={"baseline_seconds": 10, "fault_duration_seconds": 20},
+        pipeline_template={"source_path": "/test/data.csv"},
+    )
+
+    # Verify execution order:
+    # 1. pipeline_launch
+    # 2. progress_poll
+    # 3. experiment_create
+    # 4. experiment_run with pipeline_run_id
+    actions = [c[0] for c in call_order]
+    assert actions[0] == "pipeline_launch"
+    assert "progress_poll" in actions
+    assert actions.index("progress_poll") < actions.index("experiment_create")
+    assert actions.index("experiment_create") < actions.index("experiment_run")
+
+    # Check payload of experiment_run has pipeline_run_id
+    exp_run_call = next(c for c in call_order if c[0] == "experiment_run")
+    assert exp_run_call[1].get("pipeline_run_id") == "test-p-run-123"
+
