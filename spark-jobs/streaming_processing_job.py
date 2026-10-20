@@ -272,10 +272,11 @@ class StreamingProcessingJob(BaseSparkJob):
         last_seen_batch_id = -1
         total_input_rows = 0
         total_output_rows = 0
+        sink_output_tracked = True
         stop_file = getattr(self.args, "stop_file", None)
 
         def _collect_progress() -> None:
-            nonlocal last_seen_batch_id, total_input_rows
+            nonlocal last_seen_batch_id, total_input_rows, total_output_rows, sink_output_tracked
             try:
                 progress_list = list(query.recentProgress or [])
                 if not progress_list and query.lastProgress is not None:
@@ -292,6 +293,13 @@ class StreamingProcessingJob(BaseSparkJob):
                             num_rows = sources[0].get("numInputRows")
                         num_rows = int(num_rows or 0)
                         total_input_rows += num_rows
+
+                        sink = p.get("sink") or {}
+                        sink_rows = sink.get("numOutputRows")
+                        if sink_rows is not None and sink_rows >= 0:
+                            total_output_rows += int(sink_rows)
+                        else:
+                            sink_output_tracked = False
 
                         end_offset = sources[0].get("endOffset") if sources else {}
                         in_rate = p.get("inputRowsPerSecond")
@@ -343,9 +351,10 @@ class StreamingProcessingJob(BaseSparkJob):
         if exc is not None:
             self.logger.error("Streaming query terminated with exception: %s", exc)
         status = "failed" if exc else "success"
+        output_rows = total_output_rows if (sink_output_tracked and last_seen_batch_id >= 0) else None
         result_payload = {
             "input_rows": total_input_rows,
-            "output_rows": total_input_rows,
+            "output_rows": output_rows,
             "duration_seconds": duration,
             "status": status,
         }
