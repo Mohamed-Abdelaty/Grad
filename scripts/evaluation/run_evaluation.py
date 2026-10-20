@@ -40,6 +40,11 @@ import httpx
 import yaml
 
 
+class MeasurementError(RuntimeError):
+    """Raised when physical HDFS measurement execution fails (no valid JSON output)."""
+    pass
+
+
 class FlushFileHandler(logging.FileHandler):
     """FileHandler that flushes after every record to enable live tailing."""
     def emit(self, record: logging.LogRecord) -> None:
@@ -276,7 +281,7 @@ def compute_multiset_comparison(hdfs_output_path: str) -> dict[str, Any]:
       than in the expected multiset (pipeline-induced duplication)
     - expected_rows: 289744
     - physical_rows: total rows physically found in HDFS output
-    - error: str if comparison could not be completed
+    - hdfs_path: normalized HDFS path
     """
     raw_path = hdfs_output_path
     if raw_path.startswith("hdfs://"):
@@ -284,7 +289,7 @@ def compute_multiset_comparison(hdfs_output_path: str) -> dict[str, Any]:
         raw_path = "/" + parts.split("/", 1)[1] if "/" in parts else "/"
 
     py_cmd = (
-        "import urllib.request, json, io, sys, csv, collections\n"
+        "import urllib.request, json, io, sys, os, csv, collections\n"
         "import pyarrow.parquet as pq\n"
         "hdfs_path = sys.argv[1]\n"
         "csv_path = '/app/sample-data/sales_300k.csv'\n"
@@ -306,8 +311,9 @@ def compute_multiset_comparison(hdfs_output_path: str) -> dict[str, Any]:
         "            ts = row.get('timestamp', '').strip()\n"
         "            expected_counts[(tid, str(amt), ts)] += 1\n"
         "except Exception as e:\n"
-        "    print(json.dumps({'error': f'CSV read failed: {e}', 'missing_rows': -1, 'extra_rows': -1, 'duplicate_beyond_baseline': -1, 'expected_rows': 289744, 'physical_rows': 0}))\n"
-        "    sys.exit(0)\n"
+        "    sys.stderr.write(f'ERROR: CSV read failed: {e}\\n')\n"
+        "    sys.stderr.flush()\n"
+        "    os._exit(1)\n"
         "output_counts = collections.Counter()\n"
         "physical_rows = 0\n"
         "try:\n"
@@ -322,14 +328,15 @@ def compute_multiset_comparison(hdfs_output_path: str) -> dict[str, Any]:
         "        tbl = pq.read_table(io.BytesIO(content))\n"
         "        physical_rows += len(tbl)\n"
         "        cols = tbl.column_names\n"
-        "        for i in range(len(tbl)):\n"
-        "            tid = str(tbl['transaction_id'][i].as_py() or '') if 'transaction_id' in cols else ''\n"
-        "            amt = str(tbl['amount'][i].as_py() or 0.0) if 'amount' in cols else ''\n"
-        "            ts = str(tbl['timestamp'][i].as_py() or '') if 'timestamp' in cols else ''\n"
-        "            output_counts[(tid, amt, ts)] += 1\n"
+        "        tids = tbl['transaction_id'].to_pylist() if 'transaction_id' in cols else [''] * len(tbl)\n"
+        "        amts = tbl['amount'].to_pylist() if 'amount' in cols else [0.0] * len(tbl)\n"
+        "        tss = tbl['timestamp'].to_pylist() if 'timestamp' in cols else [''] * len(tbl)\n"
+        "        for tid, amt, ts in zip(tids, amts, tss):\n"
+        "            output_counts[(str(tid), str(amt), str(ts))] += 1\n"
         "except Exception as e:\n"
-        "    print(json.dumps({'error': f'HDFS read failed: {e}', 'missing_rows': -1, 'extra_rows': -1, 'duplicate_beyond_baseline': -1, 'expected_rows': len(expected_counts), 'physical_rows': physical_rows}))\n"
-        "    sys.exit(0)\n"
+        "    sys.stderr.write(f'ERROR: HDFS read failed: {e}\\n')\n"
+        "    sys.stderr.flush()\n"
+        "    os._exit(1)\n"
         "missing = 0\n"
         "extra = 0\n"
         "dup_beyond = 0\n"
@@ -350,6 +357,8 @@ def compute_multiset_comparison(hdfs_output_path: str) -> dict[str, Any]:
         "    'expected_rows': expected_total,\n"
         "    'physical_rows': physical_rows,\n"
         "}))\n"
+        "sys.stdout.flush()\n"
+        "os._exit(0)\n"
     )
     try:
         res = subprocess.run(
@@ -357,23 +366,38 @@ def compute_multiset_comparison(hdfs_output_path: str) -> dict[str, Any]:
             capture_output=True,
             text=True,
             timeout=180,
-            check=True,
         )
-        line = res.stdout.strip().splitlines()[-1]
-        data = json.loads(line)
-        data["hdfs_path"] = raw_path
-        return data
+        stdout = res.stdout.strip()
+        stderr = res.stderr.strip()
+        data = None
+        for line in reversed(stdout.splitlines()):
+            line = line.strip()
+            if line.startswith("{") and line.endswith("}"):
+                try:
+                    data = json.loads(line)
+                    break
+                except Exception:
+                    pass
+
+        if data is not None and "missing_rows" in data and data.get("missing_rows") != -1:
+            data["hdfs_path"] = raw_path
+            return data
+
+        logger.error(
+            "compute_multiset_comparison failed for %s (exit code %s).\nSTDOUT: %s\nSTDERR: %s",
+            hdfs_output_path,
+            res.returncode,
+            stdout,
+            stderr,
+        )
+        raise MeasurementError(
+            f"compute_multiset_comparison failed for {hdfs_output_path} (exit code {res.returncode}): {stderr or stdout or 'no output'}"
+        )
     except Exception as exc:
-        logger.warning("compute_multiset_comparison failed for %s: %s", hdfs_output_path, exc)
-        return {
-            "hdfs_path": raw_path,
-            "missing_rows": -1,
-            "extra_rows": -1,
-            "duplicate_beyond_baseline": -1,
-            "expected_rows": 289744,
-            "physical_rows": 0,
-            "error": str(exc),
-        }
+        if isinstance(exc, MeasurementError):
+            raise
+        logger.error("compute_multiset_comparison execution failed for %s: %s", hdfs_output_path, exc)
+        raise MeasurementError(f"compute_multiset_comparison execution failed for {hdfs_output_path}: {exc}") from exc
 
 
 def get_hdfs_physical_metrics(hdfs_output_path: str) -> dict[str, Any]:
@@ -396,7 +420,7 @@ def get_hdfs_physical_metrics(hdfs_output_path: str) -> dict[str, Any]:
         raw_path = "/" + parts.split("/", 1)[1] if "/" in parts else "/"
 
     py_cmd = (
-        "import urllib.request, json, io, sys\n"
+        "import urllib.request, json, io, sys, os\n"
         "import pyarrow.parquet as pq\n"
         "path = sys.argv[1]\n"
         "url = f'http://namenode:9870/webhdfs/v1{path}?op=LISTSTATUS'\n"
@@ -431,43 +455,51 @@ def get_hdfs_physical_metrics(hdfs_output_path: str) -> dict[str, Any]:
         "        'excess_duplicates': excess,\n"
         "        'file_count': len(files),\n"
         "    }))\n"
+        "    sys.stdout.flush()\n"
+        "    os._exit(0)\n"
         "except Exception as e:\n"
-        "    print(json.dumps({\n"
-        "        'error': str(e),\n"
-        "        'physical_rows': 0,\n"
-        "        'unique_transaction_ids': 0,\n"
-        "        'duplicate_transaction_ids': 0,\n"
-        "        'baseline_csv_duplicates': 4730,\n"
-        "        'excess_duplicates': 0,\n"
-        "        'file_count': 0,\n"
-        "    }))\n"
+        "    sys.stderr.write(f'ERROR: {e}\\n')\n"
+        "    sys.stderr.flush()\n"
+        "    os._exit(1)\n"
     )
     try:
         res = subprocess.run(
             ["docker", "exec", "platform-backend", "python", "-c", py_cmd, raw_path],
             capture_output=True,
             text=True,
-            check=True,
+            timeout=180,
         )
-        line = res.stdout.strip().splitlines()[-1]
-        try:
-            data = json.loads(line)
-        except Exception:
-            data = {"physical_rows": int(line), "unique_transaction_ids": 0, "duplicate_transaction_ids": 0, "baseline_csv_duplicates": 4730, "excess_duplicates": 0, "file_count": 0}
-        data["raw_path"] = raw_path
-        return data
+        stdout = res.stdout.strip()
+        stderr = res.stderr.strip()
+        data = None
+        for line in reversed(stdout.splitlines()):
+            line = line.strip()
+            if line.startswith("{") and line.endswith("}"):
+                try:
+                    data = json.loads(line)
+                    break
+                except Exception:
+                    pass
+
+        if data is not None and "physical_rows" in data:
+            data["raw_path"] = raw_path
+            return data
+
+        logger.error(
+            "Failed to count HDFS physical metrics for %s (exit code %s).\nSTDOUT: %s\nSTDERR: %s",
+            hdfs_output_path,
+            res.returncode,
+            stdout,
+            stderr,
+        )
+        raise MeasurementError(
+            f"Failed to count HDFS physical metrics for {hdfs_output_path} (exit code {res.returncode}): {stderr or stdout or 'no output'}"
+        )
     except Exception as exc:
-        logger.warning("Failed to count HDFS physical metrics for %s: %s", hdfs_output_path, exc)
-        return {
-            "raw_path": raw_path,
-            "physical_rows": 0,
-            "unique_transaction_ids": 0,
-            "duplicate_transaction_ids": 0,
-            "baseline_csv_duplicates": 4730,
-            "excess_duplicates": 0,
-            "file_count": 0,
-            "error": str(exc),
-        }
+        if isinstance(exc, MeasurementError):
+            raise
+        logger.error("Failed to execute physical metrics command for %s: %s", hdfs_output_path, exc)
+        raise MeasurementError(f"Failed to execute physical metrics command for {hdfs_output_path}: {exc}") from exc
 
 
 def count_hdfs_physical_rows(hdfs_output_path: str) -> int:
@@ -483,7 +515,7 @@ def count_hdfs_physical_rows(hdfs_output_path: str) -> int:
         raw_path = "/" + parts.split("/", 1)[1] if "/" in parts else "/"
 
     py_cmd = (
-        "import urllib.request, json, io, sys\n"
+        "import urllib.request, json, io, sys, os\n"
         "import pyarrow.parquet as pq\n"
         "path = sys.argv[1]\n"
         "url = f'http://namenode:9870/webhdfs/v1{path}?op=LISTSTATUS'\n"
@@ -496,21 +528,50 @@ def count_hdfs_physical_rows(hdfs_output_path: str) -> int:
         "        furl = f'http://namenode:9870/webhdfs/v1{path}/{fn}?op=OPEN'\n"
         "        with urllib.request.urlopen(furl) as fr:\n"
         "            total += pq.ParquetFile(io.BytesIO(fr.read())).metadata.num_rows\n"
-        "    print(total)\n"
+        "    print(json.dumps({'physical_rows': total}))\n"
+        "    sys.stdout.flush()\n"
+        "    os._exit(0)\n"
         "except Exception as e:\n"
-        "    print(0)\n"
+        "    sys.stderr.write(f'ERROR: {e}\\n')\n"
+        "    sys.stderr.flush()\n"
+        "    os._exit(1)\n"
     )
     try:
         res = subprocess.run(
             ["docker", "exec", "platform-backend", "python", "-c", py_cmd, raw_path],
             capture_output=True,
             text=True,
-            check=True,
+            timeout=180,
         )
-        return int(res.stdout.strip().splitlines()[-1])
+        stdout = res.stdout.strip()
+        stderr = res.stderr.strip()
+        for line in reversed(stdout.splitlines()):
+            line = line.strip()
+            if line.startswith("{") and line.endswith("}"):
+                try:
+                    data = json.loads(line)
+                    if "physical_rows" in data:
+                        return int(data["physical_rows"])
+                except Exception:
+                    pass
+            elif line.isdigit():
+                return int(line)
+
+        logger.error(
+            "Failed to count HDFS physical rows for %s (exit code %s).\nSTDOUT: %s\nSTDERR: %s",
+            hdfs_output_path,
+            res.returncode,
+            stdout,
+            stderr,
+        )
+        raise MeasurementError(
+            f"Failed to count HDFS physical rows for {hdfs_output_path} (exit code {res.returncode}): {stderr or stdout or 'no output'}"
+        )
     except Exception as exc:
-        logger.warning("Failed to count HDFS physical rows for %s: %s", hdfs_output_path, exc)
-        return 0
+        if isinstance(exc, MeasurementError):
+            raise
+        logger.error("Failed to execute physical row count for %s: %s", hdfs_output_path, exc)
+        raise MeasurementError(f"Failed to execute physical row count for {hdfs_output_path}: {exc}") from exc
 
 
 def build_pipeline_yaml(
@@ -956,26 +1017,68 @@ class EvaluationHarness:
             json.dump(children_json, f, indent=2)
 
         # Independent physical HDFS metrics
-        physical_metrics = get_hdfs_physical_metrics(rep_output_path)
-        rep_phys_rows = physical_metrics.get("physical_rows", 0)
-        rep_unique_ids = physical_metrics.get("unique_transaction_ids", 0)
-        rep_dup_ids = physical_metrics.get("duplicate_transaction_ids", 0)
-        rep_baseline_dups = physical_metrics.get("baseline_csv_duplicates", 4730)
-        rep_excess_dups = physical_metrics.get("excess_duplicates", 0)
         rep_expected_rows = 289744
-        rep_data_loss = max(0, rep_expected_rows - rep_phys_rows)
+        measurement_error = None
+        try:
+            physical_metrics = get_hdfs_physical_metrics(rep_output_path)
+            rep_phys_rows = physical_metrics.get("physical_rows", 0)
+            rep_unique_ids = physical_metrics.get("unique_transaction_ids", 0)
+            rep_dup_ids = physical_metrics.get("duplicate_transaction_ids", 0)
+            rep_baseline_dups = physical_metrics.get("baseline_csv_duplicates", 4730)
+            rep_excess_dups = physical_metrics.get("excess_duplicates", 0)
+            rep_data_loss = max(0, rep_expected_rows - rep_phys_rows)
+            rep_multiset = compute_multiset_comparison(rep_output_path)
+        except MeasurementError as me:
+            measurement_error = str(me)
+            physical_metrics = {
+                "raw_path": rep_output_path,
+                "physical_rows": -1,
+                "unique_transaction_ids": -1,
+                "duplicate_transaction_ids": -1,
+                "baseline_csv_duplicates": 4730,
+                "excess_duplicates": -1,
+                "file_count": 0,
+                "error": measurement_error,
+            }
+            rep_phys_rows = -1
+            rep_unique_ids = -1
+            rep_dup_ids = -1
+            rep_baseline_dups = 4730
+            rep_excess_dups = -1
+            rep_data_loss = -1
+            rep_multiset = {
+                "hdfs_path": rep_output_path,
+                "missing_rows": -1,
+                "extra_rows": -1,
+                "duplicate_beyond_baseline": -1,
+                "expected_rows": rep_expected_rows,
+                "physical_rows": -1,
+                "error": measurement_error,
+            }
 
         results_dict = report_json.get("results") or {}
-        # Full multiset comparison for experiment run
-        rep_multiset = compute_multiset_comparison(rep_output_path)
-        rep_run_valid = rep_phys_rows > 0 and rep_multiset.get("missing_rows", -1) >= 0 and not rep_multiset.get("error")
+
+        if measurement_error:
+            rep_run_valid = False
+            run_classification = "MEASUREMENT_FAILED"
+        elif rep_phys_rows == 0:
+            rep_run_valid = False
+            run_classification = "INVALID: empty output"
+        else:
+            rep_run_valid = (
+                rep_phys_rows > 0
+                and rep_multiset.get("missing_rows", -1) >= 0
+                and not rep_multiset.get("error")
+            )
+            run_classification = "VALID" if rep_run_valid else "INVALID"
+
         logger.info(
-            "RUN MULTISET [%s]: missing=%s extra=%s dup_beyond=%s valid=%s",
+            "RUN MULTISET [%s]: missing=%s extra=%s dup_beyond=%s classification=%s",
             exp_name,
             rep_multiset.get("missing_rows"),
             rep_multiset.get("extra_rows"),
             rep_multiset.get("duplicate_beyond_baseline"),
-            rep_run_valid,
+            run_classification,
         )
 
         physical_audit = {
@@ -989,6 +1092,7 @@ class EvaluationHarness:
             "physical_data_loss": rep_data_loss,
             "file_count": physical_metrics.get("file_count", 0),
             "run_valid": rep_run_valid,
+            "run_classification": run_classification,
             "multiset_comparison": rep_multiset,
             "platform_validator": {
                 "label": "platform validator (unreliable, uses tracker counters)",
@@ -1199,14 +1303,26 @@ class EvaluationHarness:
 
         # Sanity gate: verify HDFS output row count matches physical expected count
         output_path = cal_output_path
-        physical_metrics = get_hdfs_physical_metrics(output_path)
-        physical_rows = physical_metrics.get("physical_rows", 0)
-        unique_ids = physical_metrics.get("unique_transaction_ids", 0)
-        dup_ids = physical_metrics.get("duplicate_transaction_ids", 0)
-        baseline_dups = physical_metrics.get("baseline_csv_duplicates", 4730)
-        excess_dups = physical_metrics.get("excess_duplicates", 0)
         expected_physical_rows = 289744
-        physical_data_loss = max(0, expected_physical_rows - physical_rows)
+        try:
+            physical_metrics = get_hdfs_physical_metrics(output_path)
+            physical_rows = physical_metrics.get("physical_rows", 0)
+            unique_ids = physical_metrics.get("unique_transaction_ids", 0)
+            dup_ids = physical_metrics.get("duplicate_transaction_ids", 0)
+            baseline_dups = physical_metrics.get("baseline_csv_duplicates", 4730)
+            excess_dups = physical_metrics.get("excess_duplicates", 0)
+            physical_data_loss = max(0, expected_physical_rows - physical_rows)
+
+            logger.info("CALIBRATION: Running multiset comparison against expected data...")
+            multiset = compute_multiset_comparison(output_path)
+        except MeasurementError as me:
+            calibration_data["hdfs_sanity_gate"] = "MEASUREMENT_FAILED"
+            calibration_data["run_valid"] = False
+            calibration_data["measurement_error"] = str(me)
+            with open(cal_dir / "calibration_report.json", "w", encoding="utf-8") as f:
+                json.dump(calibration_data, f, indent=2)
+            logger.error("CALIBRATION MEASUREMENT FAILED: %s", me)
+            raise
 
         # Retrieve tracker numbers for auditing and logging
         tracker_rows_written = None
@@ -1234,6 +1350,7 @@ class EvaluationHarness:
             "physical_data_loss": physical_data_loss,
             "file_count": physical_metrics.get("file_count", 0),
         }
+        calibration_data["multiset_comparison"] = multiset
         calibration_data["platform_validator_unreliable"] = {
             "label": "platform validator (unreliable, uses tracker counters)",
             "records_in": tracker_records_in,
@@ -1260,40 +1377,47 @@ class EvaluationHarness:
             tracker_rows_written,
         )
 
-        if physical_rows == 0 or physical_rows != expected_physical_rows:
+        if physical_rows == 0:
             logger.error(
-                "CALIBRATION SANITY GATE FAILED: Physical HDFS output has %d rows (expected %d). "
-                "Platform Tracker (unreliable) reported hdfs.rowsWritten=%s, spark.recordsOut=%s. "
-                "Do NOT use this calibration for evaluation.",
+                "CALIBRATION SANITY GATE FAILED: Physical HDFS output has 0 rows (INVALID: empty output). "
+                "Platform Tracker (unreliable) reported hdfs.rowsWritten=%s, spark.recordsOut=%s.",
+                tracker_rows_written,
+                tracker_records_out,
+            )
+            calibration_data["hdfs_sanity_gate"] = "INVALID: empty output"
+            calibration_data["run_valid"] = False
+            with open(cal_dir / "calibration_report.json", "w", encoding="utf-8") as f:
+                json.dump(calibration_data, f, indent=2)
+            raise RuntimeError(
+                "Calibration SANITY GATE FAILED: Physical HDFS row count is 0 (INVALID: empty output)."
+            )
+        elif physical_rows != expected_physical_rows or multiset.get("missing_rows", 0) > 0 or multiset.get("duplicate_beyond_baseline", 0) > 0:
+            logger.error(
+                "CALIBRATION SANITY GATE FAILED: Physical HDFS rows=%d (expected %d), missing=%s, excess_dups=%s. "
+                "Platform Tracker (unreliable) reported hdfs.rowsWritten=%s, spark.recordsOut=%s.",
                 physical_rows,
                 expected_physical_rows,
+                multiset.get("missing_rows"),
+                multiset.get("duplicate_beyond_baseline"),
                 tracker_rows_written,
                 tracker_records_out,
             )
             calibration_data["hdfs_sanity_gate"] = "FAILED"
+            calibration_data["run_valid"] = False
             with open(cal_dir / "calibration_report.json", "w", encoding="utf-8") as f:
                 json.dump(calibration_data, f, indent=2)
             raise RuntimeError(
                 f"Calibration SANITY GATE FAILED: Physical HDFS row count is {physical_rows} "
-                f"(expected {expected_physical_rows}). Platform tracker values (unreliable): "
-                f"recordsIn={tracker_records_in}, recordsOut={tracker_records_out}, rowsWritten={tracker_rows_written}."
+                f"(expected {expected_physical_rows}), missing={multiset.get('missing_rows')}, "
+                f"excess_dups={multiset.get('duplicate_beyond_baseline')}."
             )
 
         calibration_data["hdfs_sanity_gate"] = "PASSED"
+        calibration_data["run_valid"] = True
         logger.info(
-            "CALIBRATION SANITY GATE PASSED: Physical HDFS rows=%d matches expected %d",
+            "CALIBRATION SANITY GATE PASSED: Physical HDFS rows=%d matches expected %d, 0 missing, 0 excess duplicates",
             physical_rows,
             expected_physical_rows,
-        )
-
-        # Full multiset comparison against expected CSV data
-        logger.info("CALIBRATION: Running multiset comparison against expected data...")
-        multiset = compute_multiset_comparison(output_path)
-        calibration_data["multiset_comparison"] = multiset
-        calibration_data["run_valid"] = (
-            physical_rows > 0
-            and multiset.get("missing_rows", -1) >= 0
-            and not multiset.get("error")
         )
         logger.info(
             "CALIBRATION MULTISET: missing=%s extra=%s dup_beyond_baseline=%s error=%s",
