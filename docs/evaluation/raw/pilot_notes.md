@@ -327,3 +327,112 @@ Using the offset range belonging to this run (r1: 600,000–900,000; r2: 300,000
 - The observed ~140 records/sec throughput during the fault window in r2 is hypothesized to result from either:
   1. Spark Kafka consumer prefetch buffer: Records fetched into memory before the broker socket severed were processed in the subsequent micro-batch.
   2. Progress counter artifact: Tracker counters deriving rates from intermediate progress snapshots.
+
+---
+
+## PILOT RUN RECORD: pilot-v3 (October 21) [POST-FIX EVALUATION]
+
+**Target**: `kafka` | **Fault**: `container_stop` (20 s duration) | **Repetitions**: 2  
+**Target Output Directory**: `docs/evaluation/raw/pilot-v3/`  
+**Host Experimental Conditions**: 7 core containers only (`platform-backend`, `platform-postgres`, `platform-kafka`, `platform-spark-master`, `platform-spark-worker`, `platform-namenode`, `platform-datanode`). Auxiliary containers (`frontend`, `prometheus`, `grafana`, `airflow-*`) stopped.  
+**Applied Fixes Active During Run**:
+1. **Topic Isolation**: Timestamped topic names (`eval-stream-kafka-stop-r{rep}-{timestamp}`) with empty-topic assertion (`get_kafka_topic_total_records == 0`).
+2. **Metadata Filtering**: Counting physical rows strictly from committed files listed in `_spark_metadata` commit logs, ignoring aborted uncommitted task stubs.
+3. **Finite Stream Completion Fix (Q4)**: `compute_lag(None)` returns `None`, and `StreamingCompletionDetector.is_complete()` requires valid non-None lag (unreachable broker prevents premature idle termination).
+
+---
+
+### Repetition 1: `eval-kafka-stop-r1`
+
+- **Run Classification**: **`VALID`** (VERIFIED: `physical_metrics.json:11-12`)
+- **Pipeline Run ID**: `16de5509-9d65-47c9-bcfa-6ea49d810a66` (VERIFIED: `environment.json:8`)
+- **Experiment ID**: `ab977705-c898-465f-b010-517e084771f3` | **Run ID**: `9f0ef62f-6010-452a-abf2-16d400ecc3e7` (VERIFIED: `report.json:3-4`)
+- **Topic Name**: `eval-stream-kafka-stop-r1-1792537901` (VERIFIED: `environment.json:7`)
+- **Output Path**: `/data/output/pipe-eval-kafka-stop-r1-1792537912` (VERIFIED: `environment.json:9`)
+- **First Micro-Batch Delay**: 28.38 s (VERIFIED: `environment.json:38`)
+- **Topic Offsets for THIS Run** (VERIFIED via Kafka `kafka-get-offsets` & `pipeline_run_events`):
+  - Partition 0: Begin = 0, End = 112,109
+  - Partition 1: Begin = 0, End = 93,500
+  - Partition 2: Begin = 0, End = 94,391
+  - **Total Published to Kafka**: **300,000** records (`kafka_done` event payload: `published=300000`, `failed=0`)
+- **Records Consumed by Spark**: **300,000** records (`spark.recordsIn = 300,000`, 100.0% of published records consumed) (VERIFIED: `pipeline_runs.last_progress_snapshot`)
+- **Physical Output & Multiset Ground Truth** (VERIFIED: `physical_metrics.json:3-20`):
+  - Committed Parquet Files: **303** files (all tracked in `_spark_metadata`)
+  - **Physical Rows Written**: **289,744** (matches expected 289,744 exactly)
+  - **Missing Rows (`missing_rows`)**: **0** (Zero physical data loss)
+  - **Extra Rows (`extra_rows`)**: **0**
+  - **Excess Duplicates beyond Baseline**: **0**
+  - Distinct Transaction IDs: 285,014
+  - Baseline Duplicate Copies: 4,730 (exact match to input CSV duplicate rate)
+- **Fault Dynamics & Timings** (VERIFIED: `report.json:20-44`):
+  - Fault Injected: `2026-10-20T23:12:51.792595+00:00` (Kafka stopped)
+  - Fault Reverted: `2026-10-20T23:13:11.834248+00:00` (Docker start issued after 20 s)
+  - Service Recovered: `2026-10-20T23:13:21.892533+00:00`
+  - **Recovery Time**: **10.06 s**
+  - Availability During Fault: 0.0% (-100.0% delta)
+- **Throughput Profile** (VERIFIED: `report.json:36-39, 79-85`):
+  - Normal Baseline: **1,499.46 records/sec**
+  - During Fault Window: **0.0 records/sec** (-100.0% degradation)
+  - Post-Fault Average: **1,216.35 records/sec**
+- **Pipeline Active Status** (VERIFIED):
+  - Active at Injection: **`true`** (`report.json:98-99`)
+  - Active at Recovery: **`true`** (Kafka recovered at 23:13:21 UTC; streaming job continued processing batches until 23:16:18 UTC)
+- **Platform Status vs. Physical Result Disagreement** (VERIFIED):
+  - Physical Ground Truth: **100% Data Integrity (0 missing, 0 excess duplicates, VALID)**.
+  - Platform Final Status: **`failed`** (`data_loss = 10,256 > expected 0`).
+  - **Verified Cause**: In `backend/app/reliability/data_consistency_validator.py:166-180`, the platform validator computes data loss by subtracting HDFS row count (289,744) from the raw input CSV row count (300,000). The platform validator is completely unaware of the pipeline's configured `remove_nulls` filter operation (`amount IS NOT NULL AND amount > 0`), which legitimately filters out 10,256 rows with null or negative amounts.
+- **Host Telemetry & Memory Pressure** (VERIFIED: `environment.json:43-45`):
+  - Free RAM Start: 3,353.0 MB | End: 2,827.9 MB | Minimum: **1,739.4 MB**
+  - Pages/sec: 0.0–33.5 steady state; spike of 2,479.6 at t+16s.
+  - `host_memory_pressure`: `true` (due to 2 consecutive sampling intervals with Pages/sec > 100).
+- **Spark Driver Stderr Tail** (VERIFIED: `pipeline_run_events`):
+  - 1 harmless batch warning: `ProcessingTimeExecutor: Current batch is falling behind. The trigger interval is 2000 milliseconds, but spent 2700 milliseconds`. Zero errors.
+
+---
+
+### Repetition 2: `eval-kafka-stop-r2`
+
+- **Run Classification**: **`VALID`** (VERIFIED: `physical_metrics.json:11-12`)
+- **Pipeline Run ID**: `e74d9029-9769-48a9-abf1-5864db12f21b` (VERIFIED: `environment.json:8`)
+- **Experiment ID**: `365b7426-992c-4f0f-973f-8f5cb73ee5b6` | **Run ID**: `7c4ef4c5-87c7-4f90-8341-1cd60a70e8cc` (VERIFIED: `report.json:3-4`)
+- **Topic Name**: `eval-stream-kafka-stop-r2-1792538254` (VERIFIED: `environment.json:7`)
+- **Output Path**: `/data/output/pipe-eval-kafka-stop-r2-1792538260` (VERIFIED: `environment.json:9`)
+- **First Micro-Batch Delay**: 22.97 s (VERIFIED: `environment.json:38`)
+- **Topic Offsets for THIS Run** (VERIFIED via Kafka `kafka-get-offsets` & `pipeline_run_events`):
+  - Partition 0: Begin = 0, End = 100,187
+  - Partition 1: Begin = 0, End = 100,773
+  - Partition 2: Begin = 0, End = 99,040
+  - **Total Published to Kafka**: **300,000** records (`kafka_done` event payload: `published=300000`, `failed=0`)
+- **Records Consumed by Spark**: **300,000** records (`spark.recordsIn = 300,000`, 100.0% of published records consumed) (VERIFIED: `pipeline_runs.last_progress_snapshot`)
+- **Physical Output & Multiset Ground Truth** (VERIFIED: `physical_metrics.json:3-20`):
+  - Committed Parquet Files: **304** files (all tracked in `_spark_metadata`)
+  - **Physical Rows Written**: **289,744** (matches expected 289,744 exactly)
+  - **Missing Rows (`missing_rows`)**: **0** (Zero physical data loss)
+  - **Extra Rows (`extra_rows`)**: **0**
+  - **Excess Duplicates beyond Baseline**: **0**
+  - Distinct Transaction IDs: 285,014
+  - Baseline Duplicate Copies: 4,730 (exact match to input CSV duplicate rate)
+- **Fault Dynamics & Timings** (VERIFIED: `report.json:20-44`):
+  - Fault Injected: `2026-10-20T23:18:31.792720+00:00` (Kafka stopped)
+  - Fault Reverted: `2026-10-20T23:18:51.836238+00:00` (Docker start issued after 20 s)
+  - Service Recovered: `2026-10-20T23:19:04.571400+00:00`
+  - **Recovery Time**: **12.74 s**
+  - Availability During Fault: 0.0% (-100.0% delta)
+- **Throughput Profile** (VERIFIED: `report.json:36-39, 79-85`):
+  - Normal Baseline: **1,498.90 records/sec**
+  - During Fault Window: **139.17 records/sec** (-90.72% degradation)
+  - Post-Fault Average: **1,190.44 records/sec**
+  - **Mechanism for 139.17 records/sec Throughput During Fault Window** (HYPOTHESIS): Micro-batch in-flight during container stop completed its sink write before the client socket severed, contributing rows to the first interval of the 20s fault window before throughput dropped to 0.
+- **Pipeline Active Status** (VERIFIED):
+  - Active at Injection: **`true`** (`report.json:98-99`)
+  - Active at Recovery: **`true`** (Kafka recovered at 23:19:04 UTC; streaming job continued processing batches until 23:22:00 UTC)
+- **Platform Status vs. Physical Result Disagreement** (VERIFIED):
+  - Physical Ground Truth: **100% Data Integrity (0 missing, 0 excess duplicates, VALID)**.
+  - Platform Final Status: **`failed`** (`data_loss = 10,256 > expected 0`).
+  - **Verified Cause**: Unawareness of `remove_nulls` filter operation in `data_consistency_validator.py`.
+- **Host Telemetry & Memory Pressure** (VERIFIED: `environment.json:43-45`):
+  - Free RAM Start: 3,153.6 MB | End: 2,593.2 MB | Minimum: **1,832.4 MB**
+  - Pages/sec: 0.0–3.0 steady state; brief spikes to 306.3 at t+114s and 104.2 at t+130s.
+  - `host_memory_pressure`: `true` (due to 2 consecutive sampling intervals with Pages/sec > 100).
+- **Spark Driver Stderr Tail** (VERIFIED: `pipeline_run_events`):
+  - 0 warning lines, 0 error lines. Zero errors.
