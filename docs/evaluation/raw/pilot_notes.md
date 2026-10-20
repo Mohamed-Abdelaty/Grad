@@ -146,3 +146,32 @@ Both prior calibration runs are retroactively marked **INVALID for output verifi
   - Telemetry during active streaming: Free RAM ranged from **983 MB** (minimum, at t≈124 s) to 3,848 MB (start).
 - **HDFS Sanity Gate**: **PASSED**.
 
+---
+
+## CALIBRATION RUN RECORD: a4cee60d (October 20)
+
+**Run Identifier**: `eval-stream-calibration-1792529256`  
+**Pipeline Run ID**: `a4cee60d-4619-4471-97a0-22064307dcce`  
+**Execution Timestamp**: 2026-10-20 20:47:40 UTC to 20:51:21 UTC  
+**Output Path**: `/data/output/pipe-eval-calibration-1792529256`  
+**Status**: `harness measurement error (pyarrow SIGABRT exit 134 at interpreter teardown); output verified manually: 289,744 rows, multiset 0 missing / 0 extra`
+
+### Verified Observations & Measurements:
+- **Harness Status**: Failed sanity gate due to measurement execution crash: in `scripts/evaluation/run_evaluation.py:get_hdfs_physical_metrics`, `docker exec platform-backend python -c` exited with code 134 (SIGABRT: `terminate called without an active exception` during PyArrow C++ atexit interpreter teardown after successfully printing JSON). Subprocess check raised an exception which fell back to `physical_rows=0`.
+- **Physical Output Verified via Direct/Fixed Inspection**:
+  - Parquet Part Files: **304** files in `/data/output/pipe-eval-calibration-1792529256`
+  - Physical Row Count: **289,744** (matches expected 289,744 exactly)
+  - Multiset Comparison: **0 missing rows**, **0 extra rows**, **0 excess duplicates beyond baseline**
+  - Unique Transaction IDs: **285,014** (4,730 baseline duplicates)
+- **Run Timings & Resources**:
+  - Total Duration: **221.22 s**
+  - Active Processing Duration: **201.69 s** (slightly above the 150–200 s target range)
+  - First Micro-Batch Delay: **19.53 s**
+  - Host Free RAM: Minimum **2,906 MB** (started at 4,487 MB)
+  - Host Hard Page Faults: Pages/sec 0.0–1.0 during steady stream (max 27.6 at startup)
+- **Platform Tracker Counters (unreliable)**:
+  - `recordsIn`: 300,000
+  - `recordsOut`: 300,000 (from `executor.py:1228` copying input rows, untouched by design)
+  - `rowsWritten`: `None` (verified: no longer falls back to fake 300,000 after A3(c) fix)
+- **Artifacts Preserved**: Output path `/data/output/pipe-eval-calibration-1792529256` and raw report in `docs/evaluation/raw/calibration-a4cee60d/` preserved intact as evidence.
+
