@@ -82,3 +82,9 @@ token.txt
 /tmp/
 .pytest_cache/
 *.parquet
+# ── Scratch Evaluation Scripts ────────────────────────────────────────────────
+scripts/evaluation/check_host_ram.py
+scripts/evaluation/fix_schema.py
+scripts/evaluation/get_host_mem_breakdown.py
+scripts/evaluation/report_mem.ps1
+scripts/evaluation/verify_preflight_standalone.py

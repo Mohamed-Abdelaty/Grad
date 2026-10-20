@@ -1,0 +1,1000 @@
+{
+  "type": "calibration",
+  "git_commit": "8270d787ebd7ff50b77fb3bf19480fcba261bdb6",
+  "pipeline_run_id": "a4cee60d-4619-4471-97a0-22064307dcce",
+  "topic_name": "eval-stream-calibration-1792529256",
+  "started_at": "2026-10-20T20:47:40.515582+00:00",
+  "finished_at": "2026-10-20T20:51:21.730417+00:00",
+  "terminal_status": "succeeded",
+  "total_duration_seconds": 221.22,
+  "time_to_first_micro_batch_seconds": 19.53,
+  "duration_after_first_counters_seconds": 201.69,
+  "host_free_ram_start_mb": 4486.953125,
+  "host_free_ram_end_mb": 3310.17578125,
+  "telemetry_samples": [
+    {
+      "timestamp": "2026-10-20T20:47:42.710059+00:00",
+      "elapsed_seconds": 0.1,
+      "free_ram_mb": 4554.76953125,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-20T20:47:59.032874+00:00",
+      "elapsed_seconds": 16.0,
+      "free_ram_mb": 3219.1796875,
+      "pages_per_sec": 27.6115523974076
+    },
+    {
+      "timestamp": "2026-10-20T20:48:14.355763+00:00",
+      "elapsed_seconds": 31.6,
+      "free_ram_mb": 2906.234375,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-20T20:48:29.503139+00:00",
+      "elapsed_seconds": 46.9,
+      "free_ram_mb": 2913.96484375,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-20T20:48:44.565310+00:00",
+      "elapsed_seconds": 62.0,
+      "free_ram_mb": 3058.62890625,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-20T20:48:59.695853+00:00",
+      "elapsed_seconds": 77.1,
+      "free_ram_mb": 3009.2421875,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-20T20:49:14.779428+00:00",
+      "elapsed_seconds": 92.2,
+      "free_ram_mb": 2977.546875,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-20T20:49:29.902652+00:00",
+      "elapsed_seconds": 107.3,
+      "free_ram_mb": 2995.4296875,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-20T20:49:45.097704+00:00",
+      "elapsed_seconds": 122.5,
+      "free_ram_mb": 2972.9375,
+      "pages_per_sec": 4.95101858295511
+    },
+    {
+      "timestamp": "2026-10-20T20:50:00.221648+00:00",
+      "elapsed_seconds": 137.6,
+      "free_ram_mb": 2959.40625,
+      "pages_per_sec": 0.998803034443523
+    },
+    {
+      "timestamp": "2026-10-20T20:50:15.319474+00:00",
+      "elapsed_seconds": 152.8,
+      "free_ram_mb": 3052.2109375,
+      "pages_per_sec": 0.998736498455804
+    },
+    {
+      "timestamp": "2026-10-20T20:50:30.393380+00:00",
+      "elapsed_seconds": 167.9,
+      "free_ram_mb": 3094.36328125,
+      "pages_per_sec": 4.95761290541995
+    },
+    {
+      "timestamp": "2026-10-20T20:50:45.414729+00:00",
+      "elapsed_seconds": 182.9,
+      "free_ram_mb": 3062.3984375,
+      "pages_per_sec": 0.995207974083988
+    },
+    {
+      "timestamp": "2026-10-20T20:51:00.579827+00:00",
+      "elapsed_seconds": 198.0,
+      "free_ram_mb": 3054.48828125,
+      "pages_per_sec": 0.996093619651811
+    },
+    {
+      "timestamp": "2026-10-20T20:51:15.705448+00:00",
+      "elapsed_seconds": 213.1,
+      "free_ram_mb": 3044.5703125,
+      "pages_per_sec": 0.995705621226214
+    }
+  ],
+  "micro_batches": [
+    {
+      "timestamp": "2026-10-20T20:48:01.053737+00:00",
+      "elapsed_seconds": 19.53,
+      "records_in": 2998,
+      "records_out": 2998,
+      "rate_rps": 753.27,
+      "consumer_lag": 300000
+    },
+    {
+      "timestamp": "2026-10-20T20:48:03.062362+00:00",
+      "elapsed_seconds": 21.55,
+      "records_in": 5996,
+      "records_out": 5996,
+      "rate_rps": 1508.81,
+      "consumer_lag": 297002
+    },
+    {
+      "timestamp": "2026-10-20T20:48:04.067433+00:00",
+      "elapsed_seconds": 22.55,
+      "records_in": 8994,
+      "records_out": 8994,
+      "rate_rps": 2625.22,
+      "consumer_lag": 294004
+    },
+    {
+      "timestamp": "2026-10-20T20:48:06.077294+00:00",
+      "elapsed_seconds": 24.56,
+      "records_in": 11992,
+      "records_out": 11992,
+      "rate_rps": 2032.54,
+      "consumer_lag": 291006
+    },
+    {
+      "timestamp": "2026-10-20T20:48:07.080955+00:00",
+      "elapsed_seconds": 25.56,
+      "records_in": 14990,
+      "records_out": 14990,
+      "rate_rps": 3152.47,
+      "consumer_lag": 288008
+    },
+    {
+      "timestamp": "2026-10-20T20:48:09.091227+00:00",
+      "elapsed_seconds": 27.58,
+      "records_in": 17988,
+      "records_out": 17988,
+      "rate_rps": 3031.34,
+      "consumer_lag": 285010
+    },
+    {
+      "timestamp": "2026-10-20T20:48:15.361287+00:00",
+      "elapsed_seconds": 31.59,
+      "records_in": 26982,
+      "records_out": 26982,
+      "rate_rps": 3457.9,
+      "consumer_lag": 276016
+    },
+    {
+      "timestamp": "2026-10-20T20:48:17.369287+00:00",
+      "elapsed_seconds": 35.86,
+      "records_in": 29980,
+      "records_out": 29980,
+      "rate_rps": 8304.71,
+      "consumer_lag": 273018
+    },
+    {
+      "timestamp": "2026-10-20T20:48:20.381763+00:00",
+      "elapsed_seconds": 38.86,
+      "records_in": 32978,
+      "records_out": 32978,
+      "rate_rps": 8327.78,
+      "consumer_lag": 270020
+    },
+    {
+      "timestamp": "2026-10-20T20:48:21.386140+00:00",
+      "elapsed_seconds": 39.88,
+      "records_in": 35976,
+      "records_out": 35976,
+      "rate_rps": 8639.77,
+      "consumer_lag": 267022
+    },
+    {
+      "timestamp": "2026-10-20T20:48:24.397614+00:00",
+      "elapsed_seconds": 42.88,
+      "records_in": 38974,
+      "records_out": 38974,
+      "rate_rps": 1793.06,
+      "consumer_lag": 264024
+    },
+    {
+      "timestamp": "2026-10-20T20:48:25.404166+00:00",
+      "elapsed_seconds": 43.89,
+      "records_in": 41972,
+      "records_out": 41972,
+      "rate_rps": 3683.05,
+      "consumer_lag": 261026
+    },
+    {
+      "timestamp": "2026-10-20T20:48:27.412776+00:00",
+      "elapsed_seconds": 45.89,
+      "records_in": 44970,
+      "records_out": 44970,
+      "rate_rps": 4056.83,
+      "consumer_lag": 258028
+    },
+    {
+      "timestamp": "2026-10-20T20:48:30.507596+00:00",
+      "elapsed_seconds": 46.91,
+      "records_in": 47968,
+      "records_out": 47968,
+      "rate_rps": 7726.8,
+      "consumer_lag": 252032
+    },
+    {
+      "timestamp": "2026-10-20T20:48:31.510699+00:00",
+      "elapsed_seconds": 50.0,
+      "records_in": 50966,
+      "records_out": 50966,
+      "rate_rps": 2551.49,
+      "consumer_lag": 252032
+    },
+    {
+      "timestamp": "2026-10-20T20:48:34.524333+00:00",
+      "elapsed_seconds": 53.02,
+      "records_in": 53964,
+      "records_out": 53964,
+      "rate_rps": 2627.52,
+      "consumer_lag": 249034
+    },
+    {
+      "timestamp": "2026-10-20T20:48:36.532839+00:00",
+      "elapsed_seconds": 55.02,
+      "records_in": 56962,
+      "records_out": 56962,
+      "rate_rps": 2158.39,
+      "consumer_lag": 246036
+    },
+    {
+      "timestamp": "2026-10-20T20:48:37.536338+00:00",
+      "elapsed_seconds": 56.02,
+      "records_in": 59960,
+      "records_out": 59960,
+      "rate_rps": 2506.69,
+      "consumer_lag": 243038
+    },
+    {
+      "timestamp": "2026-10-20T20:48:39.547464+00:00",
+      "elapsed_seconds": 58.03,
+      "records_in": 62958,
+      "records_out": 62958,
+      "rate_rps": 4024.16,
+      "consumer_lag": 240040
+    },
+    {
+      "timestamp": "2026-10-20T20:48:40.551650+00:00",
+      "elapsed_seconds": 59.03,
+      "records_in": 65956,
+      "records_out": 65956,
+      "rate_rps": 8791.79,
+      "consumer_lag": 237042
+    },
+    {
+      "timestamp": "2026-10-20T20:48:42.562127+00:00",
+      "elapsed_seconds": 61.05,
+      "records_in": 68954,
+      "records_out": 68954,
+      "rate_rps": 7973.4,
+      "consumer_lag": 234044
+    },
+    {
+      "timestamp": "2026-10-20T20:48:45.570567+00:00",
+      "elapsed_seconds": 62.05,
+      "records_in": 71952,
+      "records_out": 71952,
+      "rate_rps": 4123.8,
+      "consumer_lag": 231046
+    },
+    {
+      "timestamp": "2026-10-20T20:48:48.583956+00:00",
+      "elapsed_seconds": 67.06,
+      "records_in": 74950,
+      "records_out": 74950,
+      "rate_rps": 3531.21,
+      "consumer_lag": 225050
+    },
+    {
+      "timestamp": "2026-10-20T20:48:49.587853+00:00",
+      "elapsed_seconds": 68.08,
+      "records_in": 77948,
+      "records_out": 77948,
+      "rate_rps": 9057.4,
+      "consumer_lag": 222052
+    },
+    {
+      "timestamp": "2026-10-20T20:48:52.602255+00:00",
+      "elapsed_seconds": 71.08,
+      "records_in": 80946,
+      "records_out": 80946,
+      "rate_rps": 4040.43,
+      "consumer_lag": 219054
+    },
+    {
+      "timestamp": "2026-10-20T20:48:54.610747+00:00",
+      "elapsed_seconds": 73.09,
+      "records_in": 83944,
+      "records_out": 83944,
+      "rate_rps": 1946.75,
+      "consumer_lag": 216056
+    },
+    {
+      "timestamp": "2026-10-20T20:48:55.613959+00:00",
+      "elapsed_seconds": 74.09,
+      "records_in": 86942,
+      "records_out": 86942,
+      "rate_rps": 8059.14,
+      "consumer_lag": 213058
+    },
+    {
+      "timestamp": "2026-10-20T20:49:00.699231+00:00",
+      "elapsed_seconds": 77.11,
+      "records_in": 92938,
+      "records_out": 92938,
+      "rate_rps": 1849.48,
+      "consumer_lag": 207062
+    },
+    {
+      "timestamp": "2026-10-20T20:49:02.709977+00:00",
+      "elapsed_seconds": 81.19,
+      "records_in": 95936,
+      "records_out": 95936,
+      "rate_rps": 1887.91,
+      "consumer_lag": 207062
+    },
+    {
+      "timestamp": "2026-10-20T20:49:04.719353+00:00",
+      "elapsed_seconds": 83.2,
+      "records_in": 98934,
+      "records_out": 98934,
+      "rate_rps": 2643.74,
+      "consumer_lag": 201066
+    },
+    {
+      "timestamp": "2026-10-20T20:49:06.726589+00:00",
+      "elapsed_seconds": 85.2,
+      "records_in": 101932,
+      "records_out": 101932,
+      "rate_rps": 2752.98,
+      "consumer_lag": 201066
+    },
+    {
+      "timestamp": "2026-10-20T20:49:07.733419+00:00",
+      "elapsed_seconds": 86.22,
+      "records_in": 104930,
+      "records_out": 104930,
+      "rate_rps": 11062.73,
+      "consumer_lag": 195070
+    },
+    {
+      "timestamp": "2026-10-20T20:49:09.745426+00:00",
+      "elapsed_seconds": 88.22,
+      "records_in": 107928,
+      "records_out": 107928,
+      "rate_rps": 4270.66,
+      "consumer_lag": 192072
+    },
+    {
+      "timestamp": "2026-10-20T20:49:11.753277+00:00",
+      "elapsed_seconds": 90.23,
+      "records_in": 110926,
+      "records_out": 110926,
+      "rate_rps": 10445.99,
+      "consumer_lag": 189074
+    },
+    {
+      "timestamp": "2026-10-20T20:49:15.783481+00:00",
+      "elapsed_seconds": 92.25,
+      "records_in": 113924,
+      "records_out": 113924,
+      "rate_rps": 4234.46,
+      "consumer_lag": 186076
+    },
+    {
+      "timestamp": "2026-10-20T20:49:16.786984+00:00",
+      "elapsed_seconds": 95.27,
+      "records_in": 116922,
+      "records_out": 116922,
+      "rate_rps": 2517.21,
+      "consumer_lag": 183078
+    },
+    {
+      "timestamp": "2026-10-20T20:49:18.798260+00:00",
+      "elapsed_seconds": 97.28,
+      "records_in": 119920,
+      "records_out": 119920,
+      "rate_rps": 2643.74,
+      "consumer_lag": 180080
+    },
+    {
+      "timestamp": "2026-10-20T20:49:19.803666+00:00",
+      "elapsed_seconds": 98.28,
+      "records_in": 122918,
+      "records_out": 122918,
+      "rate_rps": 3738.15,
+      "consumer_lag": 177082
+    },
+    {
+      "timestamp": "2026-10-20T20:49:23.822261+00:00",
+      "elapsed_seconds": 102.31,
+      "records_in": 128914,
+      "records_out": 128914,
+      "rate_rps": 3594.72,
+      "consumer_lag": 177082
+    },
+    {
+      "timestamp": "2026-10-20T20:49:25.834343+00:00",
+      "elapsed_seconds": 104.31,
+      "records_in": 131912,
+      "records_out": 131912,
+      "rate_rps": 4234.46,
+      "consumer_lag": 171086
+    },
+    {
+      "timestamp": "2026-10-20T20:49:30.906836+00:00",
+      "elapsed_seconds": 107.33,
+      "records_in": 137908,
+      "records_out": 137908,
+      "rate_rps": 1927.97,
+      "consumer_lag": 165090
+    },
+    {
+      "timestamp": "2026-10-20T20:49:31.912350+00:00",
+      "elapsed_seconds": 110.39,
+      "records_in": 140906,
+      "records_out": 140906,
+      "rate_rps": 4563.17,
+      "consumer_lag": 162092
+    },
+    {
+      "timestamp": "2026-10-20T20:49:33.920384+00:00",
+      "elapsed_seconds": 112.41,
+      "records_in": 143904,
+      "records_out": 143904,
+      "rate_rps": 2500.42,
+      "consumer_lag": 159094
+    },
+    {
+      "timestamp": "2026-10-20T20:49:35.928611+00:00",
+      "elapsed_seconds": 114.41,
+      "records_in": 146902,
+      "records_out": 146902,
+      "rate_rps": 2606.96,
+      "consumer_lag": 156096
+    },
+    {
+      "timestamp": "2026-10-20T20:49:38.943852+00:00",
+      "elapsed_seconds": 117.42,
+      "records_in": 149900,
+      "records_out": 149900,
+      "rate_rps": 4313.67,
+      "consumer_lag": 153098
+    },
+    {
+      "timestamp": "2026-10-20T20:49:39.947900+00:00",
+      "elapsed_seconds": 118.44,
+      "records_in": 152898,
+      "records_out": 152898,
+      "rate_rps": 1969.78,
+      "consumer_lag": 150100
+    },
+    {
+      "timestamp": "2026-10-20T20:49:41.960353+00:00",
+      "elapsed_seconds": 120.44,
+      "records_in": 155896,
+      "records_out": 155896,
+      "rate_rps": 1948.02,
+      "consumer_lag": 147102
+    },
+    {
+      "timestamp": "2026-10-20T20:49:42.963966+00:00",
+      "elapsed_seconds": 121.45,
+      "records_in": 158894,
+      "records_out": 158894,
+      "rate_rps": 11022.06,
+      "consumer_lag": 144104
+    },
+    {
+      "timestamp": "2026-10-20T20:49:46.103555+00:00",
+      "elapsed_seconds": 122.45,
+      "records_in": 161892,
+      "records_out": 161892,
+      "rate_rps": 2020.22,
+      "consumer_lag": 141106
+    },
+    {
+      "timestamp": "2026-10-20T20:49:47.107024+00:00",
+      "elapsed_seconds": 125.59,
+      "records_in": 164890,
+      "records_out": 164890,
+      "rate_rps": 4276.75,
+      "consumer_lag": 138108
+    },
+    {
+      "timestamp": "2026-10-20T20:49:50.122554+00:00",
+      "elapsed_seconds": 128.61,
+      "records_in": 167888,
+      "records_out": 167888,
+      "rate_rps": 1978.88,
+      "consumer_lag": 135110
+    },
+    {
+      "timestamp": "2026-10-20T20:49:52.132656+00:00",
+      "elapsed_seconds": 130.61,
+      "records_in": 170886,
+      "records_out": 170886,
+      "rate_rps": 2737.9,
+      "consumer_lag": 132112
+    },
+    {
+      "timestamp": "2026-10-20T20:49:53.136474+00:00",
+      "elapsed_seconds": 131.62,
+      "records_in": 173884,
+      "records_out": 173884,
+      "rate_rps": 4146.61,
+      "consumer_lag": 129114
+    },
+    {
+      "timestamp": "2026-10-20T20:49:57.152166+00:00",
+      "elapsed_seconds": 135.64,
+      "records_in": 176882,
+      "records_out": 176882,
+      "rate_rps": 1867.91,
+      "consumer_lag": 126116
+    },
+    {
+      "timestamp": "2026-10-20T20:49:58.156784+00:00",
+      "elapsed_seconds": 136.64,
+      "records_in": 179880,
+      "records_out": 179880,
+      "rate_rps": 2700.9,
+      "consumer_lag": 123118
+    },
+    {
+      "timestamp": "2026-10-20T20:50:01.225350+00:00",
+      "elapsed_seconds": 137.64,
+      "records_in": 185876,
+      "records_out": 185876,
+      "rate_rps": 2722.98,
+      "consumer_lag": 117122
+    },
+    {
+      "timestamp": "2026-10-20T20:50:05.241597+00:00",
+      "elapsed_seconds": 143.72,
+      "records_in": 188874,
+      "records_out": 188874,
+      "rate_rps": 1990.7,
+      "consumer_lag": 111126
+    },
+    {
+      "timestamp": "2026-10-20T20:50:06.247051+00:00",
+      "elapsed_seconds": 144.73,
+      "records_in": 191872,
+      "records_out": 191872,
+      "rate_rps": 4301.29,
+      "consumer_lag": 108128
+    },
+    {
+      "timestamp": "2026-10-20T20:50:08.258106+00:00",
+      "elapsed_seconds": 146.73,
+      "records_in": 194870,
+      "records_out": 194870,
+      "rate_rps": 2742.91,
+      "consumer_lag": 105130
+    },
+    {
+      "timestamp": "2026-10-20T20:50:10.267388+00:00",
+      "elapsed_seconds": 148.75,
+      "records_in": 197868,
+      "records_out": 197868,
+      "rate_rps": 4389.46,
+      "consumer_lag": 105130
+    },
+    {
+      "timestamp": "2026-10-20T20:50:11.270342+00:00",
+      "elapsed_seconds": 149.75,
+      "records_in": 200866,
+      "records_out": 200866,
+      "rate_rps": 7807.29,
+      "consumer_lag": 99134
+    },
+    {
+      "timestamp": "2026-10-20T20:50:13.280195+00:00",
+      "elapsed_seconds": 151.77,
+      "records_in": 203864,
+      "records_out": 203864,
+      "rate_rps": 10060.4,
+      "consumer_lag": 96136
+    },
+    {
+      "timestamp": "2026-10-20T20:50:16.324897+00:00",
+      "elapsed_seconds": 152.77,
+      "records_in": 206862,
+      "records_out": 206862,
+      "rate_rps": 4008.02,
+      "consumer_lag": 96136
+    },
+    {
+      "timestamp": "2026-10-20T20:50:19.338592+00:00",
+      "elapsed_seconds": 157.81,
+      "records_in": 209861,
+      "records_out": 209861,
+      "rate_rps": 1281.08,
+      "consumer_lag": 93138
+    },
+    {
+      "timestamp": "2026-10-20T20:50:20.341654+00:00",
+      "elapsed_seconds": 158.83,
+      "records_in": 212859,
+      "records_out": 212859,
+      "rate_rps": 3453.92,
+      "consumer_lag": 90139
+    },
+    {
+      "timestamp": "2026-10-20T20:50:22.349172+00:00",
+      "elapsed_seconds": 160.83,
+      "records_in": 215858,
+      "records_out": 215858,
+      "rate_rps": 2670.53,
+      "consumer_lag": 87141
+    },
+    {
+      "timestamp": "2026-10-20T20:50:23.353445+00:00",
+      "elapsed_seconds": 161.84,
+      "records_in": 218856,
+      "records_out": 218856,
+      "rate_rps": 4370.26,
+      "consumer_lag": 84142
+    },
+    {
+      "timestamp": "2026-10-20T20:50:26.366123+00:00",
+      "elapsed_seconds": 164.84,
+      "records_in": 221855,
+      "records_out": 221855,
+      "rate_rps": 1593.52,
+      "consumer_lag": 81144
+    },
+    {
+      "timestamp": "2026-10-20T20:50:27.370171+00:00",
+      "elapsed_seconds": 165.86,
+      "records_in": 224854,
+      "records_out": 224854,
+      "rate_rps": 4416.79,
+      "consumer_lag": 78145
+    },
+    {
+      "timestamp": "2026-10-20T20:50:31.396838+00:00",
+      "elapsed_seconds": 167.86,
+      "records_in": 227852,
+      "records_out": 227852,
+      "rate_rps": 1934.19,
+      "consumer_lag": 72148
+    },
+    {
+      "timestamp": "2026-10-20T20:50:32.400398+00:00",
+      "elapsed_seconds": 170.89,
+      "records_in": 230851,
+      "records_out": 230851,
+      "rate_rps": 1904.13,
+      "consumer_lag": 72148
+    },
+    {
+      "timestamp": "2026-10-20T20:50:35.414890+00:00",
+      "elapsed_seconds": 173.91,
+      "records_in": 233850,
+      "records_out": 233850,
+      "rate_rps": 1309.61,
+      "consumer_lag": 69149
+    },
+    {
+      "timestamp": "2026-10-20T20:50:36.420748+00:00",
+      "elapsed_seconds": 174.91,
+      "records_in": 239847,
+      "records_out": 239847,
+      "rate_rps": 11534.62,
+      "consumer_lag": 66150
+    },
+    {
+      "timestamp": "2026-10-20T20:50:39.432026+00:00",
+      "elapsed_seconds": 177.92,
+      "records_in": 242845,
+      "records_out": 242845,
+      "rate_rps": 2758.05,
+      "consumer_lag": 60153
+    },
+    {
+      "timestamp": "2026-10-20T20:50:42.444905+00:00",
+      "elapsed_seconds": 180.92,
+      "records_in": 245844,
+      "records_out": 245844,
+      "rate_rps": 4390.92,
+      "consumer_lag": 54156
+    },
+    {
+      "timestamp": "2026-10-20T20:50:46.418808+00:00",
+      "elapsed_seconds": 182.94,
+      "records_in": 251841,
+      "records_out": 251841,
+      "rate_rps": 2758.05,
+      "consumer_lag": 48159
+    },
+    {
+      "timestamp": "2026-10-20T20:50:48.427345+00:00",
+      "elapsed_seconds": 186.91,
+      "records_in": 254840,
+      "records_out": 254840,
+      "rate_rps": 2687.28,
+      "consumer_lag": 45160
+    },
+    {
+      "timestamp": "2026-10-20T20:50:50.437917+00:00",
+      "elapsed_seconds": 188.92,
+      "records_in": 257839,
+      "records_out": 257839,
+      "rate_rps": 4340.09,
+      "consumer_lag": 42161
+    },
+    {
+      "timestamp": "2026-10-20T20:50:51.442199+00:00",
+      "elapsed_seconds": 189.92,
+      "records_in": 260837,
+      "records_out": 260837,
+      "rate_rps": 12388.43,
+      "consumer_lag": 39163
+    },
+    {
+      "timestamp": "2026-10-20T20:50:54.459416+00:00",
+      "elapsed_seconds": 192.94,
+      "records_in": 263836,
+      "records_out": 263836,
+      "rate_rps": 1987.41,
+      "consumer_lag": 39163
+    },
+    {
+      "timestamp": "2026-10-20T20:50:56.467683+00:00",
+      "elapsed_seconds": 194.95,
+      "records_in": 266835,
+      "records_out": 266835,
+      "rate_rps": 2596.54,
+      "consumer_lag": 36164
+    },
+    {
+      "timestamp": "2026-10-20T20:51:01.587210+00:00",
+      "elapsed_seconds": 197.97,
+      "records_in": 275830,
+      "records_out": 275830,
+      "rate_rps": 4428.36,
+      "consumer_lag": 30167
+    },
+    {
+      "timestamp": "2026-10-20T20:51:03.595426+00:00",
+      "elapsed_seconds": 202.08,
+      "records_in": 278829,
+      "records_out": 278829,
+      "rate_rps": 2808.05,
+      "consumer_lag": 24170
+    },
+    {
+      "timestamp": "2026-10-20T20:51:05.604292+00:00",
+      "elapsed_seconds": 204.09,
+      "records_in": 281828,
+      "records_out": 281828,
+      "rate_rps": 4206.17,
+      "consumer_lag": 21171
+    },
+    {
+      "timestamp": "2026-10-20T20:51:07.614766+00:00",
+      "elapsed_seconds": 206.09,
+      "records_in": 284826,
+      "records_out": 284826,
+      "rate_rps": 2604.69,
+      "consumer_lag": 18172
+    },
+    {
+      "timestamp": "2026-10-20T20:51:09.625115+00:00",
+      "elapsed_seconds": 208.11,
+      "records_in": 287825,
+      "records_out": 287825,
+      "rate_rps": 2753.9,
+      "consumer_lag": 15174
+    },
+    {
+      "timestamp": "2026-10-20T20:51:10.628636+00:00",
+      "elapsed_seconds": 209.11,
+      "records_in": 290824,
+      "records_out": 290824,
+      "rate_rps": 10749.1,
+      "consumer_lag": 12175
+    },
+    {
+      "timestamp": "2026-10-20T20:51:16.709779+00:00",
+      "elapsed_seconds": 213.12,
+      "records_in": 296821,
+      "records_out": 296821,
+      "rate_rps": 8216.44,
+      "consumer_lag": 3179
+    },
+    {
+      "timestamp": "2026-10-20T20:51:20.725806+00:00",
+      "elapsed_seconds": 219.2,
+      "records_in": 300000,
+      "records_out": 300000,
+      "rate_rps": 278.21,
+      "consumer_lag": 0
+    }
+  ],
+  "docker_stats_start": [
+    {
+      "BlockIO": "503MB / 58.9MB",
+      "CPUPerc": "4.45%",
+      "Container": "8dab2788f0ef8ab108a49e811e4e46abc5fb8c017f07fe25ee4c0ded5dc01863",
+      "ID": "8dab2788f0ef",
+      "MemPerc": "9.40%",
+      "MemUsage": "557MiB / 5.788GiB",
+      "Name": "platform-backend",
+      "NetIO": "22.7MB / 183MB",
+      "PIDs": "17"
+    },
+    {
+      "BlockIO": "42.4MB / 1.19MB",
+      "CPUPerc": "0.00%",
+      "Container": "281312fe67890c5d867aa5ebee39f9f7c189d13f6c95a2e28007e9369771f3c0",
+      "ID": "281312fe6789",
+      "MemPerc": "0.80%",
+      "MemUsage": "47.54MiB / 5.788GiB",
+      "Name": "platform-postgres",
+      "NetIO": "126kB / 837kB",
+      "PIDs": "7"
+    },
+    {
+      "BlockIO": "133MB / 180MB",
+      "CPUPerc": "0.11%",
+      "Container": "4b04c9938138fee8bb253dbd8191e60d0e02baa345752931c15c6c2b09e047e9",
+      "ID": "4b04c9938138",
+      "MemPerc": "4.98%",
+      "MemUsage": "295.4MiB / 5.788GiB",
+      "Name": "platform-spark-worker",
+      "NetIO": "181MB / 15.4MB",
+      "PIDs": "46"
+    },
+    {
+      "BlockIO": "8.4MB / 20.4MB",
+      "CPUPerc": "0.34%",
+      "Container": "58273a5e38d74ae6034ed61bd382b671b2dea8fe006b5eb36c147916db1d62b5",
+      "ID": "58273a5e38d7",
+      "MemPerc": "6.09%",
+      "MemUsage": "360.9MiB / 5.788GiB",
+      "Name": "platform-datanode",
+      "NetIO": "13.6MB / 14.5MB",
+      "PIDs": "65"
+    },
+    {
+      "BlockIO": "127MB / 143MB",
+      "CPUPerc": "1.06%",
+      "Container": "964f812a22d2de49d04bb1867f8e3be88a0e177b2ffce254265660e0268467ab",
+      "ID": "964f812a22d2",
+      "MemPerc": "11.20%",
+      "MemUsage": "663.8MiB / 5.788GiB",
+      "Name": "platform-kafka",
+      "NetIO": "47.3MB / 53.3MB",
+      "PIDs": "98"
+    },
+    {
+      "BlockIO": "24MB / 3.29MB",
+      "CPUPerc": "0.12%",
+      "Container": "df8176b4d1f919e0b5daf0d492689e9ae1be98384a5f3dbe59206d7bfbdc7c0f",
+      "ID": "df8176b4d1f9",
+      "MemPerc": "4.02%",
+      "MemUsage": "238.4MiB / 5.788GiB",
+      "Name": "platform-spark-master",
+      "NetIO": "737kB / 364kB",
+      "PIDs": "45"
+    },
+    {
+      "BlockIO": "111MB / 19.6MB",
+      "CPUPerc": "0.26%",
+      "Container": "27012bf67efa721f98dbeb7c2dcf4d60cbf7cc5030fa8a05c93d46923001958a",
+      "ID": "27012bf67efa",
+      "MemPerc": "11.02%",
+      "MemUsage": "653.5MiB / 5.788GiB",
+      "Name": "platform-namenode",
+      "NetIO": "3.83MB / 3.07MB",
+      "PIDs": "59"
+    }
+  ],
+  "docker_stats_end": [
+    {
+      "BlockIO": "504MB / 118MB",
+      "CPUPerc": "4.21%",
+      "Container": "8dab2788f0ef8ab108a49e811e4e46abc5fb8c017f07fe25ee4c0ded5dc01863",
+      "ID": "8dab2788f0ef",
+      "MemPerc": "8.59%",
+      "MemUsage": "509.3MiB / 5.788GiB",
+      "Name": "platform-backend",
+      "NetIO": "27.5MB / 364MB",
+      "PIDs": "12"
+    },
+    {
+      "BlockIO": "42.6MB / 1.6MB",
+      "CPUPerc": "0.02%",
+      "Container": "281312fe67890c5d867aa5ebee39f9f7c189d13f6c95a2e28007e9369771f3c0",
+      "ID": "281312fe6789",
+      "MemPerc": "0.80%",
+      "MemUsage": "47.41MiB / 5.788GiB",
+      "Name": "platform-postgres",
+      "NetIO": "208kB / 858kB",
+      "PIDs": "7"
+    },
+    {
+      "BlockIO": "160MB / 357MB",
+      "CPUPerc": "0.10%",
+      "Container": "4b04c9938138fee8bb253dbd8191e60d0e02baa345752931c15c6c2b09e047e9",
+      "ID": "4b04c9938138",
+      "MemPerc": "5.34%",
+      "MemUsage": "316.5MiB / 5.788GiB",
+      "Name": "platform-spark-worker",
+      "NetIO": "363MB / 30MB",
+      "PIDs": "48"
+    },
+    {
+      "BlockIO": "9.2MB / 36.3MB",
+      "CPUPerc": "0.16%",
+      "Container": "58273a5e38d74ae6034ed61bd382b671b2dea8fe006b5eb36c147916db1d62b5",
+      "ID": "58273a5e38d7",
+      "MemPerc": "6.48%",
+      "MemUsage": "383.8MiB / 5.788GiB",
+      "Name": "platform-datanode",
+      "NetIO": "25.6MB / 15.7MB",
+      "PIDs": "65"
+    },
+    {
+      "BlockIO": "134MB / 192MB",
+      "CPUPerc": "1.12%",
+      "Container": "964f812a22d2de49d04bb1867f8e3be88a0e177b2ffce254265660e0268467ab",
+      "ID": "964f812a22d2",
+      "MemPerc": "13.23%",
+      "MemUsage": "784MiB / 5.788GiB",
+      "Name": "platform-kafka",
+      "NetIO": "94.6MB / 103MB",
+      "PIDs": "98"
+    },
+    {
+      "BlockIO": "24MB / 3.38MB",
+      "CPUPerc": "0.08%",
+      "Container": "df8176b4d1f919e0b5daf0d492689e9ae1be98384a5f3dbe59206d7bfbdc7c0f",
+      "ID": "df8176b4d1f9",
+      "MemPerc": "3.98%",
+      "MemUsage": "235.8MiB / 5.788GiB",
+      "Name": "platform-spark-master",
+      "NetIO": "766kB / 374kB",
+      "PIDs": "45"
+    },
+    {
+      "BlockIO": "111MB / 31.1MB",
+      "CPUPerc": "0.13%",
+      "Container": "27012bf67efa721f98dbeb7c2dcf4d60cbf7cc5030fa8a05c93d46923001958a",
+      "ID": "27012bf67efa",
+      "MemPerc": "11.67%",
+      "MemUsage": "691.7MiB / 5.788GiB",
+      "Name": "platform-namenode",
+      "NetIO": "5.43MB / 4.17MB",
+      "PIDs": "59"
+    }
+  ],
+  "output_path": "/data/output/pipe-eval-calibration-1792529256",
+  "physical_metrics": {
+    "expected_rows": 289744,
+    "physical_rows": 0,
+    "unique_transaction_ids": 0,
+    "duplicate_transaction_ids": 0,
+    "baseline_csv_duplicates": 4730,
+    "excess_duplicates": 0,
+    "physical_data_loss": 289744,
+    "file_count": 0
+  },
+  "platform_validator_unreliable": {
+    "label": "platform validator (unreliable, uses tracker counters)",
+    "records_in": 300000,
+    "records_out": 300000,
+    "rows_written": null
+  },
+  "hdfs_rows_physical": 0,
+  "hdfs_rows_expected": 289744,
+  "tracker_hdfs_rows_written": null,
+  "tracker_spark_records_out": 300000,
+  "hdfs_sanity_gate": "FAILED"
+}
