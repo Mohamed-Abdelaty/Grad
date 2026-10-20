@@ -254,7 +254,7 @@ Both prior calibration runs are retroactively marked **INVALID for output verifi
   - **Excess Duplicates beyond Baseline**: **0**
   - **Distinct Transaction IDs**: 39,869
   - **Duplicate Copies**: 667 (exact match to input baseline duplicate rate)
-  - **Verified Mechanism for 249,208 Data Loss**: In `backend/app/pipeline/executor.py:1260-1266`, the Kafka publishing thread (`producer.produce_batch`) encounters broker disconnection during Kafka container stop, catches the exception, and terminates with `producer_done = True` in its `finally` block after publishing only ~42,000 records. Once Spark consumed the in-flight records, consumer lag became 0 and `StreamingCompletionDetector` triggered its 20-second idle completion condition (`idle_time >= 20.0s`), terminating the pipeline cleanly with status `succeeded` after only 40,536 rows were processed.
+  - **HYPOTHESIS for 249,208 Data Loss (unconfirmed)**: In `backend/app/pipeline/executor.py:1260-1266`, the Kafka publishing thread (`producer.produce_batch`) encounters broker disconnection during Kafka container stop, catches the exception, and terminates with `producer_done = True` in its `finally` block after publishing only ~42,000 records. Once Spark consumed the in-flight records, consumer lag became 0 and `StreamingCompletionDetector` triggered its 20-second idle completion condition (`idle_time >= 20.0s`), terminating the pipeline cleanly with status `succeeded` after only 40,536 rows were processed.
 - **Platform Validator (unreliable)**:
   - `expected_records`: 41,986 (captured from a mid-stream `recordsOut` snapshot)
   - `processed_records`: 40,536
