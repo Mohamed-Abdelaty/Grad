@@ -1444,17 +1444,20 @@ class PipelineExecutor:
 
             # Verification of HDFS Parquet output
             hdfs_client = HdfsStorageClient()
-            hdfs_rows = total_rows
-            try:
-                hdfs_rows = hdfs_client.count_rows(raw_path) or total_rows
-            except Exception:
-                pass
+            hdfs_rows = None
+            verified = False
+            if hasattr(hdfs_client, "count_rows"):
+                try:
+                    hdfs_rows = hdfs_client.count_rows(raw_path)
+                    verified = hdfs_rows is not None
+                except Exception as exc:
+                    ctx.log_warning("spark_streaming", f"Physical HDFS row count failed: {exc}")
 
             if tracker_run_id:
                 _progress_tracker.emit(
                     tracker_run_id,
                     "hdfs_done",
-                    {"rows": hdfs_rows, "verified": True, "path": output_path},
+                    {"rows": hdfs_rows, "verified": verified, "path": output_path},
                 )
             ctx.log_info(
                 "spark_streaming",
