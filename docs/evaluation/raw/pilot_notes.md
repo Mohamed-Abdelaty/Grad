@@ -44,6 +44,7 @@
 - **Fault Injection Latency**: Stopping Kafka cleanly via `docker.stop("kafka")` takes ~9.7 s, so the effective fault injection latency is ~12 s after the baseline concludes.
 - **No Fault-Free Delay Control**: Traffic control (`tc`) is not installed in the `resilient-kafka` container image, meaning `service_delay` is unsupported on Kafka and cannot serve as a fault-free control.
 - **Host Resource Boundaries**: Single physical machine (16 GB RAM), WSL 2 memory capped at 6 GB via `.wslconfig`, swap disabled.
+- **Experimental Conditions**: Stack during evaluation: 7 core containers only. Frontend, Prometheus, Grafana and Airflow (postgres, webserver, scheduler) were stopped.
 - **Kafka Disk Log Volume**: Old Kafka topics and commit log segments remaining on the disk volume from previous runs may affect broker restart duration.
 - **Validating Data Drain Loop Decoupling**: In `backend/app/reliability/experiment_runner.py:1008-1019`, `_check_timeout` is NOT called inside the `validating_data` drain loop; the drain loop uses an independent hardcoded `max_drain_wait = 360` s.
 
