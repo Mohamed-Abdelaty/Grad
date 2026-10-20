@@ -176,3 +176,91 @@ Both prior calibration runs are retroactively marked **INVALID for output verifi
   - `rowsWritten`: `None` (verified: no longer falls back to fake 300,000 after A3(c) fix)
 - **Artifacts Preserved**: Output path `/data/output/pipe-eval-calibration-1792529256` and raw report in `docs/evaluation/raw/calibration-a4cee60d/` preserved intact as evidence.
 
+---
+
+## CALIBRATION RUN RECORD: 7737791b (October 21)
+
+**Run Identifier**: `eval-stream-calibration-1792532497`  
+**Pipeline Run ID**: `7737791b-5efb-4c7a-8985-1dc0448388a1`  
+**Execution Timestamp**: 2026-10-20 21:41:44 UTC to 21:45:57 UTC  
+**Output Path**: `/data/output/pipe-eval-calibration-1792532497`  
+**Status**: `PASSED (fully automated, exit 134 resolved, sanity gate passed)`  
+
+### Verified Observations & Physical Ground Truth:
+- **HDFS Sanity Gate**: **PASSED** (`run_valid`: `True`)
+- **Parquet Part Files**: **304** files in `/data/output/pipe-eval-calibration-1792532497`
+- **Physical Row Count**: **289,744** (matches expected 289,744 exactly)
+- **Multiset Comparison**:
+  - `missing_rows`: **0**
+  - `extra_rows`: **0**
+  - `duplicate_beyond_baseline`: **0**
+  - `physical_data_loss`: **0**
+- **Transaction ID Accounting**:
+  - Distinct IDs: **285,014**
+  - Baseline Duplicate Copies: **4,730**
+  - Excess Duplicates: **0**
+- **Timings & Telemetry**:
+  - Total Duration: **253.23 s**
+  - Active Processing Duration: **206.39 s** (target: 150–200 s)
+  - First Micro-Batch Delay: **46.84 s**
+  - Host Pre-flight: Free RAM 4,049.1 MB, Pages/sec 6.2 30s avg.
+  - Telemetry during stream: Free RAM minimum 2,607.4 MB (started 4,143.6 MB).
+- **Platform Tracker Counters (unreliable)**:
+  - `recordsIn`: 300,000
+  - `recordsOut`: 300,000 (copied from input by `executor.py:1228`)
+  - `rowsWritten`: `None` (verified: no longer falls back to fake 300,000 after A3(c) fix)
+
+---
+
+## PILOT RUN RECORD: pilot-v2 (October 21)
+
+**Target**: `kafka` | **Fault**: `container_stop` | **Repetitions**: 2  
+**Target Output Directory**: `docs/evaluation/raw/pilot-v2/`  
+**Host Experimental Conditions**: 7 core containers only (`platform-backend`, `platform-postgres`, `platform-kafka`, `platform-spark-master`, `platform-spark-worker`, `platform-namenode`, `platform-datanode`). Auxiliary containers (`frontend`, `prometheus`, `grafana`, `airflow-*`) stopped.  
+
+### Repetition 1: `eval-kafka-stop-r1`
+- **Pipeline Run ID**: `c777c253-eb55-479c-8422-fd07f74ce6e8`  
+- **Experiment Run ID**: `0dacabfb-25d0-415d-8d23-00125b50924d`  
+- **Output Path**: `/data/output/pipe-eval-kafka-stop-r1-1792533072`  
+- **First Micro-Batch Wait**: 21.38 s  
+- **Platform Experiment Status**: `failed` (`host_memory_pressure`: `false`)  
+- **Fault Recovery Time**: 13.31 s  
+- **Availability During Fault**: 0.0% (-100% delta)  
+- **Throughput Baseline**: 1,498.94 records/sec $\to$ 0.0 records/sec during fault (-100% degradation)  
+- **Physical HDFS Measurement**: `MEASUREMENT_FAILED` (`run_valid`: `false`)
+  - **Verified Cause**: During container stop, Spark structured streaming write was interrupted mid-task, leaving a 4-byte truncated Parquet file (`part-00001-1cf3358d-2b32-415b-8e16-a8cc2dcd217f-c000.snappy.parquet`, 4 bytes: header `PAR1` only, missing footer).
+  - PyArrow failed with `ERROR: Parquet file size is 4 bytes, smaller than the minimum file footer (8 bytes)`.
+  - Harness caught exception via `MeasurementError` and recorded `MEASUREMENT_FAILED` honestly without defaulting to 0.
+- **Platform Validator (unreliable)**:
+  - `expected_records`: 41,973
+  - `processed_records`: 0 (platform validator also failed on the 4-byte parquet file)
+  - `data_loss`: 41,973
+
+### Repetition 2: `eval-kafka-stop-r2`
+- **Pipeline Run ID**: `04e775f3-8d8e-4e2f-aebc-422d1f7cf980`  
+- **Experiment Run ID**: `3faa85ab-6baf-4ffb-bca1-7f9d8a2256fe`  
+- **Output Path**: `/data/output/pipe-eval-kafka-stop-r2-1792533218`  
+- **First Micro-Batch Wait**: 23.47 s  
+- **Platform Experiment Status**: `failed` (`host_memory_pressure`: `false`)  
+- **Fault Recovery Time**: 11.04 s  
+- **Availability During Fault**: 0.0% (-100% delta)  
+- **Throughput Baseline**: 1,499.47 records/sec $\to$ 140.18 records/sec during fault (-90.65% degradation)  
+- **Physical HDFS Ground Truth & Multiset Comparison**: `VALID` (`run_valid`: `true`)
+  - **Parquet Part Files**: 42 files in `/data/output/pipe-eval-kafka-stop-r2-1792533218`
+  - **Physical Rows Written**: **40,536**
+  - **Expected Rows**: 289,744
+  - **Physical Data Loss (`missing_rows`)**: **249,208**
+  - **Extra Rows (`extra_rows`)**: **0**
+  - **Excess Duplicates beyond Baseline**: **0**
+  - **Distinct Transaction IDs**: 39,869
+  - **Duplicate Copies**: 667 (exact match to input baseline duplicate rate)
+  - **Verified Mechanism for 249,208 Data Loss**: In `backend/app/pipeline/executor.py:1260-1266`, the Kafka publishing thread (`producer.produce_batch`) encounters broker disconnection during Kafka container stop, catches the exception, and terminates with `producer_done = True` in its `finally` block after publishing only ~42,000 records. Once Spark consumed the in-flight records, consumer lag became 0 and `StreamingCompletionDetector` triggered its 20-second idle completion condition (`idle_time >= 20.0s`), terminating the pipeline cleanly with status `succeeded` after only 40,536 rows were processed.
+- **Platform Validator (unreliable)**:
+  - `expected_records`: 41,986 (captured from a mid-stream `recordsOut` snapshot)
+  - `processed_records`: 40,536
+  - `data_loss`: 1,450 (vastly understates true data loss of 249,208 due to validator's reliance on snapshot counters)
+- **Host Telemetry**:
+  - Host Free RAM: 2,498.3 MB minimum (started 3,663.1 MB, pre-flight gate 3,860.9 MB)
+  - Pages/sec: 0.0–0.99 during active stream (no memory pressure)
+
+
