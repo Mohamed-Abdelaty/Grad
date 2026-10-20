@@ -485,3 +485,128 @@ def test_get_hdfs_physical_metrics_unit(monkeypatch):
     assert fail_metrics["duplicate_transaction_ids"] == 0
     assert fail_metrics["excess_duplicates"] == 0
     assert "error" in fail_metrics
+
+
+def test_check_hdfs_metadata_exists_unit(monkeypatch):
+    """Verify check_hdfs_metadata_exists detects stale _spark_metadata via hdfs dfs -test."""
+    import subprocess
+    from run_evaluation import check_hdfs_metadata_exists
+
+    # Simulate: path HAS _spark_metadata (returncode 0 means exists)
+    def mock_run_exists(cmd, *args, **kwargs):
+        class MockRes:
+            returncode = 0
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run_exists)
+    assert check_hdfs_metadata_exists("/data/output/pipe-test-123") is True
+
+    # Simulate: path does NOT have _spark_metadata (returncode 1 means not exists)
+    def mock_run_not_exists(cmd, *args, **kwargs):
+        class MockRes:
+            returncode = 1
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run_not_exists)
+    assert check_hdfs_metadata_exists("/data/output/pipe-test-new") is False
+
+    # Simulate: docker exec fails (timeout etc.) -> treat as not-exists (conservative)
+    def mock_run_fail(cmd, *args, **kwargs):
+        raise RuntimeError("docker exec failed")
+
+    monkeypatch.setattr(subprocess, "run", mock_run_fail)
+    assert check_hdfs_metadata_exists("/data/output/pipe-test-fail") is False
+
+
+def test_compute_multiset_comparison_unit(monkeypatch):
+    """Verify compute_multiset_comparison parses docker exec output and handles errors."""
+    import subprocess
+    import json
+    from run_evaluation import compute_multiset_comparison
+
+    # Perfect match: 0 missing, 0 extra
+    perfect = {"missing_rows": 0, "extra_rows": 0, "duplicate_beyond_baseline": 0,
+               "expected_rows": 289744, "physical_rows": 289744}
+
+    def mock_run_perfect(cmd, *args, **kwargs):
+        class MockRes:
+            stdout = json.dumps(perfect) + "\n"
+            returncode = 0
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run_perfect)
+    result = compute_multiset_comparison("hdfs://namenode:9000/data/output/pipe-cal")
+    assert result["missing_rows"] == 0
+    assert result["extra_rows"] == 0
+    assert result["duplicate_beyond_baseline"] == 0
+    assert result["physical_rows"] == 289744
+    assert result["hdfs_path"] == "/data/output/pipe-cal"
+
+    # Data loss scenario: 100 missing rows
+    lossy = {"missing_rows": 100, "extra_rows": 0, "duplicate_beyond_baseline": 0,
+             "expected_rows": 289744, "physical_rows": 289644}
+
+    def mock_run_lossy(cmd, *args, **kwargs):
+        class MockRes:
+            stdout = json.dumps(lossy) + "\n"
+            returncode = 0
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run_lossy)
+    result2 = compute_multiset_comparison("/data/output/pipe-fault")
+    assert result2["missing_rows"] == 100
+
+    # Fault run with replay (extra rows are OK, not a harness failure)
+    replay = {"missing_rows": 0, "extra_rows": 250, "duplicate_beyond_baseline": 250,
+              "expected_rows": 289744, "physical_rows": 289994}
+
+    def mock_run_replay(cmd, *args, **kwargs):
+        class MockRes:
+            stdout = json.dumps(replay) + "\n"
+            returncode = 0
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run_replay)
+    result3 = compute_multiset_comparison("/data/output/pipe-fault2")
+    assert result3["missing_rows"] == 0  # no data loss
+    assert result3["extra_rows"] == 250  # legitimately from at-least-once replay
+
+    # Failure fallback
+    def mock_run_fail(cmd, *args, **kwargs):
+        raise RuntimeError("docker exec failed")
+
+    monkeypatch.setattr(subprocess, "run", mock_run_fail)
+    result4 = compute_multiset_comparison("/data/output/pipe-err")
+    assert result4["missing_rows"] == -1
+    assert "error" in result4
+
+
+def test_run_invalid_rule():
+    """Verify the invalid-run rule: physical_rows == 0 means run is INVALID (not passed/failed)."""
+    import json
+
+    # Simulate a physical_metrics dict with 0 rows
+    physical_metrics_zero = {
+        "physical_rows": 0,
+        "unique_transaction_ids": 0,
+        "duplicate_transaction_ids": 0,
+        "baseline_csv_duplicates": 4730,
+        "excess_duplicates": 0,
+        "file_count": 102,
+    }
+    multiset_zero = {"missing_rows": 289744, "extra_rows": 0, "duplicate_beyond_baseline": 0,
+                     "expected_rows": 289744, "physical_rows": 0}
+
+    # Rule: run_valid = False when physical_rows == 0
+    rep_phys_rows = physical_metrics_zero["physical_rows"]
+    rep_run_valid = rep_phys_rows > 0 and multiset_zero.get("missing_rows", -1) >= 0 and not multiset_zero.get("error")
+    assert rep_run_valid is False, "Run with 0 physical rows must be marked INVALID"
+
+    # Rule: run_valid = True when rows match
+    physical_metrics_ok = {"physical_rows": 289744}
+    multiset_ok = {"missing_rows": 0, "extra_rows": 0, "duplicate_beyond_baseline": 0,
+                   "expected_rows": 289744, "physical_rows": 289744}
+    rep_run_valid_ok = (physical_metrics_ok["physical_rows"] > 0
+                        and multiset_ok.get("missing_rows", -1) >= 0
+                        and not multiset_ok.get("error"))
+    assert rep_run_valid_ok is True, "Run with correct physical rows must be marked VALID"
