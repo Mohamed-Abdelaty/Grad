@@ -37,8 +37,9 @@
 
 - **Baseline Phase Sequential Execution**: The baseline phase measures availability and throughput sequentially, so it lasts approximately $2 \times \text{baseline\_seconds}$ plus probe overhead (23.1 s observed for `baseline_seconds: 10`).
 - **Pre-Fault Accounting Counter Fallback**: In `backend/app/pipeline/executor.py:1325`, the executor passes `published=None` once the producer thread finishes publishing. The experiment runner's `_snapshot_pre_fault_accounting` therefore falls back to reading Spark `recordsIn`.
-- **First Micro-Batch Warm-Up**: Empirically measured at **~27 seconds** during calibration (t=26.95s), rather than the previously assumed 12–15s. The delay reflects pipeline submission, Docker container scheduling, Spark driver registration, and initial micro-batch compilation.
-- **Host Free RAM Margin Risk**: During calibration, host free RAM dropped to **1,564 MB** against the **1,500 MB** pre-flight threshold (margin of only 64 MB). Host memory fluctuations during pipeline execution present a potential risk of tripping memory bounds if checked during runtime.
+- **First Micro-Batch Warm-Up**: Warm-up (time from pipeline launch to first non-zero `recordsIn`) varied across calibration runs: 16 s (Oct 19 calibration), 27 s (prior Oct 20 calibration, t=26.95s), 44.64 s (confirmed Oct 20 calibration run `eval-stream-calibration-1792525960`). The delay reflects pipeline submission, Docker container scheduling, Spark driver registration, and initial micro-batch compilation. This variability must be accounted for when sizing baseline windows.
+- **Stale `_spark_metadata` Silent Skip**: Re-running a Spark Structured Streaming pipeline against an output path that already contains a `_spark_metadata/` directory causes Spark to silently skip all micro-batches (the `FileStreamSink` checks `batchId <= fileLog.getLatest()` and logs `Skipping already committed batch` but writes no data). The platform backend reports the job as `success` and the tracker counters (recordsIn, recordsOut, rowsWritten) still increment normally, making the silent skip undetectable without a physical HDFS row count. This is not being fixed in the application. The harness avoids it by generating a unique timestamped output path per run and aborting if `_spark_metadata` already exists at the target path (VERIFIED: `run_evaluation.py`, `check_hdfs_metadata_exists()`).
+- **Host Free RAM Margin Risk**: During calibration, host free RAM dropped to **1,564 MB** (prior calibration) and **983 MB** (confirmed Oct 20 calibration `eval-stream-calibration-1792525960`, at t≈124 s) against the **1,500 MB** pre-flight threshold, even though RAM started at 3.8 GB. WSL 2 memory expansion during Spark job execution can cause rapid drops of 2–3 GB. Host memory fluctuations during pipeline execution present a potential risk of tripping memory bounds if checked during runtime.
 - **Fault Injection Latency**: Stopping Kafka cleanly via `docker.stop("kafka")` takes ~9.7 s, so the effective fault injection latency is ~12 s after the baseline concludes.
 - **No Fault-Free Delay Control**: Traffic control (`tc`) is not installed in the `resilient-kafka` container image, meaning `service_delay` is unsupported on Kafka and cannot serve as a fault-free control.
 - **Host Resource Boundaries**: Single physical machine (16 GB RAM), WSL 2 memory capped at 6 GB via `.wslconfig`, swap disabled.
@@ -88,7 +89,7 @@
 - **Root cause**: The pipeline schema in `scripts/evaluation/run_evaluation.py` declared column `sale_date` (type `string`), but `sample-data/sales_300k.csv` has column `timestamp`. Spark received `sale_date=null` for every row, the `remove_nulls` operation dropped all 300,000 rows, and HDFS output contained 0 data rows in all parquet files.
 - **Impact on r1**: `expected_records=0`, `processed_records=0`, `data_loss=0`. Result appeared to be `succeeded` with zero loss only because the validator compared 0 against 0.
 - **Impact on r2**: `expected_records=41,189` (taken from a mid-run `spark.recordsOut` snapshot), `processed_records=0` (HDFS rows). `data_loss=41,189` reported by the platform. This is NOT a fault-induced data loss — it reflects the same 0-row HDFS output from the schema mismatch.
-- **The `recordsOut = 41,189` vs `0 rows in HDFS` discrepancy**: Unexplained. `spark.recordsOut` in the progress tracker reported 41,189 at validation snapshot time, while direct Spark parquet read confirmed 0 rows in all 15 output files. No explanation is asserted here; to be investigated if reproduced with a valid schema.
+- **The `recordsOut = 41,189` vs `0 rows in HDFS` discrepancy**: Unexplained for the old invalid runs. The counter values are now understood separately: `spark.recordsOut` was populated by `executor.py:1228` which unconditionally copies `total_input_rows` into `records_out` (VERIFIED: `backend/app/pipeline/executor.py:1228`, `records_out=total_input_rows`); `rowsWritten` was populated by `executor.py:1447-1451` which calls `hdfs_client.count_rows(raw_path)` in a try/except that silently swallows an `AttributeError` (HdfsStorageClient has no `count_rows` method) and falls back to `total_rows = 300,000` (VERIFIED: `backend/app/pipeline/executor.py:1447-1451`). The discrepancy between the two counter values (41,189 vs 0 rows) as reported by the platform validator for r2 remains unexplained and is to be investigated if reproduced with valid data.
 - **Status**: `invalid: schema mismatch, empty output`
 - **Raw artifacts preserved**: All `docs/evaluation/raw/eval-kafka-stop-r1/` and `docs/evaluation/raw/eval-kafka-stop-r2/` artifacts retained in original form. Nothing deleted or modified.
 
@@ -126,7 +127,7 @@ Both prior calibration runs are retroactively marked **INVALID for output verifi
 - Upon executing the calibration with the corrected schema against a brand-new, unique HDFS path, Spark Structured Streaming committed all micro-batches and wrote physical Parquet files containing real rows.
 
 ### Key Metrics & Physical Ground Truth
-- **Total Duration**: 257.41 s (active processing duration: 212.77 s; warm-up / first micro-batch delay: 44.64 s).
+- **Total Duration**: 257.41 s (active processing duration: 212.77 s — **ABOVE the 150–200 s target range**; warm-up / first micro-batch delay: 44.64 s).
 - **Physical HDFS Row Count**: **289,744** across 304 Parquet part files.
   - Matches 100% of expected valid rows: $300,000\text{ (total)} - 5,124\text{ (null amount)} - 5,132\text{ (negative amount)} = 289,744$.
   - Physical data loss = **0**.
@@ -141,6 +142,6 @@ Both prior calibration runs are retroactively marked **INVALID for output verifi
 - **Pre-Flight Gates**:
   - Host Free RAM: 3,814.8 MB / 3,795.1 MB / 3,736.6 MB ($\ge 1,500$ MB $\to$ **PASS**).
   - Host Pages/sec: 2.66 30s avg ($\le 100$ $\to$ **PASS**).
-  - Telemetry during active streaming: Free RAM maintained between 983 MB and 3,848 MB.
+  - Telemetry during active streaming: Free RAM ranged from **983 MB** (minimum, at t≈124 s) to 3,848 MB (start).
 - **HDFS Sanity Gate**: **PASSED**.
 
