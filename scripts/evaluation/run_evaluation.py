@@ -238,6 +238,144 @@ def get_topic_consumer_lag(topic_name: str) -> int:
         return 0
 
 
+def check_hdfs_metadata_exists(hdfs_output_path: str) -> bool:
+    """Return True if the HDFS output path already contains a _spark_metadata directory.
+
+    Uses 'hdfs dfs -test -d <path>/_spark_metadata' inside platform-namenode.
+    A return value of True means the path is stale and must NOT be used for a new run.
+    """
+    raw_path = hdfs_output_path
+    if raw_path.startswith("hdfs://"):
+        parts = raw_path.split("://", 1)[1]
+        raw_path = "/" + parts.split("/", 1)[1] if "/" in parts else "/"
+    meta_path = f"{raw_path.rstrip('/')}/_spark_metadata"
+    try:
+        res = subprocess.run(
+            ["docker", "exec", "platform-namenode", "hdfs", "dfs", "-test", "-d", meta_path],
+            capture_output=True,
+            timeout=15,
+        )
+        return res.returncode == 0
+    except Exception as exc:
+        logger.warning("check_hdfs_metadata_exists failed for %s: %s", hdfs_output_path, exc)
+        return False
+
+
+def compute_multiset_comparison(hdfs_output_path: str) -> dict[str, Any]:
+    """Compare HDFS Parquet output against expected multiset from sales_300k.csv.
+
+    Expected set = rows in /app/sample-data/sales_300k.csv where amount IS NOT NULL
+    and amount > 0 (289,744 rows). Key = (transaction_id, amount, timestamp).
+    The input file itself contains 4,730 extra duplicate copies by transaction_id,
+    so the expected output multiset also contains those duplicates.
+
+    Returns:
+    - missing_rows: count in expected not in output (data-loss criterion; 0 = no loss)
+    - extra_rows: count in output not in expected (can legitimately occur in fault runs)
+    - duplicate_beyond_baseline: rows whose transaction_id appears more times in output
+      than in the expected multiset (pipeline-induced duplication)
+    - expected_rows: 289744
+    - physical_rows: total rows physically found in HDFS output
+    - error: str if comparison could not be completed
+    """
+    raw_path = hdfs_output_path
+    if raw_path.startswith("hdfs://"):
+        parts = raw_path.split("://", 1)[1]
+        raw_path = "/" + parts.split("/", 1)[1] if "/" in parts else "/"
+
+    py_cmd = (
+        "import urllib.request, json, io, sys, csv, collections\n"
+        "import pyarrow.parquet as pq\n"
+        "hdfs_path = sys.argv[1]\n"
+        "csv_path = '/app/sample-data/sales_300k.csv'\n"
+        "expected_counts = collections.Counter()\n"
+        "try:\n"
+        "    with open(csv_path, newline='', encoding='utf-8') as f:\n"
+        "        reader = csv.DictReader(f)\n"
+        "        for row in reader:\n"
+        "            amt_str = row.get('amount', '')\n"
+        "            if amt_str is None or amt_str.strip() == '' or amt_str.strip().lower() == 'null':\n"
+        "                continue\n"
+        "            try:\n"
+        "                amt = float(amt_str)\n"
+        "            except ValueError:\n"
+        "                continue\n"
+        "            if amt <= 0:\n"
+        "                continue\n"
+        "            tid = row.get('transaction_id', '').strip()\n"
+        "            ts = row.get('timestamp', '').strip()\n"
+        "            expected_counts[(tid, str(amt), ts)] += 1\n"
+        "except Exception as e:\n"
+        "    print(json.dumps({'error': f'CSV read failed: {e}', 'missing_rows': -1, 'extra_rows': -1, 'duplicate_beyond_baseline': -1, 'expected_rows': 289744, 'physical_rows': 0}))\n"
+        "    sys.exit(0)\n"
+        "output_counts = collections.Counter()\n"
+        "physical_rows = 0\n"
+        "try:\n"
+        "    url = f'http://namenode:9870/webhdfs/v1{hdfs_path}?op=LISTSTATUS'\n"
+        "    with urllib.request.urlopen(url) as r:\n"
+        "        data = json.load(r)\n"
+        "    files = [f['pathSuffix'] for f in data.get('FileStatuses', {}).get('FileStatus', []) if f['pathSuffix'].endswith('.parquet')]\n"
+        "    for fn in files:\n"
+        "        furl = f'http://namenode:9870/webhdfs/v1{hdfs_path}/{fn}?op=OPEN'\n"
+        "        with urllib.request.urlopen(furl) as fr:\n"
+        "            content = fr.read()\n"
+        "        tbl = pq.read_table(io.BytesIO(content))\n"
+        "        physical_rows += len(tbl)\n"
+        "        cols = tbl.column_names\n"
+        "        for i in range(len(tbl)):\n"
+        "            tid = str(tbl['transaction_id'][i].as_py() or '') if 'transaction_id' in cols else ''\n"
+        "            amt = str(tbl['amount'][i].as_py() or 0.0) if 'amount' in cols else ''\n"
+        "            ts = str(tbl['timestamp'][i].as_py() or '') if 'timestamp' in cols else ''\n"
+        "            output_counts[(tid, amt, ts)] += 1\n"
+        "except Exception as e:\n"
+        "    print(json.dumps({'error': f'HDFS read failed: {e}', 'missing_rows': -1, 'extra_rows': -1, 'duplicate_beyond_baseline': -1, 'expected_rows': len(expected_counts), 'physical_rows': physical_rows}))\n"
+        "    sys.exit(0)\n"
+        "missing = 0\n"
+        "extra = 0\n"
+        "dup_beyond = 0\n"
+        "all_keys = set(expected_counts) | set(output_counts)\n"
+        "for key in all_keys:\n"
+        "    exp = expected_counts.get(key, 0)\n"
+        "    got = output_counts.get(key, 0)\n"
+        "    if got < exp:\n"
+        "        missing += exp - got\n"
+        "    elif got > exp:\n"
+        "        extra += got - exp\n"
+        "        dup_beyond += got - exp\n"
+        "expected_total = sum(expected_counts.values())\n"
+        "print(json.dumps({\n"
+        "    'missing_rows': missing,\n"
+        "    'extra_rows': extra,\n"
+        "    'duplicate_beyond_baseline': dup_beyond,\n"
+        "    'expected_rows': expected_total,\n"
+        "    'physical_rows': physical_rows,\n"
+        "}))\n"
+    )
+    try:
+        res = subprocess.run(
+            ["docker", "exec", "platform-backend", "python", "-c", py_cmd, raw_path],
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=True,
+        )
+        line = res.stdout.strip().splitlines()[-1]
+        data = json.loads(line)
+        data["hdfs_path"] = raw_path
+        return data
+    except Exception as exc:
+        logger.warning("compute_multiset_comparison failed for %s: %s", hdfs_output_path, exc)
+        return {
+            "hdfs_path": raw_path,
+            "missing_rows": -1,
+            "extra_rows": -1,
+            "duplicate_beyond_baseline": -1,
+            "expected_rows": 289744,
+            "physical_rows": 0,
+            "error": str(exc),
+        }
+
+
 def get_hdfs_physical_metrics(hdfs_output_path: str) -> dict[str, Any]:
     """Physically inspect all Parquet files in an HDFS output path via WebHDFS.
 
@@ -662,6 +800,15 @@ class EvaluationHarness:
         git_commit = get_git_commit_hash()
 
         rep_output_path = f"/data/output/pipe-{exp_name}-{int(time.time())}"
+
+        # Guard: refuse to start if _spark_metadata already exists at the target path
+        if check_hdfs_metadata_exists(rep_output_path):
+            raise RuntimeError(
+                f"RUN ABORTED: Target HDFS path {rep_output_path} already contains "
+                "_spark_metadata. This run would be INVALID. "
+                "Generate a new unique path."
+            )
+
         p_yaml = build_pipeline_yaml(
             pipeline_template,
             topic_name=topic_name,
@@ -819,6 +966,18 @@ class EvaluationHarness:
         rep_data_loss = max(0, rep_expected_rows - rep_phys_rows)
 
         results_dict = report_json.get("results") or {}
+        # Full multiset comparison for experiment run
+        rep_multiset = compute_multiset_comparison(rep_output_path)
+        rep_run_valid = rep_phys_rows > 0 and rep_multiset.get("missing_rows", -1) >= 0 and not rep_multiset.get("error")
+        logger.info(
+            "RUN MULTISET [%s]: missing=%s extra=%s dup_beyond=%s valid=%s",
+            exp_name,
+            rep_multiset.get("missing_rows"),
+            rep_multiset.get("extra_rows"),
+            rep_multiset.get("duplicate_beyond_baseline"),
+            rep_run_valid,
+        )
+
         physical_audit = {
             "output_path": rep_output_path,
             "expected_rows": rep_expected_rows,
@@ -829,6 +988,8 @@ class EvaluationHarness:
             "excess_duplicates": rep_excess_dups,
             "physical_data_loss": rep_data_loss,
             "file_count": physical_metrics.get("file_count", 0),
+            "run_valid": rep_run_valid,
+            "multiset_comparison": rep_multiset,
             "platform_validator": {
                 "label": "platform validator (unreliable, uses tracker counters)",
                 "data_loss": results_dict.get("dataLoss"),
@@ -903,6 +1064,15 @@ class EvaluationHarness:
         cal_topic = f"eval-stream-calibration-{cal_ts}"
         p_name = "pipe-eval-calibration"
         cal_output_path = f"/data/output/{p_name}-{cal_ts}"
+
+        # Guard: refuse to start if _spark_metadata already exists at the target path
+        if check_hdfs_metadata_exists(cal_output_path):
+            raise RuntimeError(
+                f"CALIBRATION ABORTED: Target HDFS path {cal_output_path} already contains "
+                "_spark_metadata. This run would be INVALID (Spark skips all batches). "
+                "Generate a new unique path."
+            )
+
         p_yaml = build_pipeline_yaml(
             pipeline_template,
             topic_name=cal_topic,
@@ -1114,6 +1284,23 @@ class EvaluationHarness:
             "CALIBRATION SANITY GATE PASSED: Physical HDFS rows=%d matches expected %d",
             physical_rows,
             expected_physical_rows,
+        )
+
+        # Full multiset comparison against expected CSV data
+        logger.info("CALIBRATION: Running multiset comparison against expected data...")
+        multiset = compute_multiset_comparison(output_path)
+        calibration_data["multiset_comparison"] = multiset
+        calibration_data["run_valid"] = (
+            physical_rows > 0
+            and multiset.get("missing_rows", -1) >= 0
+            and not multiset.get("error")
+        )
+        logger.info(
+            "CALIBRATION MULTISET: missing=%s extra=%s dup_beyond_baseline=%s error=%s",
+            multiset.get("missing_rows"),
+            multiset.get("extra_rows"),
+            multiset.get("duplicate_beyond_baseline"),
+            multiset.get("error"),
         )
         with open(cal_dir / "calibration_report.json", "w", encoding="utf-8") as f:
             json.dump(calibration_data, f, indent=2)
