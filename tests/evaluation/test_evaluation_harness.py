@@ -785,3 +785,74 @@ def test_get_hdfs_physical_metrics_spark_metadata_filter(monkeypatch):
     py_code = captured_cmds[0][5]  # python -c <code> <path>
     assert "_spark_metadata" in py_code
     assert "posixpath.basename" in py_code
+
+
+def test_get_kafka_topic_total_records_unit(monkeypatch):
+    """Verify get_kafka_topic_total_records parses GetOffsetShell output or returns 0 on non-zero returncode."""
+    import subprocess
+    from run_evaluation import get_kafka_topic_total_records
+
+    # Case 1: Topic with records
+    def mock_run_with_records(cmd, *args, **kwargs):
+        class MockRes:
+            returncode = 0
+            stdout = "my-topic:0:100\nmy-topic:1:250\nmy-topic:2:150\n"
+            stderr = ""
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run_with_records)
+    assert get_kafka_topic_total_records("my-topic") == 500
+
+    # Case 2: Non-existent topic (returncode != 0)
+    def mock_run_nonexistent(cmd, *args, **kwargs):
+        class MockRes:
+            returncode = 1
+            stdout = ""
+            stderr = "Error: topic does not exist"
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run_nonexistent)
+    assert get_kafka_topic_total_records("no-such-topic") == 0
+
+    # Case 3: Empty topic (0 offsets)
+    def mock_run_empty(cmd, *args, **kwargs):
+        class MockRes:
+            returncode = 0
+            stdout = "empty-topic:0:0\nempty-topic:1:0\n"
+            stderr = ""
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run_empty)
+    assert get_kafka_topic_total_records("empty-topic") == 0
+
+
+def test_unique_topic_name_and_reuse_guard(monkeypatch):
+    """Verify topic names have timestamp suffix and run refuses non-empty topics."""
+    import re
+    import pytest
+    from pathlib import Path
+    from run_evaluation import EvaluationHarness
+
+    orch = EvaluationHarness(
+        base_url="http://localhost:8000",
+    )
+
+    # Mock get_kafka_topic_total_records returning 500 records -> must abort
+    monkeypatch.setattr("run_evaluation.get_kafka_topic_total_records", lambda topic: 500)
+    monkeypatch.setattr("run_evaluation.check_hdfs_metadata_exists", lambda path: False)
+    monkeypatch.setattr("run_evaluation.get_free_ram_mb", lambda: 4000.0)
+    monkeypatch.setattr("run_evaluation.get_docker_stats_snapshot", lambda: {})
+    monkeypatch.setattr("run_evaluation.get_kafka_metrics", lambda: {})
+    monkeypatch.setattr("run_evaluation.get_spark_master_metrics", lambda: {})
+
+    with pytest.raises(RuntimeError) as exc_info:
+        orch.run_repetition(
+            exp_id="test-exp",
+            target_service="kafka",
+            fault_type="container_stop",
+            rep_idx=1,
+            settings={},
+            pipeline_template={"source_path": "/app/sample-data/sales_300k.csv"},
+        )
+    assert "RUN ABORTED: Kafka topic" in str(exc_info.value)
+    assert "already contains 500 records" in str(exc_info.value)

@@ -243,6 +243,40 @@ def get_topic_consumer_lag(topic_name: str) -> int:
         return 0
 
 
+def get_kafka_topic_total_records(topic_name: str) -> int:
+    """Return the sum of end offsets across all partitions for a Kafka topic.
+
+    Queries Kafka broker using GetOffsetShell inside platform-kafka.
+    Returns 0 if the topic does not exist or has no records.
+    """
+    try:
+        res = subprocess.run(
+            [
+                "docker", "exec", "platform-kafka",
+                "kafka-run-class", "kafka.tools.GetOffsetShell",
+                "--bootstrap-server", "localhost:9092",
+                "--topic", topic_name,
+                "--time", "-1",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if res.returncode != 0:
+            return 0
+        total = 0
+        for line in res.stdout.strip().splitlines():
+            line = line.strip()
+            if ":" in line:
+                parts = line.split(":")
+                if len(parts) == 3 and parts[2].isdigit():
+                    total += int(parts[2])
+        return total
+    except Exception as exc:
+        logger.warning("Failed to query total records for topic %s: %s", topic_name, exc)
+        return 0
+
+
 def check_hdfs_metadata_exists(hdfs_output_path: str) -> bool:
     """Return True if the HDFS output path already contains a _spark_metadata directory.
 
@@ -906,7 +940,8 @@ class EvaluationHarness:
     ) -> dict[str, Any]:
         """Execute a single repetition as an isolated experiment."""
         exp_name = f"eval-{exp_id}-r{rep_idx}"
-        topic_name = f"eval-stream-{exp_id}-r{rep_idx}"
+        rep_ts = int(time.time())
+        topic_name = f"eval-stream-{exp_id}-r{rep_idx}-{rep_ts}"
         output_dir = self.raw_output_dir / exp_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -937,6 +972,17 @@ class EvaluationHarness:
                 f"RUN ABORTED: Target HDFS path {rep_output_path} already contains "
                 "_spark_metadata. This run would be INVALID. "
                 "Generate a new unique path."
+            )
+
+        # Guard: refuse to start if the Kafka topic already has records (topic reuse
+        # contaminates the run with stale records from a prior run, invalidating offsets).
+        existing_records = get_kafka_topic_total_records(topic_name)
+        if existing_records > 0:
+            raise RuntimeError(
+                f"RUN ABORTED: Kafka topic {topic_name!r} already contains "
+                f"{existing_records:,} records from a prior run. "
+                "Topic names must be unique per run to guarantee 100% topic isolation. "
+                "Delete the topic or use a different topic name."
             )
 
         p_yaml = build_pipeline_yaml(
@@ -1244,6 +1290,11 @@ class EvaluationHarness:
                 f"CALIBRATION ABORTED: Target HDFS path {cal_output_path} already contains "
                 "_spark_metadata. This run would be INVALID (Spark skips all batches). "
                 "Generate a new unique path."
+            )
+
+        if get_kafka_topic_total_records(cal_topic) > 0:
+            raise RuntimeError(
+                f"CALIBRATION ABORTED: Kafka topic {cal_topic!r} already contains records from a prior run."
             )
 
         p_yaml = build_pipeline_yaml(
