@@ -212,7 +212,7 @@ Both prior calibration runs are retroactively marked **INVALID for output verifi
 
 ---
 
-## PILOT RUN RECORD: pilot-v2 (October 21)
+## PILOT RUN RECORD: pilot-v2 (October 21) [PRE-FIX EVIDENCE]
 
 **Target**: `kafka` | **Fault**: `container_stop` | **Repetitions**: 2  
 **Target Output Directory**: `docs/evaluation/raw/pilot-v2/`  
@@ -264,3 +264,62 @@ Both prior calibration runs are retroactively marked **INVALID for output verifi
   - Pages/sec: 0.0–0.99 during active stream (no memory pressure)
 
 
+
+
+---
+
+## PILOT-V2 ROOT CAUSE DIAGNOSIS & DEFECT VERIFICATION
+
+**Status**: Verified Diagnosis (Read-Only Evidence Analysis)  
+**Classification of pilot-v2**: Marked as **pre-fix evidence**. The runs exposed two critical system behaviors:
+1. A confirmed platform defect in finite stream completion detection during broker outages.
+2. An evaluation harness gap in topic isolation and uncommitted task-file filtering.
+
+### 1. Topic Offset Accounting & Topic Reuse (VERIFIED)
+- **Topic Names**: In pilot-v2, the evaluation harness generated topic names as `eval-stream-{exp_id}-r{rep_idx}` without timestamp suffixes (VERIFIED: `run_evaluation.py:840`).
+- **Cumulative Record Counts**:
+  - `eval-stream-kafka-stop-r1`: Reused across 3 runs (`0d930d18` Oct 19 10:36, `ba89b977` Oct 19 11:25, `c777c253` Oct 20 21:51). Sum of end offsets across 3 partitions = **900,000** (VERIFIED via Kafka `GetOffsetShell`).
+  - `eval-stream-kafka-stop-r2`: Reused across 2 runs (`75eb98aa` Oct 20 12:22, `04e775f3` Oct 20 21:53). Sum of end offsets across 3 partitions = **600,000** (VERIFIED via Kafka `GetOffsetShell`).
+- **Producer Output in THIS Run (VERIFIED)**:
+  - Both r1 and r2 configured 300,000 rows from `/app/sample-data/sales_300k.csv`.
+  - In r1 (`c777c253`): Initial topic end offset was 600,000; producer published all 300,000 records; topic end offset reached 900,000 (offset range for this run: 600,000–900,000).
+  - In r2 (`04e775f3`): Initial topic end offset was 300,000; producer published all 300,000 records; topic end offset reached 600,000 (offset range for this run: 300,000–600,000).
+  - Delivery callbacks and broker log persistence confirmed 300,000 records written in both runs. Stage A data loss (never published) = **0**.
+
+### 2. Streaming Ingestion & Offset Mechanics (VERIFIED)
+- Spark Structured Streaming was configured with `starting_offsets: "earliest"` (VERIFIED: `streaming_processing_job.py:186-189`).
+- Because checkpoints were deleted between runs (`executor.py:1469`), Spark started ingestion from partition offset 0.
+- Spark consumed offsets 0 to ~41,973 (r1) and 0 to ~41,986 (r2)—which corresponded to old records published during prior runs—before Kafka was stopped. None of the new 300,000 records published in this run were consumed before the job terminated.
+
+### 3. Confirmed Platform Defect: `compute_lag(None) = 0` (VERIFIED)
+- **Defect Location**: `backend/app/pipeline/stream_progress.py:107-108`:
+  ```python
+  if end_offsets is None:
+      return 0  # DEFECT: Unknown lag treated as zero
+  ```
+- **Failure Mechanism**:
+  1. During Kafka container stop, `get_topic_partition_end_offsets()` encounters a transport disconnection (`KafkaError{code=_TRANSPORT}`) and returns `None`.
+  2. `compute_lag(None, ...)` returns `0` instead of `None`.
+  3. `StreamingCompletionDetector.is_complete()` checks Condition 2: `current_lag == 0 and idle_time >= 20.0s`.
+  4. While Kafka is stopped, no new rows are ingested (idle time accumulates). Because lag is falsely reported as 0 rather than unknown, the detector triggers completion after 20 seconds.
+  5. The platform terminates the pipeline cleanly with status `succeeded`, falsely declaring the finite stream fully processed when only ~40,536 rows were committed.
+- **Evaluation Significance**: This is a confirmed platform defect found directly by the evaluation. Finite stream completion must require a verified offset read; unknown lag (`None`) must never count as zero or trigger stream completion.
+
+### 4. Loss Classification for THIS Run's Offset Range (VERIFIED)
+Using the offset range belonging to this run (r1: 600,000–900,000; r2: 300,000–600,000):
+- **Stage A (Never published)**: **0** (All 300,000 records reached Kafka).
+- **Stage B (Published, not consumed)**: **300,000** (All 300,000 records remained in Kafka unconsumed when the job prematurely terminated).
+- **Stage C (Consumed, not committed)**: **0** (No records from this run reached the executor; the 1,450 uncommitted rows in r1 were from the earlier run's aborted batch).
+
+### 5. Resolution of r1 Physical Measurement Failure (VERIFIED)
+- In r1, an aborted Spark write task left an uncommitted 4-byte stub file (`part-00001-1cf3358d-...`, header `PAR1` only).
+- Verified from `_spark_metadata/` commit logs that this file was never committed (0 occurrences in metadata).
+- Harness updated to inspect only files listed as `action="add"` in `_spark_metadata` commit logs.
+- Physical rows from committed files:
+  - **r1**: 42 committed files = **40,523** rows (VERIFIED)
+  - **r2**: 42 committed files = **40,536** rows (VERIFIED)
+
+### 6. Throughput During Fault Window (HYPOTHESIS)
+- The observed ~140 records/sec throughput during the fault window in r2 is hypothesized to result from either:
+  1. Spark Kafka consumer prefetch buffer: Records fetched into memory before the broker socket severed were processed in the subsequent micro-batch.
+  2. Progress counter artifact: Tracker counters deriving rates from intermediate progress snapshots.
