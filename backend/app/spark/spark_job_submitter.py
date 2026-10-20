@@ -467,6 +467,21 @@ class SparkJobSubmitter:
             if run_id is not None:
                 tracker.deregister_proc_pid(run_id)
 
+            # Persist filtered driver stderr tail to pipeline run events
+            if run_id is not None and stderr_deque:
+                try:
+                    import re
+                    pattern = re.compile(r"Skipping|WARN|ERROR|Exception", re.IGNORECASE)
+                    matched_lines = [l for l in stderr_deque if pattern.search(l)][-50:]
+                    if matched_lines:
+                        tracker.emit(
+                            run_id,
+                            "driver_stderr_tail",
+                            {"lines": matched_lines, "line_count": len(matched_lines)},
+                        )
+                except Exception as emit_err:
+                    logger.debug("Failed to emit driver_stderr_tail: %s", emit_err)
+
         stdout = "\n".join(stdout_deque)
         stderr = "\n".join(stderr_deque)
 
