@@ -88,7 +88,7 @@ def extract_spark_offset_sum(offset_obj: Any) -> int:
 def compute_lag(
     end_offsets: dict[int, int] | int | None,
     spark_consumed_offset: Any,
-) -> int:
+) -> int | None:
     """
     Compute consumer lag as max(0, sum(end_offsets) - sum(spark_consumed_offsets)).
 
@@ -101,11 +101,11 @@ def compute_lag(
 
     Returns
     -------
-    int
-        Non-negative consumer lag count.
+    int | None
+        Non-negative consumer lag count, or None if end_offsets is unreachable/unknown.
     """
     if end_offsets is None:
-        return 0
+        return None
 
     if isinstance(end_offsets, dict):
         end_sum = sum(int(v) for v in end_offsets.values() if v is not None)
@@ -140,16 +140,16 @@ class StreamingCompletionDetector:
         self.last_activity_time = time.monotonic()
         self.last_total_rows = 0
 
-    def record_activity(self, current_total_rows: int, current_lag: int) -> None:
+    def record_activity(self, current_total_rows: int, current_lag: int | None) -> None:
         """Update last activity timestamp if new rows arrived or lag > 0."""
         now = time.monotonic()
-        if current_total_rows > self.last_total_rows or current_lag > 0:
+        if current_total_rows > self.last_total_rows or (current_lag is not None and current_lag > 0):
             self.last_activity_time = now
             self.last_total_rows = current_total_rows
 
     def is_complete(
         self,
-        current_lag: int,
+        current_lag: int | None,
         current_total_rows: int,
         expected_total_rows: int | None = None,
         producer_done: bool = False,
@@ -157,6 +157,11 @@ class StreamingCompletionDetector:
         """
         Check if the streaming query has processed all available records and drained.
         """
+        # Unknown lag (e.g. Kafka broker unreachable) cannot confirm stream completion.
+        # Completion strictly requires a successful offset read.
+        if current_lag is None:
+            return False
+
         now = time.monotonic()
         self.record_activity(current_total_rows, current_lag)
 

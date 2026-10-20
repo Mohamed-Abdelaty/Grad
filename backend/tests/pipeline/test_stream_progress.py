@@ -68,7 +68,7 @@ def test_compute_lag() -> None:
     assert compute_lag(500, 450) == 50
 
     # None end offsets
-    assert compute_lag(None, 450) == 0
+    assert compute_lag(None, 450) is None
 
 
 def test_streaming_completion_detector_expected_rows_reached() -> None:
@@ -102,3 +102,24 @@ def test_streaming_completion_detector_max_runtime() -> None:
     detector = StreamingCompletionDetector(idle_timeout_seconds=10.0, max_runtime_seconds=0.05)
     time.sleep(0.08)
     assert detector.is_timed_out()
+
+def test_streaming_completion_detector_unknown_lag_never_completes() -> None:
+    """Verify that an unreachable broker (lag=None) never triggers stream completion."""
+    detector = StreamingCompletionDetector(idle_timeout_seconds=0.1, max_runtime_seconds=60.0)
+
+    # Activity occurs
+    detector.record_activity(current_total_rows=100, current_lag=50)
+
+    # Broker goes down -> lag is None
+    assert compute_lag(None, 100) is None
+
+    # Wait beyond idle timeout
+    time.sleep(0.15)
+
+    # Must NOT complete while lag is None, even with producer done and idle timeout elapsed
+    assert not detector.is_complete(
+        current_lag=None,
+        current_total_rows=100,
+        expected_total_rows=100,
+        producer_done=True,
+    )
