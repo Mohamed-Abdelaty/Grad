@@ -422,12 +422,15 @@ def test_count_hdfs_physical_rows_unit(monkeypatch):
     assert rows == 289744
     assert captured_cmds[0][-1] == "/data/output/pipe-eval-calibration"
 
-    # Test failure fallback returns 0
+    # Test failure raises MeasurementError
     def mock_run_fail(cmd, *args, **kwargs):
         raise RuntimeError("docker failed")
 
     monkeypatch.setattr(subprocess, "run", mock_run_fail)
-    assert count_hdfs_physical_rows("/data/output/empty") == 0
+    import pytest
+    from run_evaluation import MeasurementError
+    with pytest.raises(MeasurementError):
+        count_hdfs_physical_rows("/data/output/empty")
 
 
 def test_build_pipeline_yaml_custom_output_path():
@@ -474,17 +477,15 @@ def test_get_hdfs_physical_metrics_unit(monkeypatch):
     assert metrics["file_count"] == 98
     assert metrics["raw_path"] == "/data/output/pipe-eval-custom"
 
-    # Test failure fallback
+    # Test failure raises MeasurementError
     def mock_run_fail(cmd, *args, **kwargs):
         raise RuntimeError("docker exec failed")
 
     monkeypatch.setattr(subprocess, "run", mock_run_fail)
-    fail_metrics = get_hdfs_physical_metrics("/data/output/nonexistent")
-    assert fail_metrics["physical_rows"] == 0
-    assert fail_metrics["unique_transaction_ids"] == 0
-    assert fail_metrics["duplicate_transaction_ids"] == 0
-    assert fail_metrics["excess_duplicates"] == 0
-    assert "error" in fail_metrics
+    import pytest
+    from run_evaluation import MeasurementError
+    with pytest.raises(MeasurementError):
+        get_hdfs_physical_metrics("/data/output/nonexistent")
 
 
 def test_check_hdfs_metadata_exists_unit(monkeypatch):
@@ -571,42 +572,182 @@ def test_compute_multiset_comparison_unit(monkeypatch):
     assert result3["missing_rows"] == 0  # no data loss
     assert result3["extra_rows"] == 250  # legitimately from at-least-once replay
 
-    # Failure fallback
+    # Failure fallback: must raise MeasurementError
     def mock_run_fail(cmd, *args, **kwargs):
         raise RuntimeError("docker exec failed")
 
     monkeypatch.setattr(subprocess, "run", mock_run_fail)
-    result4 = compute_multiset_comparison("/data/output/pipe-err")
-    assert result4["missing_rows"] == -1
-    assert "error" in result4
+    import pytest
+    from run_evaluation import MeasurementError
+    with pytest.raises(MeasurementError):
+        compute_multiset_comparison("/data/output/pipe-err")
 
 
-def test_run_invalid_rule():
-    """Verify the invalid-run rule: physical_rows == 0 means run is INVALID (not passed/failed)."""
+def test_get_hdfs_physical_metrics_success(monkeypatch):
+    """Verify get_hdfs_physical_metrics returns metrics on exit code 0."""
+    import subprocess
     import json
+    from run_evaluation import get_hdfs_physical_metrics
 
-    # Simulate a physical_metrics dict with 0 rows
-    physical_metrics_zero = {
-        "physical_rows": 0,
-        "unique_transaction_ids": 0,
-        "duplicate_transaction_ids": 0,
+    data = {
+        "physical_rows": 289744,
+        "unique_transaction_ids": 285014,
+        "duplicate_transaction_ids": 4730,
         "baseline_csv_duplicates": 4730,
         "excess_duplicates": 0,
-        "file_count": 102,
+        "file_count": 304,
     }
-    multiset_zero = {"missing_rows": 289744, "extra_rows": 0, "duplicate_beyond_baseline": 0,
-                     "expected_rows": 289744, "physical_rows": 0}
 
-    # Rule: run_valid = False when physical_rows == 0
-    rep_phys_rows = physical_metrics_zero["physical_rows"]
-    rep_run_valid = rep_phys_rows > 0 and multiset_zero.get("missing_rows", -1) >= 0 and not multiset_zero.get("error")
-    assert rep_run_valid is False, "Run with 0 physical rows must be marked INVALID"
+    def mock_run(cmd, *args, **kwargs):
+        class MockRes:
+            stdout = json.dumps(data) + "\n"
+            stderr = ""
+            returncode = 0
+        return MockRes()
 
-    # Rule: run_valid = True when rows match
-    physical_metrics_ok = {"physical_rows": 289744}
-    multiset_ok = {"missing_rows": 0, "extra_rows": 0, "duplicate_beyond_baseline": 0,
-                   "expected_rows": 289744, "physical_rows": 289744}
-    rep_run_valid_ok = (physical_metrics_ok["physical_rows"] > 0
-                        and multiset_ok.get("missing_rows", -1) >= 0
-                        and not multiset_ok.get("error"))
-    assert rep_run_valid_ok is True, "Run with correct physical rows must be marked VALID"
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    res = get_hdfs_physical_metrics("/data/output/pipe-test")
+    assert res["physical_rows"] == 289744
+    assert res["unique_transaction_ids"] == 285014
+
+
+def test_get_hdfs_physical_metrics_exit_134_with_json(monkeypatch):
+    """Verify get_hdfs_physical_metrics accepts valid JSON even if exit code is 134 (PyArrow teardown)."""
+    import subprocess
+    import json
+    from run_evaluation import get_hdfs_physical_metrics
+
+    data = {
+        "physical_rows": 289744,
+        "unique_transaction_ids": 285014,
+        "duplicate_transaction_ids": 4730,
+        "baseline_csv_duplicates": 4730,
+        "excess_duplicates": 0,
+        "file_count": 304,
+    }
+
+    def mock_run(cmd, *args, **kwargs):
+        class MockRes:
+            stdout = "some log\n" + json.dumps(data) + "\nterminate called without an active exception\n"
+            stderr = ""
+            returncode = 134  # SIGABRT
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    res = get_hdfs_physical_metrics("/data/output/pipe-test")
+    assert res["physical_rows"] == 289744
+    assert res["unique_transaction_ids"] == 285014
+
+
+def test_get_hdfs_physical_metrics_no_json_raises_measurement_error(monkeypatch):
+    """Verify get_hdfs_physical_metrics raises MeasurementError when no valid JSON is produced."""
+    import subprocess
+    import pytest
+    from run_evaluation import get_hdfs_physical_metrics, MeasurementError
+
+    def mock_run(cmd, *args, **kwargs):
+        class MockRes:
+            stdout = "Traceback (most recent call last):\n..."
+            stderr = "Error connecting to namenode"
+            returncode = 1
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    with pytest.raises(MeasurementError) as exc_info:
+        get_hdfs_physical_metrics("/data/output/pipe-fail")
+    assert "Failed to count HDFS physical metrics" in str(exc_info.value)
+
+
+def test_compute_multiset_comparison_exit_134_with_json(monkeypatch):
+    """Verify compute_multiset_comparison accepts valid JSON even if exit code is 134."""
+    import subprocess
+    import json
+    from run_evaluation import compute_multiset_comparison
+
+    perfect = {"missing_rows": 0, "extra_rows": 0, "duplicate_beyond_baseline": 0,
+               "expected_rows": 289744, "physical_rows": 289744}
+
+    def mock_run(cmd, *args, **kwargs):
+        class MockRes:
+            stdout = json.dumps(perfect) + "\nterminate called without an active exception\n"
+            stderr = ""
+            returncode = 134
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    res = compute_multiset_comparison("/data/output/pipe-test")
+    assert res["missing_rows"] == 0
+    assert res["physical_rows"] == 289744
+
+
+def test_compute_multiset_comparison_no_json_raises_measurement_error(monkeypatch):
+    """Verify compute_multiset_comparison raises MeasurementError when no valid JSON is produced."""
+    import subprocess
+    import pytest
+    from run_evaluation import compute_multiset_comparison, MeasurementError
+
+    def mock_run(cmd, *args, **kwargs):
+        class MockRes:
+            stdout = "SIGSEGV"
+            stderr = "Fatal error"
+            returncode = 139
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    with pytest.raises(MeasurementError) as exc_info:
+        compute_multiset_comparison("/data/output/pipe-fail")
+    assert "compute_multiset_comparison failed" in str(exc_info.value)
+
+
+def test_run_classification_rules():
+    """Verify run classifications: VALID vs INVALID (empty output) vs MEASUREMENT_FAILED."""
+    # 1. Real zero rows -> INVALID: empty output
+    phys_zero = 0
+    multiset_zero = {"missing_rows": 289744, "extra_rows": 0, "duplicate_beyond_baseline": 0}
+    measurement_error = None
+    if measurement_error:
+        run_valid = False
+        classification = "MEASUREMENT_FAILED"
+    elif phys_zero == 0:
+        run_valid = False
+        classification = "INVALID: empty output"
+    else:
+        run_valid = phys_zero > 0 and multiset_zero.get("missing_rows", -1) >= 0
+        classification = "VALID" if run_valid else "INVALID"
+    assert run_valid is False
+    assert classification == "INVALID: empty output"
+
+    # 2. Measurement error -> MEASUREMENT_FAILED (distinct from empty output)
+    phys_err = -1
+    measurement_error = "Connection refused to namenode"
+    if measurement_error:
+        run_valid = False
+        classification = "MEASUREMENT_FAILED"
+    elif phys_err == 0:
+        run_valid = False
+        classification = "INVALID: empty output"
+    else:
+        run_valid = phys_err > 0
+        classification = "VALID" if run_valid else "INVALID"
+    assert run_valid is False
+    assert classification == "MEASUREMENT_FAILED"
+
+    # 3. Correct rows -> VALID
+    phys_ok = 289744
+    multiset_ok = {"missing_rows": 0, "extra_rows": 0, "duplicate_beyond_baseline": 0}
+    measurement_error = None
+    if measurement_error:
+        run_valid = False
+        classification = "MEASUREMENT_FAILED"
+    elif phys_ok == 0:
+        run_valid = False
+        classification = "INVALID: empty output"
+    else:
+        rep_run_valid = (
+            phys_ok > 0
+            and multiset_ok.get("missing_rows", -1) >= 0
+            and not multiset_ok.get("error")
+        )
+        classification = "VALID" if rep_run_valid else "INVALID"
+    assert rep_run_valid is True
+    assert classification == "VALID"
