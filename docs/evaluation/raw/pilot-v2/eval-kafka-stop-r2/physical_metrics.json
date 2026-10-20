@@ -1,0 +1,28 @@
+{
+  "output_path": "/data/output/pipe-eval-kafka-stop-r2-1792533218",
+  "expected_rows": 289744,
+  "physical_rows": 40536,
+  "unique_transaction_ids": 39869,
+  "duplicate_transaction_ids": 667,
+  "baseline_csv_duplicates": 4730,
+  "excess_duplicates": 0,
+  "physical_data_loss": 249208,
+  "file_count": 42,
+  "run_valid": true,
+  "run_classification": "VALID",
+  "multiset_comparison": {
+    "missing_rows": 249208,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0,
+    "expected_rows": 289744,
+    "physical_rows": 40536,
+    "hdfs_path": "/data/output/pipe-eval-kafka-stop-r2-1792533218"
+  },
+  "platform_validator": {
+    "label": "platform validator (unreliable, uses tracker counters)",
+    "data_loss": 1450,
+    "duplicates": 0,
+    "expected_records": 41986,
+    "processed_records": 40536
+  }
+}

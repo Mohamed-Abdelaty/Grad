@@ -1,0 +1,29 @@
+{
+  "output_path": "/data/output/pipe-eval-kafka-stop-r1-1792533072",
+  "expected_rows": 289744,
+  "physical_rows": -1,
+  "unique_transaction_ids": -1,
+  "duplicate_transaction_ids": -1,
+  "baseline_csv_duplicates": 4730,
+  "excess_duplicates": -1,
+  "physical_data_loss": -1,
+  "file_count": 0,
+  "run_valid": false,
+  "run_classification": "MEASUREMENT_FAILED",
+  "multiset_comparison": {
+    "hdfs_path": "/data/output/pipe-eval-kafka-stop-r1-1792533072",
+    "missing_rows": -1,
+    "extra_rows": -1,
+    "duplicate_beyond_baseline": -1,
+    "expected_rows": 289744,
+    "physical_rows": -1,
+    "error": "Failed to count HDFS physical metrics for /data/output/pipe-eval-kafka-stop-r1-1792533072 (exit code 1): ERROR: Parquet file size is 4 bytes, smaller than the minimum file footer (8 bytes)"
+  },
+  "platform_validator": {
+    "label": "platform validator (unreliable, uses tracker counters)",
+    "data_loss": 41973,
+    "duplicates": 0,
+    "expected_records": 41973,
+    "processed_records": 0
+  }
+}
