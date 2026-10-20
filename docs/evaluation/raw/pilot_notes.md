@@ -214,6 +214,9 @@ Both prior calibration runs are retroactively marked **INVALID for output verifi
 
 ## PILOT RUN RECORD: pilot-v2 (October 21) [PRE-FIX EVIDENCE]
 
+> [!CAUTION]
+> **INVALIDATION AS FAULT EVIDENCE**: The row counts and "data loss" numbers in pilot-v2 r1 and r2 must **NOT** be used as evidence of fault-induced data loss. None of this run's 300,000 records ever reached Spark (Spark was ingesting old records 0 to ~42,000 from prior runs due to topic reuse). All pilot runs executed on Oct 19–20 were contaminated by topic reuse without timestamps. Pilot-v2 is preserved strictly as **pre-fix evidence** documenting the topic isolation gap and the completion detector defect.
+
 **Target**: `kafka` | **Fault**: `container_stop` | **Repetitions**: 2  
 **Target Output Directory**: `docs/evaluation/raw/pilot-v2/`  
 **Host Experimental Conditions**: 7 core containers only (`platform-backend`, `platform-postgres`, `platform-kafka`, `platform-spark-master`, `platform-spark-worker`, `platform-namenode`, `platform-datanode`). Auxiliary containers (`frontend`, `prometheus`, `grafana`, `airflow-*`) stopped.  
@@ -254,7 +257,8 @@ Both prior calibration runs are retroactively marked **INVALID for output verifi
   - **Excess Duplicates beyond Baseline**: **0**
   - **Distinct Transaction IDs**: 39,869
   - **Duplicate Copies**: 667 (exact match to input baseline duplicate rate)
-  - **HYPOTHESIS for 249,208 Data Loss (unconfirmed)**: In `backend/app/pipeline/executor.py:1260-1266`, the Kafka publishing thread (`producer.produce_batch`) encounters broker disconnection during Kafka container stop, catches the exception, and terminates with `producer_done = True` in its `finally` block after publishing only ~42,000 records. Once Spark consumed the in-flight records, consumer lag became 0 and `StreamingCompletionDetector` triggered its 20-second idle completion condition (`idle_time >= 20.0s`), terminating the pipeline cleanly with status `succeeded` after only 40,536 rows were processed.
+  - **DISPROVED HYPOTHESIS & ROOT CAUSE**: An earlier hypothesis suggested that the Kafka producer thread encountered a broker disconnection and aborted after publishing only ~42,000 records. **This hypothesis has been thoroughly disproved by Kafka broker offset inspection.** The producer actually published all 300,000 records successfully (end offsets reached 600,000 from starting offset 300,000). The observed missing rows were caused entirely by topic reuse (topic held 600,000 cumulative records across runs; Spark started at offset 0 and only ingested old-run records 0 to ~42,000 before the `compute_lag(None) = 0` detector bug prematurely terminated the job).
+  - **INVALIDATION NOTICE: NOT FAULT-INDUCED DATA LOSS**: The pilot-v2 r1 and r2 numbers must **NOT** be used as evidence of fault-induced data loss. None of this run's 300,000 records reached Spark before the job terminated. All pilot runs executed between October 19 and October 20 (`ba89b977`, `75eb98aa`, `c777c253`, `04e775f3`) were contaminated by topic reuse due to the lack of timestamp suffixes on topic names.
 - **Platform Validator (unreliable)**:
   - `expected_records`: 41,986 (captured from a mid-stream `recordsOut` snapshot)
   - `processed_records`: 40,536
