@@ -289,7 +289,7 @@ def compute_multiset_comparison(hdfs_output_path: str) -> dict[str, Any]:
         raw_path = "/" + parts.split("/", 1)[1] if "/" in parts else "/"
 
     py_cmd = (
-        "import urllib.request, json, io, sys, os, csv, collections\n"
+        "import urllib.request, json, io, sys, os, csv, collections, posixpath\n"
         "import pyarrow.parquet as pq\n"
         "hdfs_path = sys.argv[1]\n"
         "csv_path = '/app/sample-data/sales_300k.csv'\n"
@@ -317,10 +317,33 @@ def compute_multiset_comparison(hdfs_output_path: str) -> dict[str, Any]:
         "output_counts = collections.Counter()\n"
         "physical_rows = 0\n"
         "try:\n"
-        "    url = f'http://namenode:9870/webhdfs/v1{hdfs_path}?op=LISTSTATUS'\n"
-        "    with urllib.request.urlopen(url) as r:\n"
-        "        data = json.load(r)\n"
-        "    files = [f['pathSuffix'] for f in data.get('FileStatuses', {}).get('FileStatus', []) if f['pathSuffix'].endswith('.parquet')]\n"
+        "    meta_url = f'http://namenode:9870/webhdfs/v1{hdfs_path}/_spark_metadata?op=LISTSTATUS'\n"
+        "    try:\n"
+        "        with urllib.request.urlopen(meta_url) as r:\n"
+        "            meta_data = json.load(r)\n"
+        "        meta_files = sorted(\n"
+        "            [f['pathSuffix'] for f in meta_data.get('FileStatuses', {}).get('FileStatus', [])],\n"
+        "            key=lambda x: int(x.split('.')[0]) if x.split('.')[0].isdigit() else -1\n"
+        "        )\n"
+        "        committed = set()\n"
+        "        for mf in meta_files:\n"
+        "            murl = f'http://namenode:9870/webhdfs/v1{hdfs_path}/_spark_metadata/{mf}?op=OPEN'\n"
+        "            with urllib.request.urlopen(murl) as r:\n"
+        "                for line in r.read().decode('utf-8').splitlines():\n"
+        "                    line = line.strip()\n"
+        "                    if line.startswith('{'):\n"
+        "                        try:\n"
+        "                            entry = json.loads(line)\n"
+        "                            if entry.get('action') == 'add':\n"
+        "                                committed.add(posixpath.basename(entry['path']))\n"
+        "                        except Exception:\n"
+        "                            pass\n"
+        "        files = sorted([fn for fn in committed if fn.endswith('.parquet')])\n"
+        "    except Exception:\n"
+        "        url = f'http://namenode:9870/webhdfs/v1{hdfs_path}?op=LISTSTATUS'\n"
+        "        with urllib.request.urlopen(url) as r:\n"
+        "            data = json.load(r)\n"
+        "        files = [f['pathSuffix'] for f in data.get('FileStatuses', {}).get('FileStatus', []) if f['pathSuffix'].endswith('.parquet')]\n"
         "    for fn in files:\n"
         "        furl = f'http://namenode:9870/webhdfs/v1{hdfs_path}/{fn}?op=OPEN'\n"
         "        with urllib.request.urlopen(furl) as fr:\n"
@@ -367,8 +390,8 @@ def compute_multiset_comparison(hdfs_output_path: str) -> dict[str, Any]:
             text=True,
             timeout=180,
         )
-        stdout = res.stdout.strip()
-        stderr = res.stderr.strip()
+        stdout = (getattr(res, 'stdout', '') or '').strip()
+        stderr = (getattr(res, 'stderr', '') or '').strip()
         data = None
         for line in reversed(stdout.splitlines()):
             line = line.strip()
@@ -420,14 +443,37 @@ def get_hdfs_physical_metrics(hdfs_output_path: str) -> dict[str, Any]:
         raw_path = "/" + parts.split("/", 1)[1] if "/" in parts else "/"
 
     py_cmd = (
-        "import urllib.request, json, io, sys, os\n"
+        "import urllib.request, json, io, sys, os, posixpath\n"
         "import pyarrow.parquet as pq\n"
         "path = sys.argv[1]\n"
-        "url = f'http://namenode:9870/webhdfs/v1{path}?op=LISTSTATUS'\n"
         "try:\n"
-        "    with urllib.request.urlopen(url) as r:\n"
-        "        data = json.load(r)\n"
-        "    files = [f['pathSuffix'] for f in data.get('FileStatuses', {}).get('FileStatus', []) if f['pathSuffix'].endswith('.parquet')]\n"
+        "    meta_url = f'http://namenode:9870/webhdfs/v1{path}/_spark_metadata?op=LISTSTATUS'\n"
+        "    try:\n"
+        "        with urllib.request.urlopen(meta_url) as r:\n"
+        "            meta_data = json.load(r)\n"
+        "        meta_files = sorted(\n"
+        "            [f['pathSuffix'] for f in meta_data.get('FileStatuses', {}).get('FileStatus', [])],\n"
+        "            key=lambda x: int(x.split('.')[0]) if x.split('.')[0].isdigit() else -1\n"
+        "        )\n"
+        "        committed = set()\n"
+        "        for mf in meta_files:\n"
+        "            murl = f'http://namenode:9870/webhdfs/v1{path}/_spark_metadata/{mf}?op=OPEN'\n"
+        "            with urllib.request.urlopen(murl) as r:\n"
+        "                for line in r.read().decode('utf-8').splitlines():\n"
+        "                    line = line.strip()\n"
+        "                    if line.startswith('{'):\n"
+        "                        try:\n"
+        "                            entry = json.loads(line)\n"
+        "                            if entry.get('action') == 'add':\n"
+        "                                committed.add(posixpath.basename(entry['path']))\n"
+        "                        except Exception:\n"
+        "                            pass\n"
+        "        files = sorted([fn for fn in committed if fn.endswith('.parquet')])\n"
+        "    except Exception:\n"
+        "        url = f'http://namenode:9870/webhdfs/v1{path}?op=LISTSTATUS'\n"
+        "        with urllib.request.urlopen(url) as r:\n"
+        "            data = json.load(r)\n"
+        "        files = [f['pathSuffix'] for f in data.get('FileStatuses', {}).get('FileStatus', []) if f['pathSuffix'].endswith('.parquet')]\n"
         "    total_rows = 0\n"
         "    unique_ids = set()\n"
         "    total_ids = 0\n"
@@ -469,8 +515,8 @@ def get_hdfs_physical_metrics(hdfs_output_path: str) -> dict[str, Any]:
             text=True,
             timeout=180,
         )
-        stdout = res.stdout.strip()
-        stderr = res.stderr.strip()
+        stdout = (getattr(res, 'stdout', '') or '').strip()
+        stderr = (getattr(res, 'stderr', '') or '').strip()
         data = None
         for line in reversed(stdout.splitlines()):
             line = line.strip()
@@ -515,14 +561,37 @@ def count_hdfs_physical_rows(hdfs_output_path: str) -> int:
         raw_path = "/" + parts.split("/", 1)[1] if "/" in parts else "/"
 
     py_cmd = (
-        "import urllib.request, json, io, sys, os\n"
+        "import urllib.request, json, io, sys, os, posixpath\n"
         "import pyarrow.parquet as pq\n"
         "path = sys.argv[1]\n"
-        "url = f'http://namenode:9870/webhdfs/v1{path}?op=LISTSTATUS'\n"
         "try:\n"
-        "    with urllib.request.urlopen(url) as r:\n"
-        "        data = json.load(r)\n"
-        "    files = [f['pathSuffix'] for f in data.get('FileStatuses', {}).get('FileStatus', []) if f['pathSuffix'].endswith('.parquet')]\n"
+        "    meta_url = f'http://namenode:9870/webhdfs/v1{path}/_spark_metadata?op=LISTSTATUS'\n"
+        "    try:\n"
+        "        with urllib.request.urlopen(meta_url) as r:\n"
+        "            meta_data = json.load(r)\n"
+        "        meta_files = sorted(\n"
+        "            [f['pathSuffix'] for f in meta_data.get('FileStatuses', {}).get('FileStatus', [])],\n"
+        "            key=lambda x: int(x.split('.')[0]) if x.split('.')[0].isdigit() else -1\n"
+        "        )\n"
+        "        committed = set()\n"
+        "        for mf in meta_files:\n"
+        "            murl = f'http://namenode:9870/webhdfs/v1{path}/_spark_metadata/{mf}?op=OPEN'\n"
+        "            with urllib.request.urlopen(murl) as r:\n"
+        "                for line in r.read().decode('utf-8').splitlines():\n"
+        "                    line = line.strip()\n"
+        "                    if line.startswith('{'):\n"
+        "                        try:\n"
+        "                            entry = json.loads(line)\n"
+        "                            if entry.get('action') == 'add':\n"
+        "                                committed.add(posixpath.basename(entry['path']))\n"
+        "                        except Exception:\n"
+        "                            pass\n"
+        "        files = sorted([fn for fn in committed if fn.endswith('.parquet')])\n"
+        "    except Exception:\n"
+        "        url = f'http://namenode:9870/webhdfs/v1{path}?op=LISTSTATUS'\n"
+        "        with urllib.request.urlopen(url) as r:\n"
+        "            data = json.load(r)\n"
+        "        files = [f['pathSuffix'] for f in data.get('FileStatuses', {}).get('FileStatus', []) if f['pathSuffix'].endswith('.parquet')]\n"
         "    total = 0\n"
         "    for fn in files:\n"
         "        furl = f'http://namenode:9870/webhdfs/v1{path}/{fn}?op=OPEN'\n"
@@ -543,8 +612,8 @@ def count_hdfs_physical_rows(hdfs_output_path: str) -> int:
             text=True,
             timeout=180,
         )
-        stdout = res.stdout.strip()
-        stderr = res.stderr.strip()
+        stdout = (getattr(res, 'stdout', '') or '').strip()
+        stderr = (getattr(res, 'stderr', '') or '').strip()
         for line in reversed(stdout.splitlines()):
             line = line.strip()
             if line.startswith("{") and line.endswith("}"):

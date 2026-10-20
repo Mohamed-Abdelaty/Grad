@@ -751,3 +751,37 @@ def test_run_classification_rules():
         classification = "VALID" if rep_run_valid else "INVALID"
     assert rep_run_valid is True
     assert classification == "VALID"
+
+
+def test_get_hdfs_physical_metrics_spark_metadata_filter(monkeypatch):
+    """Verify get_hdfs_physical_metrics py_cmd inspects _spark_metadata to exclude uncommitted stubs."""
+    import subprocess
+    import json
+    from run_evaluation import get_hdfs_physical_metrics
+
+    captured_cmds = []
+
+    def mock_run(cmd, *args, **kwargs):
+        captured_cmds.append(cmd)
+        class MockRes:
+            stdout = json.dumps({
+                "physical_rows": 40523,
+                "unique_transaction_ids": 39855,
+                "duplicate_transaction_ids": 668,
+                "baseline_csv_duplicates": 4730,
+                "excess_duplicates": 0,
+                "file_count": 42,
+            }) + "\n"
+            stderr = ""
+            returncode = 0
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    res = get_hdfs_physical_metrics("/data/output/pipe-eval-kafka-stop-r1-1792533072")
+    assert res["physical_rows"] == 40523
+    assert res["file_count"] == 42
+    # Verify the executed command passed to container inspects _spark_metadata
+    assert len(captured_cmds) == 1
+    py_code = captured_cmds[0][5]  # python -c <code> <path>
+    assert "_spark_metadata" in py_code
+    assert "posixpath.basename" in py_code
