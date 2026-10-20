@@ -17,7 +17,7 @@ settings:
 pipeline_template:
   name: "eval-streaming-300k"
   source_path: "/app/sample-data/sales_300k.csv"
-  max_offsets_per_trigger: 10000
+  max_offsets_per_trigger: 3000
   trigger_interval_seconds: 2
   idle_timeout_seconds: 20
   max_runtime_seconds: 600

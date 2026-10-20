@@ -24,6 +24,8 @@ from run_evaluation import (
     build_experiment_yaml,
     get_free_ram_mb,
     verify_cool_down_status,
+    count_hdfs_physical_rows,
+    get_hdfs_physical_metrics,
 )
 from aggregate import (
     compute_sample_stats,
@@ -50,7 +52,7 @@ def test_matrix_yaml_validity():
     assert "pipeline_template" in cfg
     pt = cfg["pipeline_template"]
     assert "source_path" in pt
-    assert pt.get("max_offsets_per_trigger") == 10000
+    assert pt.get("max_offsets_per_trigger") in (3000, 10000)
 
     assert "experiments" in cfg
     exps = cfg["experiments"]
@@ -220,6 +222,21 @@ def test_cool_down_decision_logic():
     assert passed is False
     assert "below required threshold" in reason
 
+    # 8. Host page faults above threshold
+    passed, reason = verify_cool_down_status(
+        health_ok=True,
+        active_runs=0,
+        running_exps=0,
+        cores_used=0,
+        consumer_lag=0,
+        free_ram_mb=2000.0,
+        min_free_ram_mb=1500.0,
+        pages_sec_30s_avg=140.0,
+        max_pages_sec=100.0,
+    )
+    assert passed is False
+    assert "page faults" in reason
+
 
 def test_aggregate_stats_computations():
     """Verify sample statistics computation against exact hand-calculated values."""
@@ -338,6 +355,7 @@ def test_harness_pipeline_first_orchestration_contract(monkeypatch, tmp_path):
                 "runId": "test-p-run-123",
                 "kafka": {"published": 500},
                 "source": {"rowsRead": 500},
+                "spark": {"recordsIn": 500, "recordsOut": 500},
             }
         elif "/api/experiments/test-exp-uuid-456" in url:
             resp.status_code = 200
@@ -382,3 +400,88 @@ def test_harness_pipeline_first_orchestration_contract(monkeypatch, tmp_path):
     exp_run_call = next(c for c in call_order if c[0] == "experiment_run")
     assert exp_run_call[1].get("pipeline_run_id") == "test-p-run-123"
 
+
+
+def test_count_hdfs_physical_rows_unit(monkeypatch):
+    """Verify count_hdfs_physical_rows command invocation and fallback semantics."""
+    import subprocess
+
+    captured_cmds = []
+
+    def mock_run(cmd, *args, **kwargs):
+        captured_cmds.append(cmd)
+        class MockRes:
+            stdout = "289744\n"
+            returncode = 0
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    # Test full HDFS URI stripping
+    rows = count_hdfs_physical_rows("hdfs://namenode:9000/data/output/pipe-eval-calibration")
+    assert rows == 289744
+    assert captured_cmds[0][-1] == "/data/output/pipe-eval-calibration"
+
+    # Test failure fallback returns 0
+    def mock_run_fail(cmd, *args, **kwargs):
+        raise RuntimeError("docker failed")
+
+    monkeypatch.setattr(subprocess, "run", mock_run_fail)
+    assert count_hdfs_physical_rows("/data/output/empty") == 0
+
+
+def test_build_pipeline_yaml_custom_output_path():
+    """Verify build_pipeline_yaml respects explicitly passed unique output path."""
+    template = {
+        "source_path": "/app/sample-data/sales_300k.csv",
+        "max_offsets_per_trigger": 3000,
+    }
+    raw_yaml = build_pipeline_yaml(
+        template=template,
+        topic_name="eval-test-topic",
+        pipeline_name="pipe-eval-test",
+        output_path="/data/output/pipe-eval-test-1771618000",
+    )
+    parsed = yaml.safe_load(raw_yaml)
+    assert parsed["storage"]["path"] == "/data/output/pipe-eval-test-1771618000"
+
+
+def test_get_hdfs_physical_metrics_unit(monkeypatch):
+    """Verify get_hdfs_physical_metrics parsing, duplicate detection, and fallback."""
+    import subprocess
+    import json
+
+    def mock_run(cmd, *args, **kwargs):
+        class MockRes:
+            stdout = json.dumps({
+                "physical_rows": 289744,
+                "unique_transaction_ids": 285014,
+                "duplicate_transaction_ids": 4730,
+                "baseline_csv_duplicates": 4730,
+                "excess_duplicates": 0,
+                "file_count": 98,
+            }) + "\n"
+            returncode = 0
+        return MockRes()
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    metrics = get_hdfs_physical_metrics("hdfs://namenode:9000/data/output/pipe-eval-custom")
+    assert metrics["physical_rows"] == 289744
+    assert metrics["unique_transaction_ids"] == 285014
+    assert metrics["duplicate_transaction_ids"] == 4730
+    assert metrics["baseline_csv_duplicates"] == 4730
+    assert metrics["excess_duplicates"] == 0
+    assert metrics["file_count"] == 98
+    assert metrics["raw_path"] == "/data/output/pipe-eval-custom"
+
+    # Test failure fallback
+    def mock_run_fail(cmd, *args, **kwargs):
+        raise RuntimeError("docker exec failed")
+
+    monkeypatch.setattr(subprocess, "run", mock_run_fail)
+    fail_metrics = get_hdfs_physical_metrics("/data/output/nonexistent")
+    assert fail_metrics["physical_rows"] == 0
+    assert fail_metrics["unique_transaction_ids"] == 0
+    assert fail_metrics["duplicate_transaction_ids"] == 0
+    assert fail_metrics["excess_duplicates"] == 0
+    assert "error" in fail_metrics

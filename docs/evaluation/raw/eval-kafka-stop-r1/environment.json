@@ -1,0 +1,204 @@
+{
+  "experiment_name": "eval-kafka-stop-r1",
+  "experiment_id": "55c00574-29cf-4b80-881c-9cfb1b75e52e",
+  "target_service": "kafka",
+  "fault_type": "container_stop",
+  "repetition_index": 1,
+  "topic_name": "eval-stream-kafka-stop-r1",
+  "pipeline_run_id": "ba89b977-dbf2-46cb-ae93-c9ad369a0ae9",
+  "pipeline_to_experiment_delay_seconds": 2.24,
+  "git_commit": "da7c0fcbdf9ba265ef47308abe0dfac477ed9fbb",
+  "started_at": "2026-10-19T11:25:29.354784+00:00",
+  "finished_at": "2026-10-19T11:27:04.289265+00:00",
+  "terminal_status": "succeeded",
+  "host_free_ram_start_mb": 1765.5859375,
+  "host_free_ram_end_mb": 528.171875,
+  "host_memory_pressure": true,
+  "telemetry_samples": [
+    {
+      "timestamp": "2026-10-19T11:25:36.095441+00:00",
+      "elapsed_seconds": 0.0,
+      "free_ram_mb": 1531.35546875,
+      "pages_per_sec": 652.270830029592
+    },
+    {
+      "timestamp": "2026-10-19T11:25:54.502171+00:00",
+      "elapsed_seconds": 16.4,
+      "free_ram_mb": 755.62890625,
+      "pages_per_sec": 947.525822546179
+    },
+    {
+      "timestamp": "2026-10-19T11:26:13.778438+00:00",
+      "elapsed_seconds": 35.2,
+      "free_ram_mb": 455.4140625,
+      "pages_per_sec": 357.082467151397
+    },
+    {
+      "timestamp": "2026-10-19T11:26:28.542787+00:00",
+      "elapsed_seconds": 52.0,
+      "free_ram_mb": 595.84375,
+      "pages_per_sec": 2458.65290854169
+    },
+    {
+      "timestamp": "2026-10-19T11:26:45.184622+00:00",
+      "elapsed_seconds": 68.8,
+      "free_ram_mb": 662.3671875,
+      "pages_per_sec": 139.890605546463
+    },
+    {
+      "timestamp": "2026-10-19T11:27:02.257854+00:00",
+      "elapsed_seconds": 85.5,
+      "free_ram_mb": 484.6640625,
+      "pages_per_sec": 539.640483729341
+    }
+  ],
+  "spark_worker_cores_free_start": 2,
+  "kafka_data_dir_size_start": "4.5G",
+  "kafka_topic_count_start": 14,
+  "kafka_total_messages_start": 30696264,
+  "docker_stats_start": [
+    {
+      "BlockIO": "25.4MB / 553kB",
+      "CPUPerc": "0.00%",
+      "Container": "50f2a4d64ca8dca13b7dc0d4ed4aaa5ff410a6e57841463cc0f6bf18f3282ef4",
+      "ID": "50f2a4d64ca8",
+      "MemPerc": "0.17%",
+      "MemUsage": "13.14MiB / 7.631GiB",
+      "Name": "platform-frontend",
+      "NetIO": "37.9MB / 143MB",
+      "PIDs": "9"
+    },
+    {
+      "BlockIO": "20.2MB / 59.4MB",
+      "CPUPerc": "6.34%",
+      "Container": "8dab2788f0ef8ab108a49e811e4e46abc5fb8c017f07fe25ee4c0ded5dc01863",
+      "ID": "8dab2788f0ef",
+      "MemPerc": "3.01%",
+      "MemUsage": "235.6MiB / 7.631GiB",
+      "Name": "platform-backend",
+      "NetIO": "17.5MB / 170MB",
+      "PIDs": "11"
+    },
+    {
+      "BlockIO": "46MB / 28.7MB",
+      "CPUPerc": "0.00%",
+      "Container": "281312fe67890c5d867aa5ebee39f9f7c189d13f6c95a2e28007e9369771f3c0",
+      "ID": "281312fe6789",
+      "MemPerc": "0.53%",
+      "MemUsage": "41.36MiB / 7.631GiB",
+      "Name": "platform-postgres",
+      "NetIO": "7.4MB / 145MB",
+      "PIDs": "8"
+    },
+    {
+      "BlockIO": "36.5MB / 146MB",
+      "CPUPerc": "2.20%",
+      "Container": "1fd405cbccc474b5a76b354f5dd582b12fb40f309fb74ff81c7da0d684b6173c",
+      "ID": "1fd405cbccc4",
+      "MemPerc": "0.56%",
+      "MemUsage": "43.6MiB / 7.631GiB",
+      "Name": "platform-airflow-postgres",
+      "NetIO": "140MB / 129MB",
+      "PIDs": "13"
+    },
+    {
+      "BlockIO": "181MB / 1.05MB",
+      "CPUPerc": "0.51%",
+      "Container": "d2858f998ec99bee52674e9108a6af68d83f622355281aee4270117835d16005",
+      "ID": "d2858f998ec9",
+      "MemPerc": "0.89%",
+      "MemUsage": "69.17MiB / 7.631GiB",
+      "Name": "platform-grafana",
+      "NetIO": "125kB / 34.7kB",
+      "PIDs": "20"
+    },
+    {
+      "BlockIO": "226MB / 28.9MB",
+      "CPUPerc": "9.39%",
+      "Container": "9aa34279fca514d9b92e0b5eeeaf49bf1aeb603951700e199253f9180a56b6cd",
+      "ID": "9aa34279fca5",
+      "MemPerc": "8.18%",
+      "MemUsage": "639.2MiB / 7.631GiB",
+      "Name": "platform-airflow-webserver",
+      "NetIO": "2.49MB / 1.75MB",
+      "PIDs": "8"
+    },
+    {
+      "BlockIO": "101MB / 52.2MB",
+      "CPUPerc": "4.43%",
+      "Container": "657f907791d28fad845fd548f59c5df0040e622baa944346b5c089f25c709b67",
+      "ID": "657f907791d2",
+      "MemPerc": "5.94%",
+      "MemUsage": "464.1MiB / 7.631GiB",
+      "Name": "platform-airflow-scheduler",
+      "NetIO": "125MB / 138MB",
+      "PIDs": "73"
+    },
+    {
+      "BlockIO": "74.2MB / 3.46MB",
+      "CPUPerc": "4.99%",
+      "Container": "c23c7fa2e9a026935b0726936e2d44b56aa27aa66079ab35dd563a0bbd851b56",
+      "ID": "c23c7fa2e9a0",
+      "MemPerc": "0.44%",
+      "MemUsage": "34.38MiB / 7.631GiB",
+      "Name": "platform-prometheus",
+      "NetIO": "2.43MB / 1.33MB",
+      "PIDs": "14"
+    },
+    {
+      "BlockIO": "120MB / 1.39GB",
+      "CPUPerc": "0.16%",
+      "Container": "4b04c9938138fee8bb253dbd8191e60d0e02baa345752931c15c6c2b09e047e9",
+      "ID": "4b04c9938138",
+      "MemPerc": "2.68%",
+      "MemUsage": "209.4MiB / 7.631GiB",
+      "Name": "platform-spark-worker",
+      "NetIO": "895MB / 43.6MB",
+      "PIDs": "59"
+    },
+    {
+      "BlockIO": "42.7MB / 61.3MB",
+      "CPUPerc": "0.43%",
+      "Container": "58273a5e38d74ae6034ed61bd382b671b2dea8fe006b5eb36c147916db1d62b5",
+      "ID": "58273a5e38d7",
+      "MemPerc": "4.82%",
+      "MemUsage": "376.7MiB / 7.631GiB",
+      "Name": "platform-datanode",
+      "NetIO": "33.5MB / 2.53MB",
+      "PIDs": "76"
+    },
+    {
+      "BlockIO": "64.4MB / 31.4MB",
+      "CPUPerc": "1.86%",
+      "Container": "964f812a22d2de49d04bb1867f8e3be88a0e177b2ffce254265660e0268467ab",
+      "ID": "964f812a22d2",
+      "MemPerc": "7.38%",
+      "MemUsage": "576.4MiB / 7.631GiB",
+      "Name": "platform-kafka",
+      "NetIO": "1.03kB / 126B",
+      "PIDs": "101"
+    },
+    {
+      "BlockIO": "20.1MB / 25.4MB",
+      "CPUPerc": "0.19%",
+      "Container": "df8176b4d1f919e0b5daf0d492689e9ae1be98384a5f3dbe59206d7bfbdc7c0f",
+      "ID": "df8176b4d1f9",
+      "MemPerc": "3.32%",
+      "MemUsage": "259.7MiB / 7.631GiB",
+      "Name": "platform-spark-master",
+      "NetIO": "1.57MB / 1.38MB",
+      "PIDs": "57"
+    },
+    {
+      "BlockIO": "143MB / 36.7MB",
+      "CPUPerc": "0.37%",
+      "Container": "27012bf67efa721f98dbeb7c2dcf4d60cbf7cc5030fa8a05c93d46923001958a",
+      "ID": "27012bf67efa",
+      "MemPerc": "5.63%",
+      "MemUsage": "440.1MiB / 7.631GiB",
+      "Name": "platform-namenode",
+      "NetIO": "3.36MB / 2.15MB",
+      "PIDs": "64"
+    }
+  ]
+}

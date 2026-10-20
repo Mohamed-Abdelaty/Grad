@@ -16,6 +16,7 @@ Guarantees:
    - Spark worker cores completely free (coresUsed == 0 via Spark Master JSON API).
    - Consumer lag on previous eval topic == 0.
    - Host free physical RAM >= 1500 MB (with 3-minute settling window; ABORTS on failure).
+   - Host 30s average \\Memory\\Pages/sec <= 100.
 6. Resumable & Non-Destructive: Skips completed runs without overwriting or deleting any artifacts.
 7. Verbatim Raw Storage: Writes raw report.json, children.json, environment.json to docs/evaluation/raw/<name>/.
 """
@@ -38,12 +39,30 @@ from typing import Any
 import httpx
 import yaml
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
+
+class FlushFileHandler(logging.FileHandler):
+    """FileHandler that flushes after every record to enable live tailing."""
+    def emit(self, record: logging.LogRecord) -> None:
+        super().emit(record)
+        self.flush()
+
+
+# Configure root logging with both Console and File handlers
+LOG_FILE_PATH = Path("docs/evaluation/run.log")
+LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 logger = logging.getLogger("eval-harness")
+logger.setLevel(logging.INFO)
+
+# Avoid duplicate handlers on re-entry
+if not logger.handlers:
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    logger.addHandler(stream_handler)
+
+    file_handler = FlushFileHandler(str(LOG_FILE_PATH), mode="a", encoding="utf-8")
+    file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    logger.addHandler(file_handler)
 
 
 def get_git_commit_hash() -> str:
@@ -100,7 +119,7 @@ def get_docker_stats_snapshot() -> list[dict[str, Any]]:
 
 
 def get_host_page_faults_per_sec() -> float:
-    """Measure Windows host hard page faults per second via Performance Counter."""
+    """Measure Windows host hard page faults per second via 1-sample Performance Counter."""
     if sys.platform == "win32":
         try:
             cmd = "powershell -Command \"(Get-Counter '\\Memory\\Pages/sec' -MaxSamples 1).CounterSamples[0].CookedValue\""
@@ -108,6 +127,20 @@ def get_host_page_faults_per_sec() -> float:
             return float(res.stdout.strip().splitlines()[-1])
         except Exception as exc:
             logger.warning("Failed to query Windows Memory\\Pages/sec: %s", exc)
+            return 0.0
+    return 0.0
+
+
+def get_host_page_faults_30s_avg() -> float:
+    """Measure Windows host average page faults per second over 30 samples."""
+    if sys.platform == "win32":
+        try:
+            cmd = "powershell -Command \"((Get-Counter '\\Memory\\Pages/sec' -SampleInterval 1 -MaxSamples 30).CounterSamples | Measure-Object -Property CookedValue -Average).Average\""
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
+            val = float(res.stdout.strip().splitlines()[-1])
+            return val
+        except Exception as exc:
+            logger.warning("Failed to query 30s average Windows Memory\\Pages/sec: %s", exc)
             return 0.0
     return 0.0
 
@@ -120,7 +153,6 @@ def get_kafka_metrics() -> dict[str, Any]:
         "total_messages": 0,
     }
     try:
-        # 1. Data directory size
         res_du = subprocess.run(
             ["docker", "exec", "platform-kafka", "du", "-sh", "/var/lib/kafka/data"],
             capture_output=True,
@@ -132,7 +164,6 @@ def get_kafka_metrics() -> dict[str, Any]:
         logger.warning("Failed to get Kafka data dir size: %s", exc)
 
     try:
-        # 2. Topic count
         res_topics = subprocess.run(
             ["docker", "exec", "platform-kafka", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"],
             capture_output=True,
@@ -142,7 +173,6 @@ def get_kafka_metrics() -> dict[str, Any]:
         topics = [t.strip() for t in res_topics.stdout.strip().splitlines() if t.strip()]
         metrics["topic_count"] = len(topics)
 
-        # 3. Total message count across topics via GetOffsetShell
         res_offsets = subprocess.run(
             ["docker", "exec", "platform-kafka", "kafka-run-class", "kafka.tools.GetOffsetShell", "--bootstrap-server", "localhost:9092"],
             capture_output=True,
@@ -181,12 +211,8 @@ def get_spark_master_metrics(spark_url: str = "http://localhost:8080/json") -> d
 
 
 def get_topic_consumer_lag(topic_name: str) -> int:
-    """
-    Check if any consumer lag exists on the specified topic.
-    If topic does not exist or has no consumer groups, returns 0.
-    """
+    """Check if any consumer lag exists on the specified topic."""
     try:
-        # Check consumer groups
         res_groups = subprocess.run(
             ["docker", "exec", "platform-kafka", "kafka-consumer-groups", "--bootstrap-server", "localhost:9092", "--list"],
             capture_output=True,
@@ -204,7 +230,6 @@ def get_topic_consumer_lag(topic_name: str) -> int:
             for line in res_desc.stdout.strip().splitlines():
                 if topic_name in line:
                     parts = line.split()
-                    # Standard describe format: GROUP TOPIC PARTITION CURRENT-OFFSET LOG-END-OFFSET LAG CONSUMER-ID ...
                     if len(parts) >= 6 and parts[5].isdigit():
                         total_lag += int(parts[5])
         return total_lag
@@ -213,12 +238,151 @@ def get_topic_consumer_lag(topic_name: str) -> int:
         return 0
 
 
+def get_hdfs_physical_metrics(hdfs_output_path: str) -> dict[str, Any]:
+    """Physically inspect all Parquet files in an HDFS output path via WebHDFS.
+
+    Queries WebHDFS from the platform-backend container via PyArrow.
+    Does NOT rely on progress trackers or Spark driver in-memory counters.
+    Returns:
+    - physical_rows: total number of rows across all parquet files
+    - unique_transaction_ids: number of distinct transaction_id values
+    - duplicate_transaction_ids: total physical rows - unique transaction IDs
+    - baseline_csv_duplicates: 4730 (expected duplicate copies in valid 289,744 input rows)
+    - excess_duplicates: max(0, duplicate_transaction_ids - 4730)
+    - file_count: number of parquet files
+    - raw_path: normalized HDFS path
+    """
+    raw_path = hdfs_output_path
+    if raw_path.startswith("hdfs://"):
+        parts = raw_path.split("://", 1)[1]
+        raw_path = "/" + parts.split("/", 1)[1] if "/" in parts else "/"
+
+    py_cmd = (
+        "import urllib.request, json, io, sys\n"
+        "import pyarrow.parquet as pq\n"
+        "path = sys.argv[1]\n"
+        "url = f'http://namenode:9870/webhdfs/v1{path}?op=LISTSTATUS'\n"
+        "try:\n"
+        "    with urllib.request.urlopen(url) as r:\n"
+        "        data = json.load(r)\n"
+        "    files = [f['pathSuffix'] for f in data.get('FileStatuses', {}).get('FileStatus', []) if f['pathSuffix'].endswith('.parquet')]\n"
+        "    total_rows = 0\n"
+        "    unique_ids = set()\n"
+        "    total_ids = 0\n"
+        "    for fn in files:\n"
+        "        furl = f'http://namenode:9870/webhdfs/v1{path}/{fn}?op=OPEN'\n"
+        "        with urllib.request.urlopen(furl) as fr:\n"
+        "            content = fr.read()\n"
+        "            pf = pq.ParquetFile(io.BytesIO(content))\n"
+        "            num_rows = pf.metadata.num_rows\n"
+        "            total_rows += num_rows\n"
+        "            if num_rows > 0:\n"
+        "                tbl = pq.read_table(io.BytesIO(content))\n"
+        "                if 'transaction_id' in tbl.column_names:\n"
+        "                    col = tbl['transaction_id'].to_pylist()\n"
+        "                    total_ids += len(col)\n"
+        "                    unique_ids.update(col)\n"
+        "    dup_ids = total_ids - len(unique_ids) if total_ids > 0 else 0\n"
+        "    base_dups = 4730\n"
+        "    excess = max(0, dup_ids - base_dups)\n"
+        "    print(json.dumps({\n"
+        "        'physical_rows': total_rows,\n"
+        "        'unique_transaction_ids': len(unique_ids),\n"
+        "        'duplicate_transaction_ids': dup_ids,\n"
+        "        'baseline_csv_duplicates': base_dups,\n"
+        "        'excess_duplicates': excess,\n"
+        "        'file_count': len(files),\n"
+        "    }))\n"
+        "except Exception as e:\n"
+        "    print(json.dumps({\n"
+        "        'error': str(e),\n"
+        "        'physical_rows': 0,\n"
+        "        'unique_transaction_ids': 0,\n"
+        "        'duplicate_transaction_ids': 0,\n"
+        "        'baseline_csv_duplicates': 4730,\n"
+        "        'excess_duplicates': 0,\n"
+        "        'file_count': 0,\n"
+        "    }))\n"
+    )
+    try:
+        res = subprocess.run(
+            ["docker", "exec", "platform-backend", "python", "-c", py_cmd, raw_path],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        line = res.stdout.strip().splitlines()[-1]
+        try:
+            data = json.loads(line)
+        except Exception:
+            data = {"physical_rows": int(line), "unique_transaction_ids": 0, "duplicate_transaction_ids": 0, "baseline_csv_duplicates": 4730, "excess_duplicates": 0, "file_count": 0}
+        data["raw_path"] = raw_path
+        return data
+    except Exception as exc:
+        logger.warning("Failed to count HDFS physical metrics for %s: %s", hdfs_output_path, exc)
+        return {
+            "raw_path": raw_path,
+            "physical_rows": 0,
+            "unique_transaction_ids": 0,
+            "duplicate_transaction_ids": 0,
+            "baseline_csv_duplicates": 4730,
+            "excess_duplicates": 0,
+            "file_count": 0,
+            "error": str(exc),
+        }
+
+
+def count_hdfs_physical_rows(hdfs_output_path: str) -> int:
+    """Physically count data rows across all Parquet part files in an HDFS output path.
+
+    Queries WebHDFS from the platform-backend container via PyArrow metadata inspection.
+    Does NOT rely on progress trackers or Spark driver in-memory counters.
+    Returns 0 if the path does not exist, has no files, or contains only empty files.
+    """
+    raw_path = hdfs_output_path
+    if raw_path.startswith("hdfs://"):
+        parts = raw_path.split("://", 1)[1]
+        raw_path = "/" + parts.split("/", 1)[1] if "/" in parts else "/"
+
+    py_cmd = (
+        "import urllib.request, json, io, sys\n"
+        "import pyarrow.parquet as pq\n"
+        "path = sys.argv[1]\n"
+        "url = f'http://namenode:9870/webhdfs/v1{path}?op=LISTSTATUS'\n"
+        "try:\n"
+        "    with urllib.request.urlopen(url) as r:\n"
+        "        data = json.load(r)\n"
+        "    files = [f['pathSuffix'] for f in data.get('FileStatuses', {}).get('FileStatus', []) if f['pathSuffix'].endswith('.parquet')]\n"
+        "    total = 0\n"
+        "    for fn in files:\n"
+        "        furl = f'http://namenode:9870/webhdfs/v1{path}/{fn}?op=OPEN'\n"
+        "        with urllib.request.urlopen(furl) as fr:\n"
+        "            total += pq.ParquetFile(io.BytesIO(fr.read())).metadata.num_rows\n"
+        "    print(total)\n"
+        "except Exception as e:\n"
+        "    print(0)\n"
+    )
+    try:
+        res = subprocess.run(
+            ["docker", "exec", "platform-backend", "python", "-c", py_cmd, raw_path],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return int(res.stdout.strip().splitlines()[-1])
+    except Exception as exc:
+        logger.warning("Failed to count HDFS physical rows for %s: %s", hdfs_output_path, exc)
+        return 0
+
+
 def build_pipeline_yaml(
     template: dict[str, Any],
     topic_name: str,
     pipeline_name: str,
+    output_path: str | None = None,
 ) -> str:
     """Construct a complete, isolated streaming pipeline YAML definition."""
+    effective_output_path = output_path if output_path is not None else f"/data/output/{pipeline_name}"
     content = {
         "pipeline": {
             "name": pipeline_name,
@@ -233,7 +397,7 @@ def build_pipeline_yaml(
             {"name": "amount", "type": "double"},
             {"name": "customer_id", "type": "string"},
             {"name": "product_id", "type": "string"},
-            {"name": "sale_date", "type": "string"},
+            {"name": "timestamp", "type": "string"},
         ],
         "processing": {
             "operations": [
@@ -247,7 +411,7 @@ def build_pipeline_yaml(
             "idle_timeout_seconds": template.get("idle_timeout_seconds", 20),
             "max_runtime_seconds": template.get("max_runtime_seconds", 600),
             "starting_offsets": "earliest",
-            "max_offsets_per_trigger": template.get("max_offsets_per_trigger", 10000),
+            "max_offsets_per_trigger": template.get("max_offsets_per_trigger", 3000),
         },
         "messaging": {
             "broker": "kafka",
@@ -260,7 +424,7 @@ def build_pipeline_yaml(
         },
         "storage": {
             "type": "hdfs",
-            "path": f"/data/output/{pipeline_name}",
+            "path": effective_output_path,
         },
         "monitoring": {
             "enabled": True,
@@ -308,6 +472,8 @@ def verify_cool_down_status(
     consumer_lag: int,
     free_ram_mb: float,
     min_free_ram_mb: float,
+    pages_sec_30s_avg: float | None = None,
+    max_pages_sec: float = 100.0,
 ) -> tuple[bool, str]:
     """Pure decision logic for cool-down checks. Returns (passed, failure_reason)."""
     if not health_ok:
@@ -322,6 +488,8 @@ def verify_cool_down_status(
         return False, f"Consumer lag on previous topic ({consumer_lag} messages lagged)"
     if free_ram_mb < min_free_ram_mb:
         return False, f"Free host RAM ({free_ram_mb:.1f} MB) below required threshold ({min_free_ram_mb:.1f} MB)"
+    if pages_sec_30s_avg is not None and pages_sec_30s_avg > max_pages_sec:
+        return False, f"Host 30s average page faults ({pages_sec_30s_avg:.1f} Pages/sec) above threshold ({max_pages_sec:.1f})"
     return True, "All cool-down checks passed"
 
 
@@ -369,6 +537,7 @@ class EvaluationHarness:
         4. Spark worker cores completely free (coresUsed == 0 via Spark Master JSON API).
         5. Consumer lag on previous eval topic == 0.
         6. Free host RAM >= min_free_ram_mb.
+        7. 30s average host Memory\\Pages/sec <= 100.
         """
         logger.info("Initiating pre-experiment cool-down checks...")
         start_time = time.monotonic()
@@ -408,7 +577,8 @@ class EvaluationHarness:
             # 6. Host free RAM
             free_ram = get_free_ram_mb()
 
-            passed, reason = verify_cool_down_status(
+            # First verify lightweight items
+            passed_basic, reason_basic = verify_cool_down_status(
                 health_ok=health_ok,
                 active_runs=active_runs,
                 running_exps=running_exps,
@@ -418,12 +588,37 @@ class EvaluationHarness:
                 min_free_ram_mb=min_free_ram_mb,
             )
 
-            if passed:
-                logger.info("Cool-down verified: Stack healthy, 0 active runs, 0 busy cores, Free RAM=%.1f MB.", free_ram)
+            if not passed_basic:
+                last_reason = reason_basic
+                logger.warning("Cool-down pending (%s). Waiting 4s...", reason_basic)
+                time.sleep(4.0)
+                continue
+
+            # 7. Check 30s average Pages/sec
+            logger.info("Basic pre-flight checks passed. Measuring 30s average Pages/sec...")
+            pages_sec_30s = get_host_page_faults_30s_avg()
+            passed_all, reason_all = verify_cool_down_status(
+                health_ok=health_ok,
+                active_runs=active_runs,
+                running_exps=running_exps,
+                cores_used=cores_used,
+                consumer_lag=consumer_lag,
+                free_ram_mb=free_ram,
+                min_free_ram_mb=min_free_ram_mb,
+                pages_sec_30s_avg=pages_sec_30s,
+                max_pages_sec=100.0,
+            )
+
+            if passed_all:
+                logger.info(
+                    "Cool-down verified: Stack healthy, 0 active runs, 0 busy cores, Free RAM=%.1f MB, Pages/sec=%.1f.",
+                    free_ram,
+                    pages_sec_30s,
+                )
                 return
 
-            last_reason = reason
-            logger.warning("Cool-down pending (%s). Waiting 4s...", reason)
+            last_reason = reason_all
+            logger.warning("Cool-down pending (%s). Waiting 4s...", reason_all)
             time.sleep(4.0)
 
         # Abort if timeout exceeded
@@ -455,7 +650,7 @@ class EvaluationHarness:
                 return json.load(f)
 
         logger.info("==================================================================")
-        logger.info("Starting Run: %s (Target: %s, Fault: %s)", exp_name, target_service, fault_type)
+        logger.info("EXPERIMENT START: %s (Target: %s, Fault: %s)", exp_name, target_service, fault_type)
         logger.info("Topic: %s | Free RAM: %.1f MB", topic_name, get_free_ram_mb())
         logger.info("==================================================================")
 
@@ -466,7 +661,13 @@ class EvaluationHarness:
         spark_metrics_start = get_spark_master_metrics()
         git_commit = get_git_commit_hash()
 
-        p_yaml = build_pipeline_yaml(pipeline_template, topic_name=topic_name, pipeline_name=f"pipe-{exp_name}")
+        rep_output_path = f"/data/output/pipe-{exp_name}-{int(time.time())}"
+        p_yaml = build_pipeline_yaml(
+            pipeline_template,
+            topic_name=topic_name,
+            pipeline_name=f"pipe-{exp_name}",
+            output_path=rep_output_path,
+        )
         e_yaml = build_experiment_yaml(
             experiment_name=exp_name,
             target_service=target_service,
@@ -485,29 +686,36 @@ class EvaluationHarness:
             raise RuntimeError(f"Pipeline launch failed ({p_res.status_code}): {p_res.text}")
         p_data = p_res.json()
         pipeline_run_id = p_data["pipeline_run_id"]
-        logger.info("Launched Pipeline Run ID: %s", pipeline_run_id)
+        logger.info("Launched Pipeline Run ID: %s for %s", pipeline_run_id, exp_name)
 
-        # Step 1b: Poll pipeline progress until records are flowing
-        p_flow_start = time.monotonic()
-        records_flowing = False
-        max_flow_wait = 90.0
-        while time.monotonic() - p_flow_start < max_flow_wait:
+        # Step 1b: Poll pipeline progress until at least one micro-batch is finished
+        p_wait_start = time.monotonic()
+        first_batch_finished = False
+        max_micro_batch_wait = 90.0
+
+        while time.monotonic() - p_wait_start < max_micro_batch_wait:
             time.sleep(1.0)
             prog_res = self.client.get(f"/api/pipeline-runs/{pipeline_run_id}/progress")
             if prog_res.status_code == 200:
                 prog = prog_res.json()
-                pub = (prog.get("kafka") or {}).get("published")
-                rows_read = (prog.get("source") or {}).get("rowsRead")
-                recs_in = (prog.get("spark") or {}).get("recordsIn")
-                if (pub is not None and pub > 0) or (rows_read is not None and rows_read > 0) or (recs_in is not None and recs_in > 0):
-                    records_flowing = True
+                spark_dict = prog.get("spark") or {}
+                recs_in = spark_dict.get("recordsIn") or 0
+                recs_out = spark_dict.get("recordsOut") or 0
+                if recs_in > 0 or recs_out > 0:
+                    first_batch_finished = True
                     break
 
-        pipeline_to_experiment_delay = round(time.monotonic() - p_flow_start, 2)
+        first_micro_batch_wait_seconds = round(time.monotonic() - p_wait_start, 2)
+        if not first_batch_finished:
+            raise TimeoutError(
+                f"ABORTING RUN: Pipeline {pipeline_run_id} failed to complete its first micro-batch "
+                f"within {max_micro_batch_wait}s."
+            )
+
         logger.info(
-            "Pipeline records flowing=%s after %ss delay. Creating experiment...",
-            records_flowing,
-            pipeline_to_experiment_delay,
+            "PHASE CHANGE: First micro-batch completed (wait=%.2fs). Creating experiment %s...",
+            first_micro_batch_wait_seconds,
+            exp_name,
         )
 
         # Step 2: Create experiment
@@ -519,7 +727,7 @@ class EvaluationHarness:
             raise RuntimeError(f"Experiment creation failed ({create_res.status_code}): {create_res.text}")
         exp_data = create_res.json()
         experiment_uuid = exp_data["experiment_id"]
-        logger.info("Created Experiment ID: %s", experiment_uuid)
+        logger.info("Created Experiment ID: %s for %s", experiment_uuid, exp_name)
 
         # Step 3: Trigger experiment execution linked to running pipeline
         run_res = self.client.post(
@@ -532,7 +740,7 @@ class EvaluationHarness:
         )
         if run_res.status_code != 202:
             raise RuntimeError(f"Experiment run trigger failed ({run_res.status_code}): {run_res.text}")
-        logger.info("Execution triggered with pipeline_run_id=%s. Polling for terminal state...", pipeline_run_id)
+        logger.info("PHASE CHANGE: Execution triggered for %s. Monitoring until terminal state...", exp_name)
 
         # Step 4: Poll until terminal state with 15s telemetry sampling
         poll_start = time.monotonic()
@@ -557,9 +765,10 @@ class EvaluationHarness:
                     "pages_per_sec": cur_pages,
                 })
                 logger.info("Telemetry [t+%.0fs]: Free RAM=%.1f MB | Pages/sec=%.1f", now - poll_start, cur_ram, cur_pages)
+                if cur_ram < 1500.0:
+                    host_memory_pressure_flag = True
                 if cur_pages > 100.0:
                     consecutive_high_pages_sec_count += 1
-                    # 2 consecutive samples at 15s interval = >= 30 consecutive seconds
                     if consecutive_high_pages_sec_count >= 2:
                         host_memory_pressure_flag = True
                 else:
@@ -578,9 +787,14 @@ class EvaluationHarness:
             raise TimeoutError(f"Experiment {exp_name} timed out after {max_poll_time}s without reaching terminal state.")
 
         t_end = datetime.now(tz=timezone.utc).isoformat()
-        logger.info("Run %s reached terminal state: %s (memory_pressure=%s)", exp_name, terminal_status, host_memory_pressure_flag)
+        logger.info(
+            "EXPERIMENT FINISHED: %s | Status: %s | Memory Pressure: %s",
+            exp_name,
+            terminal_status,
+            host_memory_pressure_flag,
+        )
 
-        # Step 4: Fetch report and children
+        # Step 5: Fetch report and children
         rep_res = self.client.get(f"/api/reports/{experiment_uuid}")
         if rep_res.status_code != 200:
             raise RuntimeError(f"Failed to fetch report ({rep_res.status_code}): {rep_res.text}")
@@ -594,6 +808,38 @@ class EvaluationHarness:
         with open(output_dir / "children.json", "w", encoding="utf-8") as f:
             json.dump(children_json, f, indent=2)
 
+        # Independent physical HDFS metrics
+        physical_metrics = get_hdfs_physical_metrics(rep_output_path)
+        rep_phys_rows = physical_metrics.get("physical_rows", 0)
+        rep_unique_ids = physical_metrics.get("unique_transaction_ids", 0)
+        rep_dup_ids = physical_metrics.get("duplicate_transaction_ids", 0)
+        rep_baseline_dups = physical_metrics.get("baseline_csv_duplicates", 4730)
+        rep_excess_dups = physical_metrics.get("excess_duplicates", 0)
+        rep_expected_rows = 289744
+        rep_data_loss = max(0, rep_expected_rows - rep_phys_rows)
+
+        results_dict = report_json.get("results") or {}
+        physical_audit = {
+            "output_path": rep_output_path,
+            "expected_rows": rep_expected_rows,
+            "physical_rows": rep_phys_rows,
+            "unique_transaction_ids": rep_unique_ids,
+            "duplicate_transaction_ids": rep_dup_ids,
+            "baseline_csv_duplicates": rep_baseline_dups,
+            "excess_duplicates": rep_excess_dups,
+            "physical_data_loss": rep_data_loss,
+            "file_count": physical_metrics.get("file_count", 0),
+            "platform_validator": {
+                "label": "platform validator (unreliable, uses tracker counters)",
+                "data_loss": results_dict.get("dataLoss"),
+                "duplicates": results_dict.get("duplicates"),
+                "expected_records": results_dict.get("expectedRecords"),
+                "processed_records": results_dict.get("processedRecords"),
+            },
+        }
+        with open(output_dir / "physical_metrics.json", "w", encoding="utf-8") as f:
+            json.dump(physical_audit, f, indent=2)
+
         env_metadata = {
             "experiment_name": exp_name,
             "experiment_id": experiment_uuid,
@@ -602,7 +848,9 @@ class EvaluationHarness:
             "repetition_index": rep_idx,
             "topic_name": topic_name,
             "pipeline_run_id": pipeline_run_id,
-            "pipeline_to_experiment_delay_seconds": pipeline_to_experiment_delay,
+            "output_path": rep_output_path,
+            "physical_metrics": physical_audit,
+            "first_micro_batch_wait_seconds": first_micro_batch_wait_seconds,
             "git_commit": git_commit,
             "started_at": t_start,
             "finished_at": t_end,
@@ -624,6 +872,255 @@ class EvaluationHarness:
         logger.info("Persisted raw outputs to %s", output_dir)
         return report_json
 
+    def run_calibration(self) -> dict[str, Any]:
+        """
+        Run the streaming pipeline alone with NO fault injection.
+        Measures:
+        - Time from start to first non-zero recordsIn (first micro-batch)
+        - Rows per second per micro-batch and per-batch offsets
+        - Total duration and duration after first non-zero counters
+        - Free host RAM, Pages/sec, and docker stats peak memory
+        Saves all outputs to docs/evaluation/raw/calibration/.
+        """
+        self.authenticate()
+        cal_dir = self.raw_output_dir / "calibration"
+        cal_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(self.matrix_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+
+        settings = cfg.get("settings", {})
+        pipeline_template = cfg.get("pipeline_template", {})
+        min_free_ram = float(settings.get("min_host_free_ram_mb", 1500))
+
+        logger.info("==================================================================")
+        logger.info("STARTING CALIBRATION RUN (Pipeline only, NO fault injection)")
+        logger.info("==================================================================")
+
+        self.cool_down_check(min_free_ram_mb=min_free_ram)
+
+        cal_ts = int(time.time())
+        cal_topic = f"eval-stream-calibration-{cal_ts}"
+        p_name = "pipe-eval-calibration"
+        cal_output_path = f"/data/output/{p_name}-{cal_ts}"
+        p_yaml = build_pipeline_yaml(
+            pipeline_template,
+            topic_name=cal_topic,
+            pipeline_name=p_name,
+            output_path=cal_output_path,
+        )
+
+        ram_start = get_free_ram_mb()
+        docker_stats_start = get_docker_stats_snapshot()
+        git_commit = get_git_commit_hash()
+        t_start_iso = datetime.now(tz=timezone.utc).isoformat()
+        t_start_mono = time.monotonic()
+
+        # Step 1: Launch pipeline
+        p_res = self.client.post("/api/pipelines/run?wait=false", json={"yaml_content": p_yaml})
+        if p_res.status_code not in (200, 202):
+            raise RuntimeError(f"Calibration pipeline launch failed ({p_res.status_code}): {p_res.text}")
+        p_data = p_res.json()
+        pipeline_run_id = p_data["pipeline_run_id"]
+        logger.info("Calibration pipeline launched. Run ID: %s | Topic: %s", pipeline_run_id, cal_topic)
+
+        # Step 2: Poll progress until terminal state while logging micro-batches and telemetry
+        first_nonzero_time: float | None = None
+        first_records_in: int = 0
+        micro_batches: list[dict[str, Any]] = []
+        telemetry_samples: list[dict[str, Any]] = []
+
+        last_sample_t = 0.0
+        last_seen_records_in = -1
+        terminal_status: str | None = None
+        max_cal_wait = 600.0
+
+        while time.monotonic() - t_start_mono < max_cal_wait:
+            now_mono = time.monotonic()
+            elapsed = now_mono - t_start_mono
+
+            # 15s telemetry
+            if now_mono - last_sample_t >= 15.0:
+                cur_ram = get_free_ram_mb()
+                cur_pages = get_host_page_faults_per_sec()
+                last_sample_t = now_mono
+                telemetry_samples.append({
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                    "elapsed_seconds": round(elapsed, 1),
+                    "free_ram_mb": cur_ram,
+                    "pages_per_sec": cur_pages,
+                })
+                logger.info("Calibration Telemetry [t+%.0fs]: Free RAM=%.1f MB | Pages/sec=%.1f", elapsed, cur_ram, cur_pages)
+
+            time.sleep(1.0)
+            prog_res = self.client.get(f"/api/pipeline-runs/{pipeline_run_id}/progress")
+            if prog_res.status_code == 200:
+                prog = prog_res.json()
+                st = prog.get("status")
+                spark_info = prog.get("spark") or {}
+                recs_in = spark_info.get("recordsIn") or 0
+                recs_out = spark_info.get("recordsOut") or 0
+                rate = (prog.get("throughput") or {}).get("recordsPerSecond") or 0.0
+
+                if (recs_in > 0 or recs_out > 0) and first_nonzero_time is None:
+                    first_nonzero_time = now_mono
+                    first_records_in = recs_in
+                    logger.info("CALIBRATION MILESTONE: First non-zero counters observed at t+%.2fs (recordsIn=%d)", elapsed, recs_in)
+
+                if recs_in != last_seen_records_in and recs_in > 0:
+                    batch_record = {
+                        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                        "elapsed_seconds": round(elapsed, 2),
+                        "records_in": recs_in,
+                        "records_out": recs_out,
+                        "rate_rps": rate,
+                        "consumer_lag": (prog.get("kafka") or {}).get("consumerLag"),
+                    }
+                    micro_batches.append(batch_record)
+                    last_seen_records_in = recs_in
+                    logger.info("Batch observed at t+%.1fs: recordsIn=%d, rate=%.1f rps", elapsed, recs_in, rate)
+
+                if st in ("succeeded", "failed", "cancelled"):
+                    terminal_status = st
+                    break
+
+        t_end_iso = datetime.now(tz=timezone.utc).isoformat()
+        total_duration = round(time.monotonic() - t_start_mono, 2)
+        duration_after_first_counters = (
+            round(time.monotonic() - first_nonzero_time, 2) if first_nonzero_time else 0.0
+        )
+        time_to_first_batch = (
+            round(first_nonzero_time - t_start_mono, 2) if first_nonzero_time else 0.0
+        )
+
+        logger.info("==================================================================")
+        logger.info(
+            "CALIBRATION COMPLETE: Status=%s | Total Duration=%.2fs | Active Processing=%.2fs | First Batch Delay=%.2fs",
+            terminal_status,
+            total_duration,
+            duration_after_first_counters,
+            time_to_first_batch,
+        )
+        logger.info("==================================================================")
+
+        docker_stats_end = get_docker_stats_snapshot()
+
+        calibration_data = {
+            "type": "calibration",
+            "git_commit": git_commit,
+            "pipeline_run_id": pipeline_run_id,
+            "topic_name": cal_topic,
+            "started_at": t_start_iso,
+            "finished_at": t_end_iso,
+            "terminal_status": terminal_status,
+            "total_duration_seconds": total_duration,
+            "time_to_first_micro_batch_seconds": time_to_first_batch,
+            "duration_after_first_counters_seconds": duration_after_first_counters,
+            "host_free_ram_start_mb": ram_start,
+            "host_free_ram_end_mb": get_free_ram_mb(),
+            "telemetry_samples": telemetry_samples,
+            "micro_batches": micro_batches,
+            "docker_stats_start": docker_stats_start,
+            "docker_stats_end": docker_stats_end,
+        }
+
+        with open(cal_dir / "calibration_report.json", "w", encoding="utf-8") as f:
+            json.dump(calibration_data, f, indent=2)
+
+        # Sanity gate: verify HDFS output row count matches physical expected count
+        output_path = cal_output_path
+        physical_metrics = get_hdfs_physical_metrics(output_path)
+        physical_rows = physical_metrics.get("physical_rows", 0)
+        unique_ids = physical_metrics.get("unique_transaction_ids", 0)
+        dup_ids = physical_metrics.get("duplicate_transaction_ids", 0)
+        baseline_dups = physical_metrics.get("baseline_csv_duplicates", 4730)
+        excess_dups = physical_metrics.get("excess_duplicates", 0)
+        expected_physical_rows = 289744
+        physical_data_loss = max(0, expected_physical_rows - physical_rows)
+
+        # Retrieve tracker numbers for auditing and logging
+        tracker_rows_written = None
+        tracker_records_out = None
+        tracker_records_in = None
+        cal_pipeline_run = self.client.get(f"/api/pipeline-runs/{pipeline_run_id}")
+        if cal_pipeline_run.status_code == 200:
+            progress = self.client.get(f"/api/pipeline-runs/{pipeline_run_id}/progress")
+            if progress.status_code == 200:
+                prog_data = progress.json()
+                hdfs_info = prog_data.get("hdfs") or {}
+                spark_info = prog_data.get("spark") or {}
+                tracker_rows_written = hdfs_info.get("rowsWritten")
+                tracker_records_out = spark_info.get("recordsOut")
+                tracker_records_in = spark_info.get("recordsIn")
+
+        calibration_data["output_path"] = output_path
+        calibration_data["physical_metrics"] = {
+            "expected_rows": expected_physical_rows,
+            "physical_rows": physical_rows,
+            "unique_transaction_ids": unique_ids,
+            "duplicate_transaction_ids": dup_ids,
+            "baseline_csv_duplicates": baseline_dups,
+            "excess_duplicates": excess_dups,
+            "physical_data_loss": physical_data_loss,
+            "file_count": physical_metrics.get("file_count", 0),
+        }
+        calibration_data["platform_validator_unreliable"] = {
+            "label": "platform validator (unreliable, uses tracker counters)",
+            "records_in": tracker_records_in,
+            "records_out": tracker_records_out,
+            "rows_written": tracker_rows_written,
+        }
+        # Backward-compat fields in calibration_data:
+        calibration_data["hdfs_rows_physical"] = physical_rows
+        calibration_data["hdfs_rows_expected"] = expected_physical_rows
+        calibration_data["tracker_hdfs_rows_written"] = tracker_rows_written
+        calibration_data["tracker_spark_records_out"] = tracker_records_out
+
+        logger.info(
+            "CALIBRATION SANITY CHECK: Physical HDFS rows=%d (expected=%d, diff/loss=%d) | Unique IDs=%d | Dups=%d (excess=%d) | "
+            "Platform Tracker (unreliable): recordsIn=%s, recordsOut=%s, rowsWritten=%s",
+            physical_rows,
+            expected_physical_rows,
+            physical_data_loss,
+            unique_ids,
+            dup_ids,
+            excess_dups,
+            tracker_records_in,
+            tracker_records_out,
+            tracker_rows_written,
+        )
+
+        if physical_rows == 0 or physical_rows != expected_physical_rows:
+            logger.error(
+                "CALIBRATION SANITY GATE FAILED: Physical HDFS output has %d rows (expected %d). "
+                "Platform Tracker (unreliable) reported hdfs.rowsWritten=%s, spark.recordsOut=%s. "
+                "Do NOT use this calibration for evaluation.",
+                physical_rows,
+                expected_physical_rows,
+                tracker_rows_written,
+                tracker_records_out,
+            )
+            calibration_data["hdfs_sanity_gate"] = "FAILED"
+            with open(cal_dir / "calibration_report.json", "w", encoding="utf-8") as f:
+                json.dump(calibration_data, f, indent=2)
+            raise RuntimeError(
+                f"Calibration SANITY GATE FAILED: Physical HDFS row count is {physical_rows} "
+                f"(expected {expected_physical_rows}). Platform tracker values (unreliable): "
+                f"recordsIn={tracker_records_in}, recordsOut={tracker_records_out}, rowsWritten={tracker_rows_written}."
+            )
+
+        calibration_data["hdfs_sanity_gate"] = "PASSED"
+        logger.info(
+            "CALIBRATION SANITY GATE PASSED: Physical HDFS rows=%d matches expected %d",
+            physical_rows,
+            expected_physical_rows,
+        )
+        with open(cal_dir / "calibration_report.json", "w", encoding="utf-8") as f:
+            json.dump(calibration_data, f, indent=2)
+
+        self.last_topic_name = cal_topic
+        return calibration_data
+
     def execute_matrix(self, pilot_only: bool = False, repetitions_override: int | None = None) -> list[dict[str, Any]]:
         """Run all experiments defined in matrix.yaml."""
         with open(self.matrix_path, "r", encoding="utf-8") as f:
@@ -638,7 +1135,7 @@ class EvaluationHarness:
         reps = repetitions_override or (2 if pilot_only else int(settings.get("repetitions_per_experiment", 5)))
 
         if pilot_only and experiments:
-            experiments = [experiments[0]]  # Run only the first experiment for pilot
+            experiments = [experiments[0]]
 
         self.authenticate()
         all_results = []
@@ -671,6 +1168,7 @@ def main():
     parser = argparse.ArgumentParser(description="ChaosFlow Graduation Research Evaluation Harness")
     parser.add_argument("--matrix", default="scripts/evaluation/matrix.yaml", help="Path to matrix.yaml")
     parser.add_argument("--pilot", action="store_true", help="Execute pilot run (1 experiment, 2 repetitions)")
+    parser.add_argument("--calibrate", action="store_true", help="Run calibration pipeline only (no fault injection)")
     parser.add_argument("--repetitions", type=int, default=None, help="Override repetition count")
     parser.add_argument("--base-url", default="http://localhost:8000", help="Platform API base URL")
     args = parser.parse_args()
@@ -679,7 +1177,11 @@ def main():
         base_url=args.base_url,
         matrix_path=args.matrix,
     )
-    harness.execute_matrix(pilot_only=args.pilot, repetitions_override=args.repetitions)
+
+    if args.calibrate:
+        harness.run_calibration()
+    else:
+        harness.execute_matrix(pilot_only=args.pilot, repetitions_override=args.repetitions)
 
 
 if __name__ == "__main__":
