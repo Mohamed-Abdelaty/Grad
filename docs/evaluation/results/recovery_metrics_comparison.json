@@ -1,0 +1,129 @@
+{
+  "kafka-stop_r1": {
+    "base_tp": 1499.46,
+    "container_rec": 10.06,
+    "tp_90_rec": 13.18
+  },
+  "kafka-stop_r2": {
+    "base_tp": 1498.9,
+    "container_rec": 12.74,
+    "tp_90_rec": 19.23
+  },
+  "kafka-stop_r3": {
+    "base_tp": 1499.4,
+    "container_rec": 20.97,
+    "tp_90_rec": 27.68
+  },
+  "kafka-stop_r4": {
+    "base_tp": 1499.4,
+    "container_rec": 23.0,
+    "tp_90_rec": 27.39
+  },
+  "kafka-stop_r5": {
+    "base_tp": 1793.11,
+    "container_rec": 20.83,
+    "tp_90_rec": 26.97
+  },
+  "kafka-restart_r1": {
+    "base_tp": 1199.57,
+    "container_rec": 3.22,
+    "tp_90_rec": 7.78
+  },
+  "kafka-restart_r2": {
+    "base_tp": 1498.96,
+    "container_rec": 0.1,
+    "tp_90_rec": 3.68
+  },
+  "kafka-restart_r3": {
+    "base_tp": 1498.76,
+    "container_rec": 0.13,
+    "tp_90_rec": 1.38
+  },
+  "kafka-restart_r4": {
+    "base_tp": 1499.47,
+    "container_rec": 0.07,
+    "tp_90_rec": 2.38
+  },
+  "kafka-restart_r5": {
+    "base_tp": 1499.23,
+    "container_rec": 0.07,
+    "tp_90_rec": 1.97
+  },
+  "spark-worker-stop_r1": {
+    "base_tp": 1799.36,
+    "container_rec": 0.55,
+    "tp_90_rec": 16.07
+  },
+  "spark-worker-stop_r2": {
+    "base_tp": 1499.17,
+    "container_rec": 0.36,
+    "tp_90_rec": 14.21
+  },
+  "spark-worker-stop_r3": {
+    "base_tp": 1799.06,
+    "container_rec": 0.56,
+    "tp_90_rec": 19.61
+  },
+  "spark-worker-stop_r4": {
+    "base_tp": 1499.16,
+    "container_rec": 0.32,
+    "tp_90_rec": 11.92
+  },
+  "spark-worker-stop_r5": {
+    "base_tp": 1798.72,
+    "container_rec": 0.59,
+    "tp_90_rec": 26.01
+  },
+  "spark-worker-restart_r1": {
+    "base_tp": 1199.56,
+    "container_rec": 0.13,
+    "tp_90_rec": 1.9
+  },
+  "spark-worker-restart_r2": {
+    "base_tp": 1199.17,
+    "container_rec": 0.23,
+    "tp_90_rec": 3.65
+  },
+  "spark-worker-restart_r3": {
+    "base_tp": 1798.93,
+    "container_rec": 0.07,
+    "tp_90_rec": 2.29
+  },
+  "spark-worker-restart_r4": {
+    "base_tp": 1498.96,
+    "container_rec": 0.09,
+    "tp_90_rec": 0.74
+  },
+  "spark-worker-restart_r5": {
+    "base_tp": 1499.47,
+    "container_rec": 0.07,
+    "tp_90_rec": 0.75
+  },
+  "datanode-stop_r1": {
+    "base_tp": 1499.07,
+    "container_rec": 0.54,
+    "tp_90_rec": 24.05
+  },
+  "datanode-stop_r2": {
+    "base_tp": 1199.17,
+    "container_rec": "N/A",
+    "tp_90_rec": "N/A",
+    "note": "query terminated"
+  },
+  "datanode-stop_r3": {
+    "base_tp": 1499.46,
+    "container_rec": 0.39,
+    "tp_90_rec": 20.01
+  },
+  "datanode-stop_r4": {
+    "base_tp": 1499.45,
+    "container_rec": 0.47,
+    "tp_90_rec": 21.01
+  },
+  "datanode-stop_r5": {
+    "base_tp": 1199.25,
+    "container_rec": "N/A",
+    "tp_90_rec": "N/A",
+    "note": "query terminated"
+  }
+}

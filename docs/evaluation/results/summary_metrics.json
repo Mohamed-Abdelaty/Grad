@@ -7,7 +7,7 @@
   "experiments": {
     "kafka-stop": {
       "target_container": "platform-kafka",
-      "normal_throughput": 1472.0,
+      "calibration_throughput": 1472.0,
       "repetitions": [
         {
           "run_dir": "docs/evaluation/raw\\pilot-v3/eval-kafka-stop-r1",
@@ -16,6 +16,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 10.06,
+          "pre_fault_baseline_throughput": 1499.46,
           "throughput_during_fault": 0.0,
           "throughput_post_recovery": 1216.35,
           "platform_data_loss": 10256,
@@ -29,6 +30,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 12.74,
+          "pre_fault_baseline_throughput": 1498.9,
           "throughput_during_fault": 139.17,
           "throughput_post_recovery": 1190.44,
           "platform_data_loss": 10256,
@@ -42,6 +44,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 20.97,
+          "pre_fault_baseline_throughput": 1499.4,
           "throughput_during_fault": 134.29,
           "throughput_post_recovery": 1140.92,
           "platform_data_loss": 10256,
@@ -55,6 +58,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 23.0,
+          "pre_fault_baseline_throughput": 1499.4,
           "throughput_during_fault": 127.17,
           "throughput_post_recovery": 1113.46,
           "platform_data_loss": 10256,
@@ -68,6 +72,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 20.83,
+          "pre_fault_baseline_throughput": 1793.11,
           "throughput_during_fault": 135.35,
           "throughput_post_recovery": 1127.81,
           "platform_data_loss": 10256,
@@ -76,11 +81,23 @@
         }
       ],
       "stats": {
-        "recovery_time": {
+        "container_recovery_time": {
           "mean": 17.52,
           "std": 5.73,
           "min": 10.06,
           "max": 23.0
+        },
+        "throughput_90pct_recovery_time": {
+          "mean": 22.89,
+          "std": 6.47,
+          "min": 13.18,
+          "max": 27.68
+        },
+        "pre_fault_baseline_throughput": {
+          "mean": 1558.05,
+          "std": 131.4,
+          "min": 1498.9,
+          "max": 1793.11
         },
         "throughput_during_fault": {
           "mean": 107.2,
@@ -88,10 +105,16 @@
           "min": 0.0,
           "max": 139.17
         },
-        "throughput_degradation_pct": {
+        "throughput_degradation_pct_calibration": {
           "mean": 92.72,
           "std": 4.08,
           "min": 90.55,
+          "max": 100.0
+        },
+        "throughput_degradation_pct_prefault": {
+          "mean": 93.15,
+          "std": 3.89,
+          "min": 90.72,
           "max": 100.0
         },
         "throughput_post_recovery": {
@@ -128,7 +151,7 @@
     },
     "kafka-restart": {
       "target_container": "platform-kafka",
-      "normal_throughput": 1472.0,
+      "calibration_throughput": 1472.0,
       "repetitions": [
         {
           "run_dir": "docs/evaluation/raw\\campaign/kafka-restart/eval-kafka-restart-r1",
@@ -137,6 +160,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 3.22,
+          "pre_fault_baseline_throughput": 1199.57,
           "throughput_during_fault": 0.0,
           "throughput_post_recovery": 1004.33,
           "platform_data_loss": 10256,
@@ -150,6 +174,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.1,
+          "pre_fault_baseline_throughput": 1498.96,
           "throughput_during_fault": 549.95,
           "throughput_post_recovery": 1319.86,
           "platform_data_loss": 10256,
@@ -163,6 +188,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.13,
+          "pre_fault_baseline_throughput": 1498.76,
           "throughput_during_fault": 548.56,
           "throughput_post_recovery": 1316.39,
           "platform_data_loss": 10256,
@@ -176,6 +202,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.07,
+          "pre_fault_baseline_throughput": 1499.47,
           "throughput_during_fault": 686.27,
           "throughput_post_recovery": 1324.72,
           "platform_data_loss": 10256,
@@ -189,6 +216,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.07,
+          "pre_fault_baseline_throughput": 1499.23,
           "throughput_during_fault": 838.66,
           "throughput_post_recovery": 1338.17,
           "platform_data_loss": 10256,
@@ -197,11 +225,23 @@
         }
       ],
       "stats": {
-        "recovery_time": {
+        "container_recovery_time": {
           "mean": 0.72,
           "std": 1.4,
           "min": 0.07,
           "max": 3.22
+        },
+        "throughput_90pct_recovery_time": {
+          "mean": 3.44,
+          "std": 2.57,
+          "min": 1.38,
+          "max": 7.78
+        },
+        "pre_fault_baseline_throughput": {
+          "mean": 1439.2,
+          "std": 133.96,
+          "min": 1199.57,
+          "max": 1499.47
         },
         "throughput_during_fault": {
           "mean": 524.69,
@@ -209,10 +249,16 @@
           "min": 0.0,
           "max": 838.66
         },
-        "throughput_degradation_pct": {
+        "throughput_degradation_pct_calibration": {
           "mean": 64.36,
           "std": 21.51,
           "min": 43.03,
+          "max": 100.0
+        },
+        "throughput_degradation_pct_prefault": {
+          "mean": 65.0,
+          "std": 21.12,
+          "min": 44.06,
           "max": 100.0
         },
         "throughput_post_recovery": {
@@ -249,7 +295,7 @@
     },
     "spark-worker-stop": {
       "target_container": "platform-spark-worker",
-      "normal_throughput": 1472.0,
+      "calibration_throughput": 1472.0,
       "repetitions": [
         {
           "run_dir": "docs/evaluation/raw\\campaign/spark-worker-stop/eval-spark-worker-stop-r1",
@@ -258,6 +304,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.55,
+          "pre_fault_baseline_throughput": 1799.36,
           "throughput_during_fault": 591.34,
           "throughput_post_recovery": 1230.62,
           "platform_data_loss": 10256,
@@ -271,6 +318,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.36,
+          "pre_fault_baseline_throughput": 1499.17,
           "throughput_during_fault": 593.18,
           "throughput_post_recovery": 1231.95,
           "platform_data_loss": 10256,
@@ -284,6 +332,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.56,
+          "pre_fault_baseline_throughput": 1799.06,
           "throughput_during_fault": 588.06,
           "throughput_post_recovery": 1187.4,
           "platform_data_loss": 10256,
@@ -297,6 +346,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.32,
+          "pre_fault_baseline_throughput": 1499.16,
           "throughput_during_fault": 494.18,
           "throughput_post_recovery": 1249.72,
           "platform_data_loss": 10256,
@@ -310,6 +360,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.59,
+          "pre_fault_baseline_throughput": 1798.72,
           "throughput_during_fault": 592.81,
           "throughput_post_recovery": 1205.13,
           "platform_data_loss": 10256,
@@ -318,11 +369,23 @@
         }
       ],
       "stats": {
-        "recovery_time": {
+        "container_recovery_time": {
           "mean": 0.48,
           "std": 0.13,
           "min": 0.32,
           "max": 0.59
+        },
+        "throughput_90pct_recovery_time": {
+          "mean": 17.56,
+          "std": 5.5,
+          "min": 11.92,
+          "max": 26.01
+        },
+        "pre_fault_baseline_throughput": {
+          "mean": 1679.09,
+          "std": 164.25,
+          "min": 1499.16,
+          "max": 1799.36
         },
         "throughput_during_fault": {
           "mean": 571.91,
@@ -330,11 +393,17 @@
           "min": 494.18,
           "max": 593.18
         },
-        "throughput_degradation_pct": {
+        "throughput_degradation_pct_calibration": {
           "mean": 61.15,
           "std": 2.96,
           "min": 59.7,
           "max": 66.43
+        },
+        "throughput_degradation_pct_prefault": {
+          "mean": 65.79,
+          "std": 3.0,
+          "min": 60.43,
+          "max": 67.31
         },
         "throughput_post_recovery": {
           "mean": 1220.96,
@@ -370,7 +439,7 @@
     },
     "spark-worker-restart": {
       "target_container": "platform-spark-worker",
-      "normal_throughput": 1472.0,
+      "calibration_throughput": 1472.0,
       "repetitions": [
         {
           "run_dir": "docs/evaluation/raw\\campaign/spark-worker-restart/eval-spark-worker-restart-r1",
@@ -379,6 +448,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.13,
+          "pre_fault_baseline_throughput": 1199.56,
           "throughput_during_fault": 1080.04,
           "throughput_post_recovery": 1367.7,
           "platform_data_loss": 10256,
@@ -392,6 +462,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.23,
+          "pre_fault_baseline_throughput": 1199.17,
           "throughput_during_fault": 583.45,
           "throughput_post_recovery": 1311.46,
           "platform_data_loss": 10256,
@@ -405,6 +476,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.07,
+          "pre_fault_baseline_throughput": 1798.93,
           "throughput_during_fault": 1078.26,
           "throughput_post_recovery": 1365.81,
           "platform_data_loss": 10256,
@@ -418,6 +490,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.09,
+          "pre_fault_baseline_throughput": 1498.96,
           "throughput_during_fault": 1080.04,
           "throughput_post_recovery": 1357.1,
           "platform_data_loss": 9329,
@@ -431,6 +504,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.07,
+          "pre_fault_baseline_throughput": 1499.47,
           "throughput_during_fault": 981.88,
           "throughput_post_recovery": 1350.65,
           "platform_data_loss": 10256,
@@ -439,11 +513,23 @@
         }
       ],
       "stats": {
-        "recovery_time": {
+        "container_recovery_time": {
           "mean": 0.12,
           "std": 0.07,
           "min": 0.07,
           "max": 0.23
+        },
+        "throughput_90pct_recovery_time": {
+          "mean": 1.87,
+          "std": 1.21,
+          "min": 0.74,
+          "max": 3.65
+        },
+        "pre_fault_baseline_throughput": {
+          "mean": 1439.22,
+          "std": 250.82,
+          "min": 1199.17,
+          "max": 1798.93
         },
         "throughput_during_fault": {
           "mean": 960.73,
@@ -451,11 +537,17 @@
           "min": 583.45,
           "max": 1080.04
         },
-        "throughput_degradation_pct": {
+        "throughput_degradation_pct_calibration": {
           "mean": 34.73,
           "std": 14.61,
           "min": 26.63,
           "max": 60.36
+        },
+        "throughput_degradation_pct_prefault": {
+          "mean": 32.77,
+          "std": 15.37,
+          "min": 9.96,
+          "max": 51.35
         },
         "throughput_post_recovery": {
           "mean": 1350.54,
@@ -491,7 +583,7 @@
     },
     "datanode-stop": {
       "target_container": "platform-datanode",
-      "normal_throughput": 1472.0,
+      "calibration_throughput": 1472.0,
       "repetitions": [
         {
           "run_dir": "docs/evaluation/raw\\campaign/datanode-stop/eval-datanode-stop-r1",
@@ -500,6 +592,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.54,
+          "pre_fault_baseline_throughput": 1499.07,
           "throughput_during_fault": 491.95,
           "throughput_post_recovery": 1179.02,
           "platform_data_loss": 10256,
@@ -513,6 +606,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.38,
+          "pre_fault_baseline_throughput": 1199.17,
           "throughput_during_fault": 0.0,
           "throughput_post_recovery": 953.07,
           "platform_data_loss": 1968,
@@ -526,6 +620,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.39,
+          "pre_fault_baseline_throughput": 1499.46,
           "throughput_during_fault": 492.19,
           "throughput_post_recovery": 1189.98,
           "platform_data_loss": 10256,
@@ -539,6 +634,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.47,
+          "pre_fault_baseline_throughput": 1499.45,
           "throughput_during_fault": 492.56,
           "throughput_post_recovery": 1188.07,
           "platform_data_loss": 10256,
@@ -552,6 +648,7 @@
           "extra_rows": 0,
           "excess_duplicates": 0,
           "recovery_time_seconds": 0.41,
+          "pre_fault_baseline_throughput": 1199.25,
           "throughput_during_fault": 0.0,
           "throughput_post_recovery": 942.83,
           "platform_data_loss": 1978,
@@ -560,11 +657,23 @@
         }
       ],
       "stats": {
-        "recovery_time": {
-          "mean": 0.44,
-          "std": 0.07,
-          "min": 0.38,
+        "container_recovery_time": {
+          "mean": 0.47,
+          "std": 0.08,
+          "min": 0.39,
           "max": 0.54
+        },
+        "throughput_90pct_recovery_time": {
+          "mean": 21.69,
+          "std": 2.1,
+          "min": 20.01,
+          "max": 24.05
+        },
+        "pre_fault_baseline_throughput": {
+          "mean": 1379.28,
+          "std": 164.38,
+          "min": 1199.17,
+          "max": 1499.46
         },
         "throughput_during_fault": {
           "mean": 295.34,
@@ -572,10 +681,16 @@
           "min": 0.0,
           "max": 492.56
         },
-        "throughput_degradation_pct": {
+        "throughput_degradation_pct_calibration": {
           "mean": 79.94,
           "std": 18.32,
           "min": 66.54,
+          "max": 100.0
+        },
+        "throughput_degradation_pct_prefault": {
+          "mean": 80.3,
+          "std": 17.98,
+          "min": 67.15,
           "max": 100.0
         },
         "throughput_post_recovery": {
