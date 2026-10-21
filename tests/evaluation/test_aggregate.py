@@ -10,8 +10,10 @@ from scripts.evaluation.aggregate import (
     compute_stats,
     load_run_metrics,
     load_calibration_metrics,
+    load_control_campaign_metrics,
     aggregate_campaign,
     build_gap3_rows,
+    build_gap3_primary_rows,
     export_gap3_csv,
     export_gap3_markdown,
 )
@@ -142,3 +144,44 @@ def test_aggregate_campaign_and_build_gap3():
         with open(md_file, "r", encoding="utf-8") as f:
             content = f.read()
             assert "| kafka-stop |" in content
+
+
+def test_load_control_campaign_metrics_and_primary_rows():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ctrl_dir = os.path.join(tmpdir, "control")
+        os.makedirs(ctrl_dir, exist_ok=True)
+
+        for i in range(1, 3):
+            r_dir = os.path.join(ctrl_dir, f"eval-control-r{i}")
+            os.makedirs(r_dir, exist_ok=True)
+            with open(os.path.join(r_dir, "report.json"), "w", encoding="utf-8") as f:
+                json.dump({
+                    "baseline": {"throughput_records_per_sec": 1600.0},
+                    "throughputDuringFault": 1500.0,
+                    "throughputAfter": 1600.0,
+                    "total_duration_seconds": 220.0,
+                    "time_to_first_micro_batch_seconds": 20.0,
+                }, f)
+            with open(os.path.join(r_dir, "physical_metrics.json"), "w", encoding="utf-8") as f:
+                json.dump({
+                    "physical_rows": 289744,
+                    "physical_data_loss": 0,
+                    "excess_duplicates": 0,
+                    "multiset_comparison": {"missing_rows": 0, "extra_rows": 0},
+                }, f)
+
+        ctrl_metrics = load_control_campaign_metrics(ctrl_dir)
+        assert ctrl_metrics is not None
+        assert ctrl_metrics["n_runs"] == 2
+        assert ctrl_metrics["baseline_throughput"]["mean"] == 1600.0
+        assert ctrl_metrics["throughput_during_simulated_fault"]["mean"] == 1500.0
+
+        agg_data = {
+            "control_baseline": {"throughput_normal": 1472.0},
+            "control_empirical": ctrl_metrics,
+            "experiments": {},
+        }
+        primary_rows = build_gap3_primary_rows(agg_data)
+        assert len(primary_rows) == 1
+        assert "Control" in primary_rows[0]["Experiment Name"]
+        assert "1600.0 ± 0.0" in primary_rows[0]["Control Baseline (rec/s)"]

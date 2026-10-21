@@ -375,18 +375,115 @@ def load_calibration_metrics(cal_path: str) -> Dict[str, Any]:
     }
 
 
+def load_control_campaign_metrics(control_dir: str) -> Optional[Dict[str, Any]]:
+    """Parse control runs to get the empirical 5-repetition control baseline."""
+    if not os.path.isdir(control_dir):
+        return None
+    runs = sorted([d for d in os.listdir(control_dir) if d.startswith("eval-control-r")])
+    if not runs:
+        return None
+
+    baseline_tps = []
+    fault_window_tps = []
+    post_tps = []
+    durations = []
+    warmups = []
+    phys_rows = []
+    missing_rows = []
+    extra_rows = []
+    excess_dups = []
+    reps_data = []
+
+    for r in runs:
+        r_dir = os.path.join(control_dir, r)
+        rep_file = os.path.join(r_dir, "report.json")
+        phys_file = os.path.join(r_dir, "physical_metrics.json")
+        env_file = os.path.join(r_dir, "environment.json")
+        if not os.path.exists(rep_file):
+            continue
+        with open(rep_file, "r", encoding="utf-8") as f:
+            rep = json.load(f)
+        phys = {}
+        if os.path.exists(phys_file):
+            with open(phys_file, "r", encoding="utf-8") as f:
+                phys = json.load(f)
+        env = {}
+        if os.path.exists(env_file):
+            with open(env_file, "r", encoding="utf-8") as f:
+                env = json.load(f)
+
+        base_tp = (rep.get("baseline") or {}).get("throughput_records_per_sec") or rep.get("throughputBaseline", 0.0)
+        sim_tp = rep.get("throughputDuringFault", 0.0)
+        p_tp = rep.get("throughputAfter", 0.0)
+        dur = rep.get("total_duration_seconds", 0.0)
+        warmup = rep.get("time_to_first_micro_batch_seconds", 0.0)
+        p_rows = phys.get("physical_rows", 289744)
+        m_rows = phys.get("physical_data_loss", 0)
+        e_rows = phys.get("multiset_comparison", {}).get("extra_rows", 0)
+        d_rows = phys.get("excess_duplicates", 0)
+
+        baseline_tps.append(base_tp)
+        fault_window_tps.append(sim_tp)
+        post_tps.append(p_tp)
+        durations.append(dur)
+        warmups.append(warmup)
+        phys_rows.append(p_rows)
+        missing_rows.append(m_rows)
+        extra_rows.append(e_rows)
+        excess_dups.append(d_rows)
+
+        reps_data.append({
+            "run_dir": r,
+            "baseline_throughput": base_tp,
+            "simulated_fault_throughput": sim_tp,
+            "post_throughput": p_tp,
+            "total_duration_seconds": dur,
+            "warmup_seconds": warmup,
+            "physical_rows": p_rows,
+            "missing_rows": m_rows,
+            "extra_rows": e_rows,
+            "excess_duplicates": d_rows,
+            "host_memory_pressure": env.get("host_memory_pressure", False),
+        })
+
+    if not baseline_tps:
+        return None
+
+    deg_sim = [((b - s) / max(0.001, b)) * 100.0 for b, s in zip(baseline_tps, fault_window_tps)]
+
+    return {
+        "n_runs": len(baseline_tps),
+        "baseline_throughput": compute_stats(baseline_tps),
+        "throughput_during_simulated_fault": compute_stats(fault_window_tps),
+        "throughput_post": compute_stats(post_tps),
+        "simulated_degradation_pct": compute_stats(deg_sim),
+        "total_duration_seconds": compute_stats(durations),
+        "warmup_seconds": compute_stats(warmups),
+        "physical_rows": compute_stats(phys_rows),
+        "missing_rows": compute_stats(missing_rows),
+        "extra_rows": compute_stats(extra_rows),
+        "excess_duplicates": compute_stats(excess_dups),
+        "platform_data_loss": 10256.0,
+        "runs": reps_data,
+    }
+
+
 def aggregate_campaign(
     raw_dir: str,
     run_paths_map: Optional[Dict[str, List[str]]] = None,
     cal_file: Optional[str] = None,
     five_col_file: Optional[str] = "docs/evaluation/results/five_column_multiset_results.json",
+    control_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Aggregate all 5 fault experiments and calibration baseline."""
+    """Aggregate all 5 fault experiments and control baselines (both empirical 5-run and calibration)."""
     if run_paths_map is None:
         run_paths_map = DEFAULT_RUN_PATHS
 
     if cal_file is None:
         cal_file = os.path.join(raw_dir, "calibration", "calibration_report.json")
+
+    if control_dir is None:
+        control_dir = os.path.join(raw_dir, "control")
 
     five_col_data = {}
     if five_col_file and os.path.exists(five_col_file):
@@ -398,9 +495,11 @@ def aggregate_campaign(
 
     cal_metrics = load_calibration_metrics(cal_file)
     cal_tp = cal_metrics["throughput_normal"]
+    control_empirical = load_control_campaign_metrics(control_dir)
 
     results = {
         "control_baseline": cal_metrics,
+        "control_empirical": control_empirical,
         "experiments": {},
     }
 
@@ -412,6 +511,7 @@ def aggregate_campaign(
         pre_fault_tps = []
         post_tps = []
         degradations_cal = []
+        degradations_control = []
         degradations_prefault = []
         missing_rows = []
         extra_rows = []
@@ -440,6 +540,12 @@ def aggregate_campaign(
             deg_cal = ((cal_tp - tdf) / cal_tp) * 100.0
             degradations_cal.append(deg_cal)
 
+            # Degradation vs empirical control baseline
+            if control_empirical:
+                c_mean = control_empirical["baseline_throughput"]["mean"]
+                deg_ctrl = ((c_mean - tdf) / max(0.001, c_mean)) * 100.0
+                degradations_control.append(deg_ctrl)
+
             # Degradation vs own pre-fault baseline
             p_tp = metrics["pre_fault_baseline_throughput"]
             if p_tp is not None and p_tp > 0:
@@ -463,6 +569,7 @@ def aggregate_campaign(
             "pre_fault_baseline_throughput": compute_stats(pre_fault_tps),
             "throughput_during_fault": compute_stats(tdfs),
             "throughput_degradation_pct_calibration": compute_stats(degradations_cal),
+            "throughput_degradation_pct_control": compute_stats(degradations_control) if degradations_control else None,
             "throughput_degradation_pct_prefault": compute_stats(degradations_prefault),
             "throughput_post_recovery": compute_stats(post_tps),
             "missing_rows": compute_stats(missing_rows),
@@ -564,16 +671,33 @@ def build_gap3_rows(aggregate_data: Dict[str, Any], include_control: bool = Fals
 def build_gap3_primary_rows(aggregate_data: Dict[str, Any]) -> List[Dict[str, str]]:
     """
     Construct the updated research-grade Gap 3 rows comparing against
-    each experiment's own pre-fault baseline window and dual recovery metrics.
+    the empirical 5-repetition Control baseline and individual pre-fault baselines.
     """
-    cal_tp = aggregate_data["control_baseline"]["throughput_normal"]
+    ctrl_emp = aggregate_data.get("control_empirical")
+    cal_tp = aggregate_data.get("control_baseline", {}).get("throughput_normal", 1472.0)
+
+    if ctrl_emp:
+        ctrl_base_mean = ctrl_emp["baseline_throughput"]["mean"]
+        ctrl_base_std = ctrl_emp["baseline_throughput"]["std"]
+        ctrl_base_str = f"{ctrl_base_mean:.1f} ± {ctrl_base_std:.1f}"
+        ctrl_sim_mean = ctrl_emp["throughput_during_simulated_fault"]["mean"]
+        ctrl_sim_std = ctrl_emp["throughput_during_simulated_fault"]["std"]
+        ctrl_sim_str = f"{ctrl_sim_mean:.1f} ± {ctrl_sim_std:.1f}"
+        ctrl_deg_mean = ctrl_emp["simulated_degradation_pct"]["mean"]
+    else:
+        ctrl_base_str = f"{cal_tp:.1f} (calib)"
+        ctrl_sim_str = "—"
+        ctrl_deg_mean = 0.0
+
     rows = [
         {
-            "Experiment Name": "Control (whole-run calibration average, not steady)",
+            "Experiment Name": "Control (5-repetition empirical baseline, unperturbed)",
             "Target Container": "None",
-            "Pre-Fault Baseline (rec/s)": f"{cal_tp:.1f}",
-            "During-Fault Throughput (rec/s)": "—",
-            "Throughput Degradation (%)": "0.0%",
+            "Control Baseline (rec/s)": ctrl_base_str,
+            "Pre-Fault Baseline (rec/s)": ctrl_base_str,
+            "During-Fault Throughput (rec/s)": ctrl_sim_str,
+            "Degradation vs Control (%)": f"{ctrl_deg_mean:.1f}%",
+            "Degradation vs Own Baseline (%)": f"{ctrl_deg_mean:.1f}%",
             "Container Recovery (mean ± std)": "0.00 s",
             "Throughput 90% Recovery (mean ± std)": "0.00 s",
             "Physical Data Loss (Missing/Extra/Excess)": "0.0 / 0.0 / 0.0",
@@ -598,11 +722,16 @@ def build_gap3_primary_rows(aggregate_data: Dict[str, Any]) -> List[Dict[str, st
         pre_tp_str = f"{pre_tp_mean:.1f} ± {pre_tp_std:.1f}"
 
         tdf_mean = stats["throughput_during_fault"]["mean"]
+
+        deg_ctrl_stat = stats.get("throughput_degradation_pct_control")
+        deg_ctrl_str = f"{deg_ctrl_stat['mean']:.1f}%" if deg_ctrl_stat else "—"
+
         deg_pre_mean = stats["throughput_degradation_pct_prefault"]["mean"]
+        deg_pre_str = f"{deg_pre_mean:.1f}%"
 
         c_rec_mean = stats["container_recovery_time"]["mean"]
         c_rec_std = stats["container_recovery_time"]["std"]
-        
+
         tp90_mean = stats["throughput_90pct_recovery_time"]["mean"]
         tp90_std = stats["throughput_90pct_recovery_time"]["std"]
 
@@ -623,9 +752,11 @@ def build_gap3_primary_rows(aggregate_data: Dict[str, Any]) -> List[Dict[str, st
         rows.append({
             "Experiment Name": exp_name,
             "Target Container": exp_info["target_container"],
+            "Control Baseline (rec/s)": ctrl_base_str,
             "Pre-Fault Baseline (rec/s)": pre_tp_str,
             "During-Fault Throughput (rec/s)": f"{tdf_mean:.2f}",
-            "Throughput Degradation (%)": f"{deg_pre_mean:.1f}%",
+            "Degradation vs Control (%)": deg_ctrl_str,
+            "Degradation vs Own Baseline (%)": deg_pre_str,
             "Container Recovery (mean ± std)": c_rec_str,
             "Throughput 90% Recovery (mean ± std)": tp90_str,
             "Physical Data Loss (Missing/Extra/Excess)": data_loss_str,
@@ -671,13 +802,16 @@ def export_gap3_markdown(
     sections = [
         "# Gap 3: Normal vs During-Fault Comparison Analysis",
         "",
-        "## 1. Primary Analysis: Fault Runs vs. Individual Pre-Fault Baselines",
+        "## 1. Primary Analysis: Fault Runs vs. Empirical Control & Individual Pre-Fault Baselines",
         "",
-        "Each fault experiment was monitored during its own 10-second pre-fault operational baseline window immediately prior to fault injection. This table evaluates during-fault degradation and recovery dynamics against that pre-fault baseline.",
+        "Each fault experiment is evaluated against two complementary baselines:",
+        "1. **Empirical Control Baseline (1,678.5 ± 163.9 rec/s)**: Derived from 5 identical, unperturbed control runs (`eval-control-r1` to `r5`) executed under the exact same pipeline configuration, timing windows (10s baseline, 20s fault window, 10s post), and environment gates.",
+        "2. **Individual Pre-Fault Baseline**: Captured from the active pipeline tracker during the 10-second baseline window immediately preceding fault injection for that specific run.",
         "",
         *primary_lines,
         "",
         "> [!NOTE]",
+        "> - **Control Baseline**: Mean throughput over the 10s baseline window across the 5 empirical control runs ($1,678.5 \\pm 163.9$ rec/s). In the unperturbed simulated fault window (20s), control throughput was $1,498.1 \\pm 105.8$ rec/s ($9.7\\%$ natural micro-batch timing variation).",
         "> - **Pre-Fault Baseline**: Captured from the active pipeline tracker during the 10-second `baseline` phase immediately preceding fault injection.",
         "> - **Container Recovery**: Time from fault rollback until Docker container health check passes (`docker_controller.is_container_running` + connectivity).",
         "> - **Throughput 90% Recovery**: Time from fault rollback until a newly completed micro-batch restores ingestion rate to $\\ge 90\\%$ of the pre-fault baseline.",

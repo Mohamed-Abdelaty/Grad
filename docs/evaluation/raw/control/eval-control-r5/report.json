@@ -1,0 +1,88 @@
+{
+  "experiment_name": "eval-control-r5",
+  "repetition_index": 5,
+  "pipelineRunId": "2c2a5076-276a-46ab-ae7e-b87b8ad63d84",
+  "pipeline_run_id": "2c2a5076-276a-46ab-ae7e-b87b8ad63d84",
+  "target": "None",
+  "targetService": "None",
+  "failure_type": "no_fault",
+  "faultType": "no_fault",
+  "status": "succeeded",
+  "started_at": "2026-10-21T13:17:45.241896+00:00",
+  "finished_at": "2026-10-21T13:21:26.330754+00:00",
+  "total_duration_seconds": 221.08,
+  "time_to_first_micro_batch_seconds": 19.61,
+  "recovery_time_seconds": 0.0,
+  "recoveryTimeSeconds": 0.0,
+  "throughput_90pct_recovery_seconds": 0.0,
+  "baseline": {
+    "throughput_records_per_sec": 1499.0,
+    "window_duration_seconds": 10.0
+  },
+  "throughputBaseline": 1499.0,
+  "throughputDuringFault": 1497.8,
+  "during_fault_window_seconds": 20.02,
+  "during_fault_records_delta": 29980,
+  "throughputAfter": 1798.8,
+  "throughputDegradationPercent": 0.08,
+  "physical_rows": 289744,
+  "data_loss": 0,
+  "duplicates": 0,
+  "comparison_table": [
+    {
+      "metric": "recovery_time_seconds",
+      "normal": 0.0,
+      "during_fault": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "throughput_records_per_sec",
+      "normal": 1499.0,
+      "during_fault": 1497.8,
+      "pct_change": 0.08
+    },
+    {
+      "metric": "data_loss",
+      "normal": 0,
+      "during_fault": 0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "duplicates",
+      "normal": 4730,
+      "during_fault": 4730,
+      "pct_change": 0.0
+    }
+  ],
+  "phases": [
+    {
+      "name": "warmup",
+      "startedAt": "2026-10-21T13:17:45.241896+00:00",
+      "finishedAt": "1970-01-07T11:43:46.031000+00:00"
+    },
+    {
+      "name": "baseline",
+      "startedAt": "1970-01-07T11:43:46.031000+00:00",
+      "finishedAt": "1970-01-07T11:43:56.031000+00:00"
+    },
+    {
+      "name": "fault_window",
+      "startedAt": "1970-01-07T11:43:56.046000+00:00",
+      "finishedAt": "1970-01-07T11:44:16.062000+00:00"
+    },
+    {
+      "name": "post_window",
+      "startedAt": "1970-01-07T11:44:16.078000+00:00",
+      "finishedAt": "1970-01-07T11:44:26.078000+00:00"
+    }
+  ],
+  "measurement_windows": {
+    "warmup_delay_seconds": 19.61,
+    "baseline_window_seconds": 10.0,
+    "fault_window_seconds": 20.02,
+    "post_window_seconds": 10.0,
+    "baseline_throughput": 1499.0,
+    "fault_window_throughput": 1497.8,
+    "post_throughput": 1798.8
+  }
+}

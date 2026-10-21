@@ -1,0 +1,164 @@
+{
+  "experiment_name": "eval-control-r5",
+  "repetition_index": 5,
+  "pipeline_run_id": "2c2a5076-276a-46ab-ae7e-b87b8ad63d84",
+  "topic_name": "eval-stream-control-r5-1792588618",
+  "output_path": "/data/output/pipe-eval-control-r5-1792588618",
+  "terminal_status": "succeeded",
+  "started_at": "2026-10-21T13:17:45.241896+00:00",
+  "finished_at": "2026-10-21T13:21:26.330754+00:00",
+  "host_free_ram_start_mb": 3449.78515625,
+  "host_free_ram_end_mb": 2351.76953125,
+  "host_memory_pressure": false,
+  "telemetry_samples": [
+    {
+      "timestamp": "2026-10-21T13:18:47.016244+00:00",
+      "elapsed_seconds": 59.7,
+      "free_ram_mb": 2392.9609375,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-21T13:19:03.207562+00:00",
+      "elapsed_seconds": 75.8,
+      "free_ram_mb": 2402.61328125,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-21T13:19:19.407308+00:00",
+      "elapsed_seconds": 92.0,
+      "free_ram_mb": 2400.25390625,
+      "pages_per_sec": 143.292279431886
+    },
+    {
+      "timestamp": "2026-10-21T13:19:35.483260+00:00",
+      "elapsed_seconds": 108.2,
+      "free_ram_mb": 2388.88671875,
+      "pages_per_sec": 16.940550526039
+    },
+    {
+      "timestamp": "2026-10-21T13:19:51.570498+00:00",
+      "elapsed_seconds": 124.3,
+      "free_ram_mb": 2404.66015625,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-21T13:20:07.624153+00:00",
+      "elapsed_seconds": 140.4,
+      "free_ram_mb": 2394.3515625,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-21T13:20:23.741063+00:00",
+      "elapsed_seconds": 156.4,
+      "free_ram_mb": 2410.41015625,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-21T13:20:40.064810+00:00",
+      "elapsed_seconds": 172.5,
+      "free_ram_mb": 2390.5234375,
+      "pages_per_sec": 0.999165496976925
+    },
+    {
+      "timestamp": "2026-10-21T13:20:56.191696+00:00",
+      "elapsed_seconds": 188.9,
+      "free_ram_mb": 2398.0,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-21T13:21:12.259525+00:00",
+      "elapsed_seconds": 205.0,
+      "free_ram_mb": 2365.75,
+      "pages_per_sec": 0.0
+    }
+  ],
+  "docker_stats_start": [
+    {
+      "BlockIO": "1.1GB / 2.48GB",
+      "CPUPerc": "4.05%",
+      "Container": "8dab2788f0ef8ab108a49e811e4e46abc5fb8c017f07fe25ee4c0ded5dc01863",
+      "ID": "8dab2788f0ef",
+      "MemPerc": "12.15%",
+      "MemUsage": "720.2MiB / 5.788GiB",
+      "Name": "platform-backend",
+      "NetIO": "1.68GB / 9GB",
+      "PIDs": "17"
+    },
+    {
+      "BlockIO": "85.5MB / 72.5MB",
+      "CPUPerc": "0.00%",
+      "Container": "281312fe67890c5d867aa5ebee39f9f7c189d13f6c95a2e28007e9369771f3c0",
+      "ID": "281312fe6789",
+      "MemPerc": "1.26%",
+      "MemUsage": "74.7MiB / 5.788GiB",
+      "Name": "platform-postgres",
+      "NetIO": "13.2MB / 51.8MB",
+      "PIDs": "9"
+    },
+    {
+      "BlockIO": "181MB / 2.31GB",
+      "CPUPerc": "0.14%",
+      "Container": "4b04c9938138fee8bb253dbd8191e60d0e02baa345752931c15c6c2b09e047e9",
+      "ID": "4b04c9938138",
+      "MemPerc": "4.93%",
+      "MemUsage": "292.4MiB / 5.788GiB",
+      "Name": "platform-spark-worker",
+      "NetIO": "2.09GB / 128MB",
+      "PIDs": "46"
+    },
+    {
+      "BlockIO": "276MB / 95.6MB",
+      "CPUPerc": "0.14%",
+      "Container": "58273a5e38d74ae6034ed61bd382b671b2dea8fe006b5eb36c147916db1d62b5",
+      "ID": "58273a5e38d7",
+      "MemPerc": "9.59%",
+      "MemUsage": "568.5MiB / 5.788GiB",
+      "Name": "platform-datanode",
+      "NetIO": "75.2MB / 403MB",
+      "PIDs": "64"
+    },
+    {
+      "BlockIO": "66.6MB / 297MB",
+      "CPUPerc": "1.04%",
+      "Container": "964f812a22d2de49d04bb1867f8e3be88a0e177b2ffce254265660e0268467ab",
+      "ID": "964f812a22d2",
+      "MemPerc": "12.56%",
+      "MemUsage": "744.7MiB / 5.788GiB",
+      "Name": "platform-kafka",
+      "NetIO": "189MB / 228MB",
+      "PIDs": "97"
+    },
+    {
+      "BlockIO": "37.8MB / 23.3MB",
+      "CPUPerc": "3.51%",
+      "Container": "df8176b4d1f919e0b5daf0d492689e9ae1be98384a5f3dbe59206d7bfbdc7c0f",
+      "ID": "df8176b4d1f9",
+      "MemPerc": "5.69%",
+      "MemUsage": "337.5MiB / 5.788GiB",
+      "Name": "platform-spark-master",
+      "NetIO": "6.81MB / 2.99MB",
+      "PIDs": "45"
+    },
+    {
+      "BlockIO": "230MB / 478MB",
+      "CPUPerc": "0.21%",
+      "Container": "27012bf67efa721f98dbeb7c2dcf4d60cbf7cc5030fa8a05c93d46923001958a",
+      "ID": "27012bf67efa",
+      "MemPerc": "12.75%",
+      "MemUsage": "755.5MiB / 5.788GiB",
+      "Name": "platform-namenode",
+      "NetIO": "110MB / 122MB",
+      "PIDs": "59"
+    }
+  ],
+  "git_commit": "862f5a5f0d1738e8b23318c6b3f26817a9de2708",
+  "physical_metrics": {
+    "physical_rows": 289744,
+    "unique_transaction_ids": 285014,
+    "duplicate_transaction_ids": 4730,
+    "baseline_csv_duplicates": 4730,
+    "excess_duplicates": 0,
+    "file_count": 304,
+    "raw_path": "/data/output/pipe-eval-control-r5-1792588618"
+  }
+}

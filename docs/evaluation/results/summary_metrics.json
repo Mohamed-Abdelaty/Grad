@@ -4,6 +4,137 @@
     "physical_rows": 289744,
     "total_duration_seconds": 220.36
   },
+  "control_empirical": {
+    "n_runs": 5,
+    "baseline_throughput": {
+      "mean": 1678.55,
+      "std": 163.91,
+      "min": 1499.0,
+      "max": 1799.4
+    },
+    "throughput_during_simulated_fault": {
+      "mean": 1498.05,
+      "std": 105.76,
+      "min": 1348.54,
+      "max": 1647.66
+    },
+    "throughput_post": {
+      "mean": 1618.7,
+      "std": 164.68,
+      "min": 1496.61,
+      "max": 1799.4
+    },
+    "simulated_degradation_pct": {
+      "mean": 9.71,
+      "std": 14.23,
+      "min": -9.92,
+      "max": 25.06
+    },
+    "total_duration_seconds": {
+      "mean": 222.07,
+      "std": 1.42,
+      "min": 220.19,
+      "max": 223.73
+    },
+    "warmup_seconds": {
+      "mean": 21.21,
+      "std": 1.3,
+      "min": 19.61,
+      "max": 22.81
+    },
+    "physical_rows": {
+      "mean": 289744.0,
+      "std": 0.0,
+      "min": 289744,
+      "max": 289744
+    },
+    "missing_rows": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "extra_rows": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "excess_duplicates": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "platform_data_loss": 10256.0,
+    "runs": [
+      {
+        "run_dir": "eval-control-r1",
+        "baseline_throughput": 1798.8,
+        "simulated_fault_throughput": 1497.88,
+        "post_throughput": 1496.61,
+        "total_duration_seconds": 222.7,
+        "warmup_seconds": 22.81,
+        "physical_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "host_memory_pressure": false
+      },
+      {
+        "run_dir": "eval-control-r2",
+        "baseline_throughput": 1796.53,
+        "simulated_fault_throughput": 1498.38,
+        "post_throughput": 1499.5,
+        "total_duration_seconds": 223.73,
+        "warmup_seconds": 22.25,
+        "physical_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "host_memory_pressure": false
+      },
+      {
+        "run_dir": "eval-control-r3",
+        "baseline_throughput": 1499.0,
+        "simulated_fault_throughput": 1647.66,
+        "post_throughput": 1499.2,
+        "total_duration_seconds": 222.66,
+        "warmup_seconds": 20.78,
+        "physical_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "host_memory_pressure": false
+      },
+      {
+        "run_dir": "eval-control-r4",
+        "baseline_throughput": 1799.4,
+        "simulated_fault_throughput": 1348.54,
+        "post_throughput": 1799.4,
+        "total_duration_seconds": 220.19,
+        "warmup_seconds": 20.61,
+        "physical_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "host_memory_pressure": false
+      },
+      {
+        "run_dir": "eval-control-r5",
+        "baseline_throughput": 1499.0,
+        "simulated_fault_throughput": 1497.8,
+        "post_throughput": 1798.8,
+        "total_duration_seconds": 221.08,
+        "warmup_seconds": 19.61,
+        "physical_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "host_memory_pressure": false
+      }
+    ]
+  },
   "experiments": {
     "kafka-stop": {
       "target_container": "platform-kafka",
@@ -119,6 +250,12 @@
           "mean": 92.72,
           "std": 4.08,
           "min": 90.55,
+          "max": 100.0
+        },
+        "throughput_degradation_pct_control": {
+          "mean": 93.61,
+          "std": 3.58,
+          "min": 91.71,
           "max": 100.0
         },
         "throughput_degradation_pct_prefault": {
@@ -298,6 +435,12 @@
           "min": 43.03,
           "max": 100.0
         },
+        "throughput_degradation_pct_control": {
+          "mean": 68.74,
+          "std": 18.87,
+          "min": 50.04,
+          "max": 100.0
+        },
         "throughput_degradation_pct_prefault": {
           "mean": 65.0,
           "std": 21.12,
@@ -453,6 +596,12 @@
           "std": 2.96,
           "min": 59.7,
           "max": 66.43
+        },
+        "throughput_degradation_pct_control": {
+          "mean": 65.93,
+          "std": 2.59,
+          "min": 64.66,
+          "max": 70.56
         },
         "throughput_degradation_pct_prefault": {
           "mean": 65.79,
@@ -610,6 +759,12 @@
           "min": 26.63,
           "max": 60.36
         },
+        "throughput_degradation_pct_control": {
+          "mean": 42.76,
+          "std": 12.81,
+          "min": 35.66,
+          "max": 65.24
+        },
         "throughput_degradation_pct_prefault": {
           "mean": 32.77,
           "std": 15.37,
@@ -764,6 +919,12 @@
           "mean": 79.94,
           "std": 18.32,
           "min": 66.54,
+          "max": 100.0
+        },
+        "throughput_degradation_pct_control": {
+          "mean": 82.41,
+          "std": 16.06,
+          "min": 70.66,
           "max": 100.0
         },
         "throughput_degradation_pct_prefault": {
