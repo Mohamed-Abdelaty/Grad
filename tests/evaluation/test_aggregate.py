@@ -185,3 +185,5 @@ def test_load_control_campaign_metrics_and_primary_rows():
         assert len(primary_rows) == 1
         assert "Control" in primary_rows[0]["Experiment Name"]
         assert "1600.0 ± 0.0" in primary_rows[0]["Post-Warmup Baseline (rec/s) [Primary]"]
+        assert primary_rows[0]["Valid Runs (n/N)"] == "5 / 5"
+        assert primary_rows[0]["Query Survived (n/N)"] == "5 / 5"

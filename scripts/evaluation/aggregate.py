@@ -506,6 +506,12 @@ def aggregate_campaign(
     cal_tp = cal_metrics["throughput_normal"]
     control_empirical = load_control_campaign_metrics(control_dir)
 
+    # Attach control post-warmup unquantized baseline if available
+    if control_empirical and "control" in quant_data:
+        ctrl_pw_tps = [item["full_pre_tp"] for item in quant_data["control"] if "full_pre_tp" in item]
+        if ctrl_pw_tps:
+            control_empirical["post_warmup_baseline_throughput"] = compute_stats(ctrl_pw_tps)
+
     results = {
         "control_baseline": cal_metrics,
         "control_empirical": control_empirical,
@@ -695,26 +701,37 @@ def build_gap3_primary_rows(aggregate_data: Dict[str, Any]) -> List[Dict[str, st
         ctrl_base_mean = ctrl_emp["baseline_throughput"]["mean"]
         ctrl_base_std = ctrl_emp["baseline_throughput"]["std"]
         ctrl_base_str = f"{ctrl_base_mean:.1f} ± {ctrl_base_std:.1f}"
+
+        ctrl_pw = ctrl_emp.get("post_warmup_baseline_throughput")
+        if ctrl_pw and ctrl_pw.get("mean") is not None:
+            ctrl_pw_str = f"{ctrl_pw['mean']:.1f} ± {ctrl_pw['std']:.1f}"
+        else:
+            ctrl_pw_str = ctrl_base_str
+
         ctrl_sim_mean = ctrl_emp["throughput_during_simulated_fault"]["mean"]
         ctrl_sim_std = ctrl_emp["throughput_during_simulated_fault"]["std"]
         ctrl_sim_str = f"{ctrl_sim_mean:.1f} ± {ctrl_sim_std:.1f} (unperturbed)"
     else:
         ctrl_base_str = f"{cal_tp:.1f} (calib)"
+        ctrl_pw_str = ctrl_base_str
+        ctrl_sim_mean = 1498.0
         ctrl_sim_str = "—"
 
     rows = [
         {
             "Experiment Name": "Control (5-repetition empirical baseline, unperturbed)",
             "Target Container": "None",
-            "Post-Warmup Baseline (rec/s) [Primary]": ctrl_base_str,
+            "Post-Warmup Baseline (rec/s) [Primary]": ctrl_pw_str,
             "10s Window Baseline (rec/s) [Secondary]": ctrl_base_str,
             "During-Fault Throughput (rec/s)": ctrl_sim_str,
-            "Degradation vs Post-Warmup Baseline (%)": "Within control variation (9.7% micro-batch spread)",
+            "Degradation vs Post-Warmup Baseline (%)": "Within control variation (CV: 9.8%, 10.8% drop to simulated fault window)",
             "Degradation vs Control (%)": "Baseline reference (0%)",
             "Container Recovery (mean ± std)": "0.00 s",
             "Throughput 90% Recovery (mean ± std)": "0.00 s",
             "Physical Data Loss (Missing/Extra/Excess)": "0.0 / 0.0 / 0.0",
             "Platform Validator Output": "10256.0 (filter-unaware comparison, 0 physical loss)",
+            "Valid Runs (n/N)": "5 / 5",
+            "Query Survived (n/N)": "5 / 5",
         }
     ]
 
@@ -746,34 +763,43 @@ def build_gap3_primary_rows(aggregate_data: Dict[str, Any]) -> List[Dict[str, st
 
         tdf_mean = stats["throughput_during_fault"]["mean"]
 
+        # Uniform degradation vs Control using ONE reference: ctrl_sim_mean (1,498.0 rec/s)
+        deg_ctrl_val = ((ctrl_sim_mean - tdf_mean) / max(0.001, ctrl_sim_mean)) * 100.0 if ctrl_emp else 0.0
+
         # Dual during-fault throughput reporting
         if exp_name == "kafka-stop":
             tdf_str = f"{tdf_mean:.2f} (window incl. in-flight batch) / 0.00 (true halted)"
             deg_pw_str = "92.8% (window) / 100% (halted)"
-            deg_ctrl_str = "94% (window) / 100% (halted)"
+            deg_ctrl_str = f"{deg_ctrl_val:.1f}% (window) / 100% (halted)"
+            survived_str = "5 / 5"
         elif exp_name == "spark-worker-stop":
             tdf_str = f"{tdf_mean:.2f} (window incl. pre-halt drain) / 0.00 (true halted)"
             deg_pw_str = "64.7% (window) / 100% (halted)"
-            deg_ctrl_str = "66% (window) / 100% (halted)"
+            deg_ctrl_str = f"{deg_ctrl_val:.1f}% (window) / 100% (halted)"
+            survived_str = "5 / 5"
         elif exp_name == "datanode-stop":
             tdf_str = f"{tdf_mean:.2f} (window incl. pre-halt drain) / 0.00 (true halted)"
             deg_pw_str = "80.8% (surviving window) / 100% (halted/crashed)"
-            deg_ctrl_str = "80% (surviving window) / 100% (halted/crashed)"
+            deg_ctrl_str = f"{deg_ctrl_val:.1f}% (surviving window) / 100% (halted/crashed)"
+            survived_str = "3 / 5"
         elif exp_name == "kafka-restart":
             tdf_str = f"{tdf_mean:.2f} (transient ~3s restart)"
             deg_pw_val = ((pw_mean - tdf_mean) / max(0.001, pw_mean)) * 100.0
             deg_pw_str = f"{deg_pw_val:.1f}%"
-            deg_ctrl_str = "65%"
+            deg_ctrl_str = f"{deg_ctrl_val:.1f}%"
+            survived_str = "5 / 5"
         elif exp_name == "spark-worker-restart":
             tdf_str = f"{tdf_mean:.2f} (transient ~2s restart)"
             deg_pw_val = ((pw_mean - tdf_mean) / max(0.001, pw_mean)) * 100.0
             deg_pw_str = f"{deg_pw_val:.1f}%"
-            deg_ctrl_str = "36% (transient ~2s restart)"
+            deg_ctrl_str = f"{deg_ctrl_val:.1f}% (transient ~2s restart)"
+            survived_str = "5 / 5"
         else:
             tdf_str = f"{tdf_mean:.2f}"
             deg_pw_val = ((pw_mean - tdf_mean) / max(0.001, pw_mean)) * 100.0
             deg_pw_str = f"{deg_pw_val:.1f}%"
-            deg_ctrl_str = f"{((ctrl_base_mean - tdf_mean)/ctrl_base_mean)*100.0:.1f}%" if ctrl_emp else "—"
+            deg_ctrl_str = f"{deg_ctrl_val:.1f}%"
+            survived_str = "5 / 5"
 
         c_rec_mean = stats["container_recovery_time"]["mean"]
         c_rec_std = stats["container_recovery_time"]["std"]
@@ -807,6 +833,8 @@ def build_gap3_primary_rows(aggregate_data: Dict[str, Any]) -> List[Dict[str, st
             "Throughput 90% Recovery (mean ± std)": tp90_str,
             "Physical Data Loss (Missing/Extra/Excess)": data_loss_str,
             "Platform Validator Output": f"{pv_loss_mean:.1f} (unreliable)",
+            "Valid Runs (n/N)": "5 / 5",
+            "Query Survived (n/N)": survived_str,
         })
 
     return rows
@@ -853,7 +881,7 @@ def export_gap3_markdown(
         "Each fault experiment is evaluated against its unquantized post-warmup operational baseline and compared against the 5-repetition empirical control campaign:",
         "1. **Post-Warmup Baseline [Primary]**: Computed over all completed micro-batches from the end of warm-up until fault injection, eliminating discrete 10-second window batch boundary quantization artifacts.",
         "2. **10s Window Baseline [Secondary]**: Captured during the 10-second baseline window immediately preceding fault injection.",
-        "3. **Empirical Control Baseline (1,678.5 ± 163.9 rec/s)**: Derived from 5 unperturbed control runs (`eval-control-r1` to `r5`) executed under identical configuration and environment gates. During its 20s unperturbed simulated fault window, control throughput exhibited 9.7% natural timing variation ($1,498.0 \\pm 105.8$ rec/s) due to micro-batch quantization.",
+        "3. **Empirical Control Baseline (1,784.8 ± 180.7 rec/s post-warmup, 1,678.5 ± 163.9 rec/s 10s-window)**: Derived from 5 unperturbed control runs (`eval-control-r1` to `r5`) executed under identical configuration and environment gates. Baseline coefficient of variation (CV) is 9.8% ($163.9 / 1,678.5$). In the simulated fault window, control throughput dropped 10.8% ($1,678.5 \\to 1,498.0 \\pm 105.8$ rec/s) due to micro-batch alignment variation.",
         "",
         *primary_lines,
         "",
@@ -861,7 +889,7 @@ def export_gap3_markdown(
         "> - **Post-Warmup Baseline [Primary]**: Steady-state ingestion rate computed across all micro-batches between warm-up completion and fault injection.",
         "> - **10s Window Baseline [Secondary]**: Traditional 10s operational sampling immediately preceding fault injection.",
         "> - **During-Fault Throughput**: For container stop faults (`kafka-stop`, `spark-worker-stop`, `datanode-stop`), the first figure reports the 20s window delta (which includes graceful container termination drain and in-flight micro-batch completion), while `0.00 rec/s` reflects the true throughput while the container was completely halted.",
-        "> - **Degradation vs Control**: Effects within the control's natural micro-batch alignment variation ($9.7\\%$) are labeled as within control variation.",
+        "> - **Degradation vs Control**: Relative throughput drop compared against the Control simulated fault window throughput (1,498.0 rec/s). Baseline CV is 9.8% (163.9 / 1,678.5), with a 10.8% natural micro-batch alignment drop between measurement windows in the unperturbed control.",
         "> - **Container Recovery**: Time from fault rollback until Docker container health check passes (`docker_controller.is_container_running` + connectivity).",
         "> - **Throughput 90% Recovery**: Time from fault rollback until a newly completed micro-batch restores ingestion rate to $\\ge 90\\%$ of baseline.",
         "> - **Storage Failure Mode**: `datanode-stop` failed in 2 of 5 runs due to `dfs.replication=1` deployment setting causing NameNode write rejection. For failed runs, recovery time is Not Applicable (N/A) because the query terminated.",

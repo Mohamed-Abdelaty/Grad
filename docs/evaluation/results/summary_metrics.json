@@ -133,7 +133,13 @@
         "excess_duplicates": 0,
         "host_memory_pressure": false
       }
-    ]
+    ],
+    "post_warmup_baseline_throughput": {
+      "mean": 1784.56,
+      "std": 183.64,
+      "min": 1646.43,
+      "max": 1987.86
+    }
   },
   "experiments": {
     "kafka-stop": {
