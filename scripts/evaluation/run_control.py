@@ -32,23 +32,49 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+# Ensure project root and script dir are in sys.path
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
 # Import helpers from run_evaluation
-from scripts.evaluation.run_evaluation import (
-    check_hdfs_metadata_exists,
-    compute_multiset_comparison,
-    get_docker_stats_snapshot,
-    get_free_ram_mb,
-    get_git_commit_hash,
-    get_hdfs_physical_metrics,
-    get_host_page_faults_30s_avg,
-    get_host_page_faults_per_sec,
-    get_kafka_metrics,
-    get_kafka_topic_total_records,
-    get_spark_master_metrics,
-    get_topic_consumer_lag,
-    verify_cool_down_status,
-    MeasurementError,
-)
+try:
+    from scripts.evaluation.run_evaluation import (
+        check_hdfs_metadata_exists,
+        compute_multiset_comparison,
+        get_docker_stats_snapshot,
+        get_free_ram_mb,
+        get_git_commit_hash,
+        get_hdfs_physical_metrics,
+        get_host_page_faults_30s_avg,
+        get_host_page_faults_per_sec,
+        get_kafka_metrics,
+        get_kafka_topic_total_records,
+        get_spark_master_metrics,
+        get_topic_consumer_lag,
+        verify_cool_down_status,
+        MeasurementError,
+    )
+except ImportError:
+    from run_evaluation import (
+        check_hdfs_metadata_exists,
+        compute_multiset_comparison,
+        get_docker_stats_snapshot,
+        get_free_ram_mb,
+        get_git_commit_hash,
+        get_hdfs_physical_metrics,
+        get_host_page_faults_30s_avg,
+        get_host_page_faults_per_sec,
+        get_kafka_metrics,
+        get_kafka_topic_total_records,
+        get_spark_master_metrics,
+        get_topic_consumer_lag,
+        verify_cool_down_status,
+        MeasurementError,
+    )
 
 logging.basicConfig(
     level=logging.INFO,
