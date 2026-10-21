@@ -18,9 +18,9 @@ Calibration throughput: ~1,472 rows/s steady-state (micro-batch telemetry in `ca
 |---|---|---|---|---|---|---|
 | r1 | pilot-v3 | 289,744 | 0 | 0 | 10.06 | ✅ VALID |
 | r2 | pilot-v3 | 289,744 | 0 | 0 (HYPO) | 12.74 | ✅ VALID |
-| r3 | — | — | — | — | — | ⏳ PENDING |
-| r4 | — | — | — | — | — | ⏳ PENDING |
-| r5 | — | — | — | — | — | ⏳ PENDING |
+| r3 | campaign | 289,744 | 0 | 0 | 20.97 | ✅ VALID |
+| r4 | campaign | 289,744 | 0 | 0 | 23.00 | ✅ VALID |
+| r5 | campaign | 289,744 | 0 | 0 | 20.83 | ✅ VALID |
 
 ## kafka-restart (target: 5 reps)
 | Rep | Source | Physical Rows | Missing | Excess Dups | Recovery (s) | Valid |
@@ -50,3 +50,6 @@ Calibration throughput: ~1,472 rows/s steady-state (micro-batch telemetry in `ca
 | 2026-10-20T19:42 | calibration | — | VALID | 289,744 rows, 212.77 s active, 44.6 s warm-up |
 | 2026-10-20T20:xx | kafka-stop | r1 | VALID | pilot-v3, recovery 10.06 s, host_memory_pressure=true |
 | 2026-10-20T20:xx | kafka-stop | r2 | VALID | pilot-v3, recovery 12.74 s, host_memory_pressure=true |
+| 2026-10-21T06:54 | kafka-stop | r3 | VALID | campaign, recovery 20.97 s, host_memory_pressure=false |
+| 2026-10-21T07:00 | kafka-stop | r4 | VALID | campaign, recovery 23.00 s, host_memory_pressure=true |
+| 2026-10-21T07:07 | kafka-stop | r5 | VALID | campaign, recovery 20.83 s, host_memory_pressure=false |
