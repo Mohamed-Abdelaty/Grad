@@ -14,22 +14,23 @@ This report documents the exhaustive, research-grade evaluation of the ChaosFlow
 
 ### Final Results Summary Table (Gap 3 Comparison)
 
-The primary comparison evaluates each fault experiment against two complementary baselines:
-1. **Empirical Control Baseline (1,678.5 ± 163.9 rec/s)**: Derived from 5 unperturbed control runs (`eval-control-r1` to `r5`) executed under identical configuration, measurement windows (10s baseline, 20s fault window, 10s post), and environment gates.
-2. **Individual Pre-Fault Baseline**: Captured from the active pipeline tracker during the 10-second baseline window immediately preceding fault injection for that specific run.
+The primary comparison evaluates each fault experiment against its unquantized post-warmup operational baseline and compares against the 5-repetition empirical control campaign:
+1. **Post-Warmup Baseline [Primary]**: Computed over all completed micro-batches from the end of warm-up until fault injection, eliminating discrete 10-second window batch boundary quantization artifacts.
+2. **10s Window Baseline [Secondary]**: Captured during the 10-second baseline window immediately preceding fault injection.
+3. **Empirical Control Baseline (1,678.5 ± 163.9 rec/s)**: Derived from 5 unperturbed control runs (`eval-control-r1` to `r5`) executed under identical configuration and environment gates. During its 20s unperturbed simulated fault window, control throughput exhibited 9.7% natural timing variation ($1,498.0 \pm 105.8$ rec/s) due to micro-batch quantization.
 
 The superseded whole-run calibration baseline (1,472.0 rec/s) is preserved in Section 5 for historical continuity.
 
-| Experiment Name | Target Container | Control Baseline (rec/s) | Pre-Fault Baseline (rec/s) | During-Fault Throughput (rec/s) | Degradation vs Control (%) | Degradation vs Own Baseline (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing / Extra / Excess) | Platform Validator Loss (Unreliable) | Valid Runs ($n/N$) |
+| Experiment Name | Target Container | Post-Warmup Baseline (rec/s) [Primary] | 10s Window Baseline (rec/s) [Secondary] | During-Fault Throughput (rec/s) | Degradation vs Post-Warmup Baseline (%) | Degradation vs Control (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing / Extra / Excess) | Platform Validator Output | Valid Runs ($n/N$) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| **Control (5-repetition empirical baseline, unperturbed)** | *None* | 1,678.5 ± 163.9 | 1,678.5 ± 163.9 | 1,498.0 ± 105.8 | 9.7% | 9.7% | 0.00 s | 0.00 s | **0 / 0 / 0** | 10,256.0 (unreliable) | 5 / 5 |
-| **kafka-stop** | `platform-kafka` | 1,678.5 ± 163.9 | 1,558.0 ± 131.4 | 107.20 ± 60.08 | 93.6% | 93.2% | 17.52 ± 5.73 s | 22.89 ± 6.47 s | **0 / 0 / 0** | 10,256.0 (unreliable) | 5 / 5 |
-| **kafka-restart** | `platform-kafka` | 1,678.5 ± 163.9 | 1,439.2 ± 134.0 | 524.69 ± 316.70 | 68.7% | 65.0% | 0.72 ± 1.40 s | 3.44 ± 2.57 s | **0 / 0 / 0** | 10,256.0 (unreliable) | 5 / 5 |
-| **spark-worker-stop** | `platform-spark-worker` | 1,678.5 ± 163.9 | 1,679.1 ± 164.2 | 571.91 ± 43.50* | 65.9% | 65.8% | 0.48 ± 0.13 s | 17.56 ± 5.50 s | **0 / 0 / 0** | 10,256.0 (unreliable) | 5 / 5 |
-| **spark-worker-restart** | `platform-spark-worker` | 1,678.5 ± 163.9 | 1,439.2 ± 250.8 | 960.73 ± 215.10 | 42.8% | 32.8% | 0.12 ± 0.07 s | 1.87 ± 1.21 s | **0 / 0 / 0** | 10,070.6 (unreliable) | 5 / 5 |
-| **datanode-stop** | `platform-datanode` | 1,678.5 ± 163.9 | 1,379.3 ± 164.4 | 295.34 ± 269.61 | 82.4% | 80.3% | 0.47 ± 0.08 s (3 passed) / N/A (2 failed) | 21.69 ± 2.10 s (3 passed) / N/A (2 failed) | **Failed in 2 of 5 runs** (query died at ~55k rows; 0 loss in 3 runs) | 6,942.8 (unreliable) | 5 / 5 |
+| **Control (5-repetition empirical baseline, unperturbed)** | *None* | 1,678.5 ± 163.9 | 1,678.5 ± 163.9 | 1,498.0 ± 105.8 (unperturbed) | Within control variation (9.7% micro-batch spread) | Baseline reference (0%) | 0.00 s | 0.00 s | **0 / 0 / 0** | 10,256 (filter-unaware comparison, 0 physical loss) | 5 / 5 |
+| **kafka-stop** | `platform-kafka` | 1,488.8 ± 140.8 | 1,558.0 ± 131.4 | 107.20 (window incl. in-flight batch) / 0.00 (true halted) | 92.8% (window) / 100% (halted) | 94% (window) / 100% (halted) | 17.52 ± 5.73 s | 22.89 ± 6.47 s | **0 / 0 / 0** | 10,256 (unreliable) | 5 / 5 |
+| **kafka-restart** | `platform-kafka` | 1,591.7 ± 37.7 | 1,439.2 ± 134.0 | 524.69 (transient ~3s restart) | 67.0% | 65% | 0.72 ± 1.40 s | 3.44 ± 2.57 s | **0 / 0 / 0** | 10,256 (unreliable) | 5 / 5 |
+| **spark-worker-stop** | `platform-spark-worker` | 1,620.2 ± 50.3 | 1,679.1 ± 164.2 | 571.91 (window incl. pre-halt drain) / 0.00 (true halted)* | 64.7% (window) / 100% (halted) | 66% (window) / 100% (halted) | 0.48 ± 0.13 s | 17.56 ± 5.50 s | **0 / 0 / 0** | 10,256 (unreliable) | 5 / 5 |
+| **spark-worker-restart** | `platform-spark-worker` | 1,651.6 ± 37.7 | 1,439.2 ± 250.8 | 960.73 (transient ~2s restart) | 41.8% | 36% (transient ~2s restart) | 0.12 ± 0.07 s | 1.87 ± 1.21 s | **0 / 0 / 0** | 10,071 (unreliable) | 5 / 5 |
+| **datanode-stop** | `platform-datanode` | 1,541.2 ± 54.1 | 1,379.3 ± 164.4 | 295.34 (window incl. pre-halt drain) / 0.00 (true halted) | 80.8% (surviving window) / 100% (halted/crashed) | 80% (surviving window) / 100% (halted/crashed) | 0.47 ± 0.08 s (3 passed) / N/A (2 failed) | 21.69 ± 2.10 s (3 passed) / N/A (2 failed) | **Failed in 2 of 5 runs** (query died at ~55k rows; 0 loss in 3 runs) | 6,943 (unreliable) | 5 / 5 |
 
-*\*Note on During-Fault Throughput: As proven in Section 2, the reported non-zero throughput during container stop faults is an accounting artifact of Docker's graceful termination window being included in the progress counter delta.*
+*\*Note on During-Fault Throughput: For container stop faults, the reported non-zero throughput during the 20s injection window includes the Docker graceful shutdown period / in-flight micro-batch drain before the container fully halted; true throughput while the container was halted was 0.00 rec/s across all runs (Section 2).*
 
 ### Core Takeaways
 
@@ -411,14 +412,14 @@ Each fault experiment is evaluated against two complementary baselines:
 1. **Empirical Control Baseline (1,678.5 ± 163.9 rec/s)**: Derived from 5 identical, unperturbed control runs (`eval-control-r1` to `r5`) executed under the exact same pipeline configuration, timing windows (10s baseline, 20s fault window, 10s post), and environment gates.
 2. **Individual Pre-Fault Baseline**: Captured from the active pipeline tracker during the 10-second baseline window immediately preceding fault injection for that specific run.
 
-| Experiment Name | Target Container | Control Baseline (rec/s) | Pre-Fault Baseline (rec/s) | During-Fault Throughput (rec/s) | Degradation vs Control (%) | Degradation vs Own Baseline (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing/Extra/Excess) | Platform Validator Loss (Unreliable) |
+| Experiment Name | Target Container | Post-Warmup Baseline (rec/s) [Primary] | 10s Window Baseline (rec/s) [Secondary] | During-Fault Throughput (rec/s) | Degradation vs Post-Warmup Baseline (%) | Degradation vs Control (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing/Extra/Excess) | Platform Validator Output |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Control (5-repetition empirical baseline, unperturbed)** | `None` | 1678.5 ± 163.9 | 1678.5 ± 163.9 | 1498.0 ± 105.8 | 9.7% | 9.7% | 0.00 s | 0.00 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
-| **kafka-stop** | `platform-kafka` | 1678.5 ± 163.9 | 1558.0 ± 131.4 | 107.20 | 93.6% | 93.2% | 17.52 ± 5.73 s | 22.89 ± 6.47 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
-| **kafka-restart** | `platform-kafka` | 1678.5 ± 163.9 | 1439.2 ± 134.0 | 524.69 | 68.7% | 65.0% | 0.72 ± 1.40 s | 3.44 ± 2.57 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
-| **spark-worker-stop** | `platform-spark-worker` | 1678.5 ± 163.9 | 1679.1 ± 164.2 | 571.91 | 65.9% | 65.8% | 0.48 ± 0.13 s | 17.56 ± 5.50 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
-| **spark-worker-restart** | `platform-spark-worker` | 1678.5 ± 163.9 | 1439.2 ± 250.8 | 960.73 | 42.8% | 32.8% | 0.12 ± 0.07 s | 1.87 ± 1.21 s | 0.0 / 0.0 / 0.0 | 10070.6 (unreliable) |
-| **datanode-stop** | `platform-datanode` | 1678.5 ± 163.9 | 1379.3 ± 164.4 | 295.34 | 82.4% | 80.3% | 0.47 ± 0.08 s (3 passed) / N/A (2 failed) | 21.69 ± 2.10 s (3 passed) / N/A (2 failed) | Failed in 2 of 5 runs (query died at ~55k rows; 0 loss in 3 runs) | 6942.8 (unreliable) |
+| **Control (5-repetition empirical baseline, unperturbed)** | `None` | 1678.5 ± 163.9 | 1678.5 ± 163.9 | 1498.0 ± 105.8 (unperturbed) | Within control variation (9.7% micro-batch spread) | Baseline reference (0%) | 0.00 s | 0.00 s | 0.0 / 0.0 / 0.0 | 10256.0 (filter-unaware comparison, 0 physical loss) |
+| **kafka-stop** | `platform-kafka` | 1488.8 ± 140.8 | 1558.0 ± 131.4 | 107.20 (window incl. in-flight batch) / 0.00 (true halted) | 92.8% (window) / 100% (halted) | 94% (window) / 100% (halted) | 17.52 ± 5.73 s | 22.89 ± 6.47 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
+| **kafka-restart** | `platform-kafka` | 1591.7 ± 37.7 | 1439.2 ± 134.0 | 524.69 (transient ~3s restart) | 67.0% | 65% | 0.72 ± 1.40 s | 3.44 ± 2.57 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
+| **spark-worker-stop** | `platform-spark-worker` | 1620.2 ± 50.3 | 1679.1 ± 164.2 | 571.91 (window incl. pre-halt drain) / 0.00 (true halted) | 64.7% (window) / 100% (halted) | 66% (window) / 100% (halted) | 0.48 ± 0.13 s | 17.56 ± 5.50 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
+| **spark-worker-restart** | `platform-spark-worker` | 1651.6 ± 37.7 | 1439.2 ± 250.8 | 960.73 (transient ~2s restart) | 41.8% | 36% (transient ~2s restart) | 0.12 ± 0.07 s | 1.87 ± 1.21 s | 0.0 / 0.0 / 0.0 | 10070.6 (unreliable) |
+| **datanode-stop** | `platform-datanode` | 1541.2 ± 54.1 | 1379.3 ± 164.4 | 295.34 (window incl. pre-halt drain) / 0.00 (true halted) | 80.8% (surviving window) / 100% (halted/crashed) | 80% (surviving window) / 100% (halted/crashed) | 0.47 ± 0.08 s (3 passed) / N/A (2 failed) | 21.69 ± 2.10 s (3 passed) / N/A (2 failed) | Failed in 2 of 5 runs (query died at ~55k rows; 0 loss in 3 runs) | 6942.8 (unreliable) |
 
 ---
 
@@ -437,25 +438,33 @@ Each fault experiment is evaluated against two complementary baselines:
 
 ---
 
-## 6. Disproved Hypotheses
+## 6. Hypotheses Tested During the Evaluation
 
-During the initial pilot evaluations (Pilot v1, v2, v3), several preliminary hypotheses were proposed to explain anomalies. The campaign systematically tested and clarified each one:
+During the pilot evaluations and research campaign, several hypotheses were systematically evaluated and clarified against empirical evidence:
 
 ### Hypothesis 1: "Producer abort caused data loss in pilot-v2"
-- **Status**: **DISPROVED**
+- **Verdict**: **REJECTED**
 - **Evidence**: Detailed Kafka partition offset examination across `eval-stream-kafka-stop-r1` and `eval-stream-kafka-stop-r2` confirmed that the Kafka producer successfully published all 300,000 records. The perceived loss occurred because pilot-v2 runs reused un-timestamped Kafka topics (`eval-stream-kafka-stop-r1` and `eval-stream-kafka-stop-r2`) from earlier pilot executions. Checkpoints had been cleared, so Spark started from `startingOffsets=earliest`, read pre-existing stale records from the reused topics, and the platform defect `compute_lag(None) = 0` terminated the streaming completion detector prematurely before this run's published records reached Spark.
 
 ### Hypothesis 2: "Re-running a pipeline on an existing output path is safe"
-- **Status**: **DISPROVED**
+- **Verdict**: **REJECTED**
 - **Evidence**: Observed in the Oct 20 calibration run and explained by stale `_spark_metadata` (diagnosis supported by the later fresh-path run). When a pipeline executes against an HDFS path containing a pre-existing `_spark_metadata` directory, Spark Structured Streaming detects that batch numbers have already been committed and silently skips processing without writing records, while the platform reports a false "success". The harness was updated to enforce unique timestamped output paths and abort immediately if `_spark_metadata` pre-exists.
 
 ### Hypothesis 3: "Lag = None implies the pipeline is complete"
-- **Status**: **DISPROVED (Defect Patched)**
+- **Verdict**: **REJECTED (Defect Patched)**
 - **Evidence**: Code review of `backend/app/pipeline/stream_progress.py:107-108` identified a defect where unreadable consumer lag (`None`, which occurs when Kafka is offline) was coerced to `0` (`compute_lag(None) = 0`). This caused `StreamingCompletionDetector` to declare the pipeline complete while the broker was down. The bug was **fixed in code and covered by unit tests; not yet exercised by a real outage at completion time**.
 
 ### Hypothesis 4: "Fault injection introduces excess duplicate rows due to at-least-once replay"
-- **Status**: **NOT OBSERVED in 25 runs on this Parquet sink**
-- **Evidence**: Across all 25 fault repetitions, `duplicate_beyond_baseline` was exactly **0**. Because Spark Structured Streaming writes speculative part-files to temporary staging directories and commits them atomically via `_spark_metadata`, re-executed tasks during worker or broker restarts did not introduce excess duplicate rows into committed output in this campaign.
+- **Verdict**: **NOT OBSERVED on HDFS Parquet Sink**
+- **Evidence**: Across all 25 fault repetitions and 5 control runs, `duplicate_beyond_baseline` was exactly **0**. Because Spark Structured Streaming writes speculative part-files to temporary staging directories and commits them atomically via `_spark_metadata`, re-executed tasks during worker or broker restarts did not introduce excess duplicate rows into committed output in this campaign.
+
+### Hypothesis 5: "Spark Structured Streaming maintains zero data loss under broker and compute worker failures"
+- **Verdict**: **SUPPORTED**
+- **Evidence**: Across all 20 repetitions of `kafka-stop`, `kafka-restart`, `spark-worker-stop`, and `spark-worker-restart`, full-row multiset verification confirmed exactly 289,744 committed rows with 0 missing, 0 extra, and 0 excess duplicates across all 5 columns (`transaction_id`, `customer_id`, `product_id`, `amount`, `timestamp`).
+
+### Hypothesis 6: "Single-replica HDFS (`dfs.replication=1`) survives DataNode outage without query termination"
+- **Verdict**: **REJECTED**
+- **Evidence**: In 2 of 5 runs (r2 and r5), DataNode stoppage while an active micro-batch was attempting block allocation caused NameNode write rejection (`could only be written to 0 of the 1 minReplication nodes`), terminating the streaming query at ~55k rows with ~234,750 missing rows. In multi-node deployments with standard replication (`dfs.replication=3`), block writes failover to surviving nodes without query termination.
 
 ---
 
