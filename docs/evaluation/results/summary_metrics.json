@@ -1,0 +1,614 @@
+{
+  "control_baseline": {
+    "throughput_normal": 1472.0,
+    "physical_rows": 289744,
+    "total_duration_seconds": 220.36
+  },
+  "experiments": {
+    "kafka-stop": {
+      "target_container": "platform-kafka",
+      "normal_throughput": 1472.0,
+      "repetitions": [
+        {
+          "run_dir": "docs/evaluation/raw\\pilot-v3/eval-kafka-stop-r1",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 10.06,
+          "throughput_during_fault": 0.0,
+          "throughput_post_recovery": 1216.35,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": true,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\pilot-v3/eval-kafka-stop-r2",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 12.74,
+          "throughput_during_fault": 139.17,
+          "throughput_post_recovery": 1190.44,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": true,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/kafka-stop/eval-kafka-stop-r3",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 20.97,
+          "throughput_during_fault": 134.29,
+          "throughput_post_recovery": 1140.92,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/kafka-stop/eval-kafka-stop-r4",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 23.0,
+          "throughput_during_fault": 127.17,
+          "throughput_post_recovery": 1113.46,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": true,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/kafka-stop/eval-kafka-stop-r5",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 20.83,
+          "throughput_during_fault": 135.35,
+          "throughput_post_recovery": 1127.81,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        }
+      ],
+      "stats": {
+        "recovery_time": {
+          "mean": 17.52,
+          "std": 5.73,
+          "min": 10.06,
+          "max": 23.0
+        },
+        "throughput_during_fault": {
+          "mean": 107.2,
+          "std": 60.08,
+          "min": 0.0,
+          "max": 139.17
+        },
+        "throughput_degradation_pct": {
+          "mean": 92.72,
+          "std": 4.08,
+          "min": 90.55,
+          "max": 100.0
+        },
+        "throughput_post_recovery": {
+          "mean": 1157.8,
+          "std": 43.71,
+          "min": 1113.46,
+          "max": 1216.35
+        },
+        "missing_rows": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "extra_rows": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "excess_duplicates": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "platform_data_loss": {
+          "mean": 10256.0,
+          "std": 0.0,
+          "min": 10256,
+          "max": 10256
+        }
+      }
+    },
+    "kafka-restart": {
+      "target_container": "platform-kafka",
+      "normal_throughput": 1472.0,
+      "repetitions": [
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/kafka-restart/eval-kafka-restart-r1",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 3.22,
+          "throughput_during_fault": 0.0,
+          "throughput_post_recovery": 1004.33,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/kafka-restart/eval-kafka-restart-r2",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.1,
+          "throughput_during_fault": 549.95,
+          "throughput_post_recovery": 1319.86,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/kafka-restart/eval-kafka-restart-r3",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.13,
+          "throughput_during_fault": 548.56,
+          "throughput_post_recovery": 1316.39,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/kafka-restart/eval-kafka-restart-r4",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.07,
+          "throughput_during_fault": 686.27,
+          "throughput_post_recovery": 1324.72,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/kafka-restart/eval-kafka-restart-r5",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.07,
+          "throughput_during_fault": 838.66,
+          "throughput_post_recovery": 1338.17,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        }
+      ],
+      "stats": {
+        "recovery_time": {
+          "mean": 0.72,
+          "std": 1.4,
+          "min": 0.07,
+          "max": 3.22
+        },
+        "throughput_during_fault": {
+          "mean": 524.69,
+          "std": 316.7,
+          "min": 0.0,
+          "max": 838.66
+        },
+        "throughput_degradation_pct": {
+          "mean": 64.36,
+          "std": 21.51,
+          "min": 43.03,
+          "max": 100.0
+        },
+        "throughput_post_recovery": {
+          "mean": 1260.69,
+          "std": 143.55,
+          "min": 1004.33,
+          "max": 1338.17
+        },
+        "missing_rows": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "extra_rows": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "excess_duplicates": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "platform_data_loss": {
+          "mean": 10256.0,
+          "std": 0.0,
+          "min": 10256,
+          "max": 10256
+        }
+      }
+    },
+    "spark-worker-stop": {
+      "target_container": "platform-spark-worker",
+      "normal_throughput": 1472.0,
+      "repetitions": [
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/spark-worker-stop/eval-spark-worker-stop-r1",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.55,
+          "throughput_during_fault": 591.34,
+          "throughput_post_recovery": 1230.62,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/spark-worker-stop/eval-spark-worker-stop-r2",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.36,
+          "throughput_during_fault": 593.18,
+          "throughput_post_recovery": 1231.95,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/spark-worker-stop/eval-spark-worker-stop-r3",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.56,
+          "throughput_during_fault": 588.06,
+          "throughput_post_recovery": 1187.4,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/spark-worker-stop/eval-spark-worker-stop-r4",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.32,
+          "throughput_during_fault": 494.18,
+          "throughput_post_recovery": 1249.72,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/spark-worker-stop/eval-spark-worker-stop-r5",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.59,
+          "throughput_during_fault": 592.81,
+          "throughput_post_recovery": 1205.13,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": true,
+          "terminal_status": "failed"
+        }
+      ],
+      "stats": {
+        "recovery_time": {
+          "mean": 0.48,
+          "std": 0.13,
+          "min": 0.32,
+          "max": 0.59
+        },
+        "throughput_during_fault": {
+          "mean": 571.91,
+          "std": 43.5,
+          "min": 494.18,
+          "max": 593.18
+        },
+        "throughput_degradation_pct": {
+          "mean": 61.15,
+          "std": 2.96,
+          "min": 59.7,
+          "max": 66.43
+        },
+        "throughput_post_recovery": {
+          "mean": 1220.96,
+          "std": 24.59,
+          "min": 1187.4,
+          "max": 1249.72
+        },
+        "missing_rows": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "extra_rows": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "excess_duplicates": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "platform_data_loss": {
+          "mean": 10256.0,
+          "std": 0.0,
+          "min": 10256,
+          "max": 10256
+        }
+      }
+    },
+    "spark-worker-restart": {
+      "target_container": "platform-spark-worker",
+      "normal_throughput": 1472.0,
+      "repetitions": [
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/spark-worker-restart/eval-spark-worker-restart-r1",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.13,
+          "throughput_during_fault": 1080.04,
+          "throughput_post_recovery": 1367.7,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/spark-worker-restart/eval-spark-worker-restart-r2",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.23,
+          "throughput_during_fault": 583.45,
+          "throughput_post_recovery": 1311.46,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/spark-worker-restart/eval-spark-worker-restart-r3",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.07,
+          "throughput_during_fault": 1078.26,
+          "throughput_post_recovery": 1365.81,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/spark-worker-restart/eval-spark-worker-restart-r4",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.09,
+          "throughput_during_fault": 1080.04,
+          "throughput_post_recovery": 1357.1,
+          "platform_data_loss": 9329,
+          "host_memory_pressure": true,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/spark-worker-restart/eval-spark-worker-restart-r5",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.07,
+          "throughput_during_fault": 981.88,
+          "throughput_post_recovery": 1350.65,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": true,
+          "terminal_status": "failed"
+        }
+      ],
+      "stats": {
+        "recovery_time": {
+          "mean": 0.12,
+          "std": 0.07,
+          "min": 0.07,
+          "max": 0.23
+        },
+        "throughput_during_fault": {
+          "mean": 960.73,
+          "std": 215.1,
+          "min": 583.45,
+          "max": 1080.04
+        },
+        "throughput_degradation_pct": {
+          "mean": 34.73,
+          "std": 14.61,
+          "min": 26.63,
+          "max": 60.36
+        },
+        "throughput_post_recovery": {
+          "mean": 1350.54,
+          "std": 22.9,
+          "min": 1311.46,
+          "max": 1367.7
+        },
+        "missing_rows": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "extra_rows": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "excess_duplicates": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "platform_data_loss": {
+          "mean": 10070.6,
+          "std": 414.57,
+          "min": 9329,
+          "max": 10256
+        }
+      }
+    },
+    "datanode-stop": {
+      "target_container": "platform-datanode",
+      "normal_throughput": 1472.0,
+      "repetitions": [
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/datanode-stop/eval-datanode-stop-r1",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.54,
+          "throughput_during_fault": 491.95,
+          "throughput_post_recovery": 1179.02,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/datanode-stop/eval-datanode-stop-r2",
+          "physical_rows": 54995,
+          "missing_rows": 234749,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.38,
+          "throughput_during_fault": 0.0,
+          "throughput_post_recovery": 953.07,
+          "platform_data_loss": 1968,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/datanode-stop/eval-datanode-stop-r3",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.39,
+          "throughput_during_fault": 492.19,
+          "throughput_post_recovery": 1189.98,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/datanode-stop/eval-datanode-stop-r4",
+          "physical_rows": 289744,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.47,
+          "throughput_during_fault": 492.56,
+          "throughput_post_recovery": 1188.07,
+          "platform_data_loss": 10256,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        },
+        {
+          "run_dir": "docs/evaluation/raw\\campaign/datanode-stop/eval-datanode-stop-r5",
+          "physical_rows": 54990,
+          "missing_rows": 234754,
+          "extra_rows": 0,
+          "excess_duplicates": 0,
+          "recovery_time_seconds": 0.41,
+          "throughput_during_fault": 0.0,
+          "throughput_post_recovery": 942.83,
+          "platform_data_loss": 1978,
+          "host_memory_pressure": false,
+          "terminal_status": "failed"
+        }
+      ],
+      "stats": {
+        "recovery_time": {
+          "mean": 0.44,
+          "std": 0.07,
+          "min": 0.38,
+          "max": 0.54
+        },
+        "throughput_during_fault": {
+          "mean": 295.34,
+          "std": 269.61,
+          "min": 0.0,
+          "max": 492.56
+        },
+        "throughput_degradation_pct": {
+          "mean": 79.94,
+          "std": 18.32,
+          "min": 66.54,
+          "max": 100.0
+        },
+        "throughput_post_recovery": {
+          "mean": 1090.59,
+          "std": 130.33,
+          "min": 942.83,
+          "max": 1189.98
+        },
+        "missing_rows": {
+          "mean": 93900.6,
+          "std": 128578.69,
+          "min": 0,
+          "max": 234754
+        },
+        "extra_rows": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "excess_duplicates": {
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "platform_data_loss": {
+          "mean": 6942.8,
+          "std": 4536.79,
+          "min": 1968,
+          "max": 10256
+        }
+      }
+    }
+  }
+}
