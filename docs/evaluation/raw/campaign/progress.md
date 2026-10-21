@@ -34,7 +34,11 @@ Calibration throughput: ~1,472 rows/s steady-state (micro-batch telemetry in `ca
 ## spark-worker-stop (target: 5 reps)
 | Rep | Source | Physical Rows | Missing | Excess Dups | Recovery (s) | Valid |
 |---|---|---|---|---|---|---|
-| r1–r5 | — | — | — | — | — | ⏳ PENDING |
+| r1 | campaign | 289,744 | 0 | 0 | 0.55 | ✅ VALID |
+| r2 | campaign | 289,744 | 0 | 0 | 0.36 | ✅ VALID |
+| r3 | campaign | 289,744 | 0 | 0 | 0.56 | ✅ VALID |
+| r4 | campaign | 289,744 | 0 | 0 | 0.32 | ✅ VALID |
+| r5 | campaign | 289,744 | 0 | 0 | 0.59 | ✅ VALID |
 
 ## spark-worker-restart (target: 5 reps)
 | Rep | Source | Physical Rows | Missing | Excess Dups | Recovery (s) | Valid |
@@ -62,3 +66,8 @@ Calibration throughput: ~1,472 rows/s steady-state (micro-batch telemetry in `ca
 | 2026-10-21T07:56 | kafka-restart | r3 | VALID | campaign, recovery 0.13 s, host_memory_pressure=false |
 | 2026-10-21T08:03 | kafka-restart | r4 | VALID | campaign, recovery 0.07 s, host_memory_pressure=false |
 | 2026-10-21T08:09 | kafka-restart | r5 | VALID | campaign, recovery 0.07 s, host_memory_pressure=false |
+| 2026-10-21T08:16 | spark-worker-stop | r1 | VALID | campaign, recovery 0.55 s, host_memory_pressure=false |
+| 2026-10-21T08:22 | spark-worker-stop | r2 | VALID | campaign, recovery 0.36 s, host_memory_pressure=false |
+| 2026-10-21T08:27 | spark-worker-stop | r3 | VALID | campaign, recovery 0.56 s, host_memory_pressure=false |
+| 2026-10-21T08:34 | spark-worker-stop | r4 | VALID | campaign, recovery 0.32 s, host_memory_pressure=false |
+| 2026-10-21T08:41 | spark-worker-stop | r5 | VALID | campaign, recovery 0.59 s, host_memory_pressure=true |

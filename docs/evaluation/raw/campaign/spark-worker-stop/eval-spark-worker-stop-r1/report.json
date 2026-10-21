@@ -1,0 +1,789 @@
+{
+  "id": "1257b2af-4ce5-4506-b931-a68e31b096ca",
+  "experiment_id": "7b99b72c-7e3d-4dc0-8fe1-600221fed486",
+  "experiment_run_id": "61d63d5d-2e90-41b5-90d1-90c8c3033377",
+  "experiment_name": "eval-spark-worker-stop-r1",
+  "target": "spark-worker",
+  "targetService": "spark-worker",
+  "failure_type": "container_stop",
+  "faultType": "container_stop",
+  "failure_duration_seconds": 20,
+  "durationSeconds": 20,
+  "faultParams": {
+    "type": "container_stop",
+    "duration": 20,
+    "cores": null,
+    "memory_bytes": null,
+    "disk_size_mb": null,
+    "delay_ms": null
+  },
+  "faultInjectedAt": "2026-10-21T08:17:33.601678+00:00",
+  "faultRevertedAt": "2026-10-21T08:17:53.634258+00:00",
+  "recoveredAt": "2026-10-21T08:17:54.181758+00:00",
+  "thresholds": {
+    "expectedDataLoss": 0,
+    "maxRecoverySeconds": 60.0
+  },
+  "recovery_time_seconds": 0.55,
+  "recoveryTimeSeconds": 0.55,
+  "expected_records": 300000,
+  "expectedRecords": 300000,
+  "processed_records": 289744,
+  "processedRecords": 289744,
+  "data_loss": 10256,
+  "dataLoss": 10256,
+  "duplicates": 0,
+  "average_throughput": 1230.62,
+  "throughputBaseline": null,
+  "throughputDuringFault": 591.34,
+  "throughputAfter": 1230.62,
+  "throughputDegradationPercent": null,
+  "availability_percentage": 0.0,
+  "availabilityPercentage": 0.0,
+  "availability_during_fault": 0.0,
+  "availabilityDuringFault": 0.0,
+  "error_rate": 1.0,
+  "errorRate": 1.0,
+  "errorCount": 20,
+  "totalOperations": 20,
+  "cpuAvgPercent": null,
+  "memoryAvgBytes": null,
+  "comparison_table": [
+    {
+      "metric": "availability_percentage",
+      "label": "Availability",
+      "unit": "%",
+      "normal": 100.0,
+      "normal_reason": null,
+      "normalReason": null,
+      "normal_n_samples": null,
+      "normalNSamples": null,
+      "during_fault": 0.0,
+      "duringFault": 0.0,
+      "during_fault_reason": null,
+      "duringFaultReason": null,
+      "delta": -100.0,
+      "pct_change": -100.0,
+      "pctChange": -100.0,
+      "baseline_applicable": true,
+      "baselineApplicable": true,
+      "measured_directly": true,
+      "measuredDirectly": true,
+      "definition": "Percentage of availability probes returning operational healthy status during fault window (target poll interval: 1.0s, deep probe timeout up to 5.0s when service unresponsive, observed samples: 20). Note: For container_restart, Docker SDK restart blocks until the container is operational, so availability probes during the fault window may observe 100% availability.",
+      "aggregate": null
+    },
+    {
+      "metric": "throughput_records_per_sec",
+      "label": "Throughput",
+      "unit": "records/sec",
+      "normal": 1799.36,
+      "normal_reason": null,
+      "normalReason": null,
+      "normal_n_samples": null,
+      "normalNSamples": null,
+      "during_fault": 591.34,
+      "duringFault": 591.34,
+      "during_fault_reason": null,
+      "duringFaultReason": null,
+      "delta": -1208.02,
+      "pct_change": -67.14,
+      "pctChange": -67.14,
+      "baseline_applicable": true,
+      "baselineApplicable": true,
+      "measured_directly": true,
+      "measuredDirectly": true,
+      "definition": "Pipeline record processing or ingestion throughput during fault window.",
+      "counter_used": "spark.recordsOut",
+      "counterUsed": "spark.recordsOut",
+      "pipeline_active_at_injection": true,
+      "pipelineActiveAtInjection": true,
+      "aggregate": null
+    },
+    {
+      "metric": "data_loss",
+      "label": "Data Loss",
+      "unit": "records",
+      "normal": null,
+      "normal_reason": "n/a (by definition)",
+      "normalReason": "n/a (by definition)",
+      "normal_n_samples": null,
+      "normalNSamples": null,
+      "during_fault": 10256,
+      "duringFault": 10256,
+      "during_fault_reason": null,
+      "duringFaultReason": null,
+      "delta": null,
+      "pct_change": null,
+      "pctChange": null,
+      "baseline_applicable": false,
+      "baselineApplicable": false,
+      "measured_directly": true,
+      "measuredDirectly": true,
+      "definition": "Difference between verified expected output records and actual output records.",
+      "aggregate": null
+    },
+    {
+      "metric": "duplicates",
+      "label": "Duplicate Records",
+      "unit": "records",
+      "normal": null,
+      "normal_reason": "not measured during baseline",
+      "normalReason": "not measured during baseline",
+      "normal_n_samples": null,
+      "normalNSamples": null,
+      "during_fault": 0,
+      "duringFault": 0,
+      "during_fault_reason": null,
+      "duringFaultReason": null,
+      "delta": null,
+      "pct_change": null,
+      "pctChange": null,
+      "baseline_applicable": false,
+      "baselineApplicable": false,
+      "measured_directly": true,
+      "measuredDirectly": true,
+      "definition": "Count of duplicate record identifier keys observed in destination storage.",
+      "output_duplicates": 4730,
+      "outputDuplicates": 4730,
+      "source_duplicates": 4932,
+      "sourceDuplicates": 4932,
+      "fault_induced_duplicates": 0,
+      "faultInducedDuplicates": 0,
+      "aggregate": null
+    },
+    {
+      "metric": "recovery_time_seconds",
+      "label": "Recovery Time",
+      "unit": "seconds",
+      "normal": null,
+      "normal_reason": "n/a (by definition)",
+      "normalReason": "n/a (by definition)",
+      "normal_n_samples": null,
+      "normalNSamples": null,
+      "during_fault": 0.55,
+      "duringFault": 0.55,
+      "during_fault_reason": null,
+      "duringFaultReason": null,
+      "delta": null,
+      "pct_change": null,
+      "pctChange": null,
+      "baseline_applicable": false,
+      "baselineApplicable": false,
+      "measured_directly": true,
+      "measuredDirectly": true,
+      "definition": "Elapsed duration from fault revert until service health check passed.",
+      "aggregate": null
+    }
+  ],
+  "comparisonTable": [
+    {
+      "metric": "availability_percentage",
+      "label": "Availability",
+      "unit": "%",
+      "normal": 100.0,
+      "normal_reason": null,
+      "normalReason": null,
+      "normal_n_samples": null,
+      "normalNSamples": null,
+      "during_fault": 0.0,
+      "duringFault": 0.0,
+      "during_fault_reason": null,
+      "duringFaultReason": null,
+      "delta": -100.0,
+      "pct_change": -100.0,
+      "pctChange": -100.0,
+      "baseline_applicable": true,
+      "baselineApplicable": true,
+      "measured_directly": true,
+      "measuredDirectly": true,
+      "definition": "Percentage of availability probes returning operational healthy status during fault window (target poll interval: 1.0s, deep probe timeout up to 5.0s when service unresponsive, observed samples: 20). Note: For container_restart, Docker SDK restart blocks until the container is operational, so availability probes during the fault window may observe 100% availability.",
+      "aggregate": null
+    },
+    {
+      "metric": "throughput_records_per_sec",
+      "label": "Throughput",
+      "unit": "records/sec",
+      "normal": 1799.36,
+      "normal_reason": null,
+      "normalReason": null,
+      "normal_n_samples": null,
+      "normalNSamples": null,
+      "during_fault": 591.34,
+      "duringFault": 591.34,
+      "during_fault_reason": null,
+      "duringFaultReason": null,
+      "delta": -1208.02,
+      "pct_change": -67.14,
+      "pctChange": -67.14,
+      "baseline_applicable": true,
+      "baselineApplicable": true,
+      "measured_directly": true,
+      "measuredDirectly": true,
+      "definition": "Pipeline record processing or ingestion throughput during fault window.",
+      "counter_used": "spark.recordsOut",
+      "counterUsed": "spark.recordsOut",
+      "pipeline_active_at_injection": true,
+      "pipelineActiveAtInjection": true,
+      "aggregate": null
+    },
+    {
+      "metric": "data_loss",
+      "label": "Data Loss",
+      "unit": "records",
+      "normal": null,
+      "normal_reason": "n/a (by definition)",
+      "normalReason": "n/a (by definition)",
+      "normal_n_samples": null,
+      "normalNSamples": null,
+      "during_fault": 10256,
+      "duringFault": 10256,
+      "during_fault_reason": null,
+      "duringFaultReason": null,
+      "delta": null,
+      "pct_change": null,
+      "pctChange": null,
+      "baseline_applicable": false,
+      "baselineApplicable": false,
+      "measured_directly": true,
+      "measuredDirectly": true,
+      "definition": "Difference between verified expected output records and actual output records.",
+      "aggregate": null
+    },
+    {
+      "metric": "duplicates",
+      "label": "Duplicate Records",
+      "unit": "records",
+      "normal": null,
+      "normal_reason": "not measured during baseline",
+      "normalReason": "not measured during baseline",
+      "normal_n_samples": null,
+      "normalNSamples": null,
+      "during_fault": 0,
+      "duringFault": 0,
+      "during_fault_reason": null,
+      "duringFaultReason": null,
+      "delta": null,
+      "pct_change": null,
+      "pctChange": null,
+      "baseline_applicable": false,
+      "baselineApplicable": false,
+      "measured_directly": true,
+      "measuredDirectly": true,
+      "definition": "Count of duplicate record identifier keys observed in destination storage.",
+      "output_duplicates": 4730,
+      "outputDuplicates": 4730,
+      "source_duplicates": 4932,
+      "sourceDuplicates": 4932,
+      "fault_induced_duplicates": 0,
+      "faultInducedDuplicates": 0,
+      "aggregate": null
+    },
+    {
+      "metric": "recovery_time_seconds",
+      "label": "Recovery Time",
+      "unit": "seconds",
+      "normal": null,
+      "normal_reason": "n/a (by definition)",
+      "normalReason": "n/a (by definition)",
+      "normal_n_samples": null,
+      "normalNSamples": null,
+      "during_fault": 0.55,
+      "duringFault": 0.55,
+      "during_fault_reason": null,
+      "duringFaultReason": null,
+      "delta": null,
+      "pct_change": null,
+      "pctChange": null,
+      "baseline_applicable": false,
+      "baselineApplicable": false,
+      "measured_directly": true,
+      "measuredDirectly": true,
+      "definition": "Elapsed duration from fault revert until service health check passed.",
+      "aggregate": null
+    }
+  ],
+  "result": "FAIL",
+  "failed_criteria": [
+    "Data loss of 10256 records exceeded the maximum allowed of 0."
+  ],
+  "failedCriteria": [
+    "Data loss of 10256 records exceeded the maximum allowed of 0."
+  ],
+  "started_at": "2026-10-21T08:16:59.982678+00:00",
+  "finished_at": "2026-10-21T08:20:55.471608+00:00",
+  "status": "failed",
+  "pipelineRunId": "78c7e74a-8f42-4f57-8263-7ac16689ccf4",
+  "phases": [
+    {
+      "name": "validating",
+      "state": "done",
+      "startedAt": "2026-10-21T08:17:00.008366+00:00",
+      "finishedAt": "2026-10-21T08:17:00.087743+00:00"
+    },
+    {
+      "name": "preparing",
+      "state": "done",
+      "startedAt": "2026-10-21T08:17:00.087743+00:00",
+      "finishedAt": "2026-10-21T08:17:00.099139+00:00"
+    },
+    {
+      "name": "baseline",
+      "state": "done",
+      "startedAt": "2026-10-21T08:17:00.099139+00:00",
+      "finishedAt": "2026-10-21T08:17:23.194555+00:00"
+    },
+    {
+      "name": "injecting",
+      "state": "done",
+      "startedAt": "2026-10-21T08:17:23.194555+00:00",
+      "finishedAt": "2026-10-21T08:17:33.613898+00:00"
+    },
+    {
+      "name": "monitoring",
+      "state": "done",
+      "startedAt": "2026-10-21T08:17:33.613898+00:00",
+      "finishedAt": "2026-10-21T08:17:53.630714+00:00"
+    },
+    {
+      "name": "rolling_back",
+      "state": "done",
+      "startedAt": "2026-10-21T08:17:53.630714+00:00",
+      "finishedAt": "2026-10-21T08:17:54.057402+00:00"
+    },
+    {
+      "name": "waiting_for_recovery",
+      "state": "done",
+      "startedAt": "2026-10-21T08:17:54.057402+00:00",
+      "finishedAt": "2026-10-21T08:17:54.190098+00:00"
+    },
+    {
+      "name": "validating_data",
+      "state": "done",
+      "startedAt": "2026-10-21T08:17:54.190098+00:00",
+      "finishedAt": "2026-10-21T08:20:55.434201+00:00"
+    },
+    {
+      "name": "collecting_metrics",
+      "state": "done",
+      "startedAt": "2026-10-21T08:20:55.434201+00:00",
+      "finishedAt": "2026-10-21T08:20:55.448629+00:00"
+    },
+    {
+      "name": "analyzing",
+      "state": "done",
+      "startedAt": "2026-10-21T08:20:55.448629+00:00",
+      "finishedAt": "2026-10-21T08:20:55.460051+00:00"
+    },
+    {
+      "name": "cleaning_up",
+      "state": "done",
+      "startedAt": "2026-10-21T08:20:55.460051+00:00",
+      "finishedAt": "2026-10-21T08:20:55.466187+00:00"
+    },
+    {
+      "name": "generating_report",
+      "state": "done",
+      "startedAt": "2026-10-21T08:20:55.466187+00:00",
+      "finishedAt": "2026-10-21T08:20:55.471608+00:00"
+    }
+  ],
+  "series": {
+    "availabilitySamples": [
+      {
+        "t": "2026-10-21T08:17:33.621665+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:34.621788+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:35.621981+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:36.622097+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:37.622267+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:38.622378+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:39.622574+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:40.622687+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:41.622787+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:42.623186+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:43.623273+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:44.623497+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:45.623590+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:46.623740+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:47.623840+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:48.623939+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:49.624032+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:50.622752+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:51.622882+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:52.623005+00:00",
+        "available": false
+      }
+    ],
+    "throughputSamples": null,
+    "cpuSamples": null,
+    "memorySamples": null
+  },
+  "results": {
+    "recoveryTimeSeconds": 0.55,
+    "dataLoss": 10256,
+    "duplicates": 0,
+    "expectedRecords": 300000,
+    "processedRecords": 289744,
+    "throughputBaseline": null,
+    "throughputDuringFault": 591.34,
+    "throughputAfter": 1230.62,
+    "throughputDegradationPercent": null,
+    "availabilityPercentage": 0.0,
+    "availabilityDuringFault": 0.0,
+    "errorRate": 1.0,
+    "errorCount": 20,
+    "totalOperations": 20,
+    "availabilitySamples": [
+      {
+        "t": "2026-10-21T08:17:33.621665+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:34.621788+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:35.621981+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:36.622097+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:37.622267+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:38.622378+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:39.622574+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:40.622687+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:41.622787+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:42.623186+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:43.623273+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:44.623497+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:45.623590+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:46.623740+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:47.623840+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:48.623939+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:49.624032+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:50.622752+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:51.622882+00:00",
+        "available": false
+      },
+      {
+        "t": "2026-10-21T08:17:52.623005+00:00",
+        "available": false
+      }
+    ],
+    "throughputSamples": null,
+    "cpuSamples": null,
+    "memorySamples": null,
+    "comparisonTable": [
+      {
+        "metric": "availability_percentage",
+        "label": "Availability",
+        "unit": "%",
+        "normal": 100.0,
+        "normal_reason": null,
+        "normalReason": null,
+        "normal_n_samples": null,
+        "normalNSamples": null,
+        "during_fault": 0.0,
+        "duringFault": 0.0,
+        "during_fault_reason": null,
+        "duringFaultReason": null,
+        "delta": -100.0,
+        "pct_change": -100.0,
+        "pctChange": -100.0,
+        "baseline_applicable": true,
+        "baselineApplicable": true,
+        "measured_directly": true,
+        "measuredDirectly": true,
+        "definition": "Percentage of availability probes returning operational healthy status during fault window (target poll interval: 1.0s, deep probe timeout up to 5.0s when service unresponsive, observed samples: 20). Note: For container_restart, Docker SDK restart blocks until the container is operational, so availability probes during the fault window may observe 100% availability.",
+        "aggregate": null
+      },
+      {
+        "metric": "throughput_records_per_sec",
+        "label": "Throughput",
+        "unit": "records/sec",
+        "normal": 1799.36,
+        "normal_reason": null,
+        "normalReason": null,
+        "normal_n_samples": null,
+        "normalNSamples": null,
+        "during_fault": 591.34,
+        "duringFault": 591.34,
+        "during_fault_reason": null,
+        "duringFaultReason": null,
+        "delta": -1208.02,
+        "pct_change": -67.14,
+        "pctChange": -67.14,
+        "baseline_applicable": true,
+        "baselineApplicable": true,
+        "measured_directly": true,
+        "measuredDirectly": true,
+        "definition": "Pipeline record processing or ingestion throughput during fault window.",
+        "counter_used": "spark.recordsOut",
+        "counterUsed": "spark.recordsOut",
+        "pipeline_active_at_injection": true,
+        "pipelineActiveAtInjection": true,
+        "aggregate": null
+      },
+      {
+        "metric": "data_loss",
+        "label": "Data Loss",
+        "unit": "records",
+        "normal": null,
+        "normal_reason": "n/a (by definition)",
+        "normalReason": "n/a (by definition)",
+        "normal_n_samples": null,
+        "normalNSamples": null,
+        "during_fault": 10256,
+        "duringFault": 10256,
+        "during_fault_reason": null,
+        "duringFaultReason": null,
+        "delta": null,
+        "pct_change": null,
+        "pctChange": null,
+        "baseline_applicable": false,
+        "baselineApplicable": false,
+        "measured_directly": true,
+        "measuredDirectly": true,
+        "definition": "Difference between verified expected output records and actual output records.",
+        "aggregate": null
+      },
+      {
+        "metric": "duplicates",
+        "label": "Duplicate Records",
+        "unit": "records",
+        "normal": null,
+        "normal_reason": "not measured during baseline",
+        "normalReason": "not measured during baseline",
+        "normal_n_samples": null,
+        "normalNSamples": null,
+        "during_fault": 0,
+        "duringFault": 0,
+        "during_fault_reason": null,
+        "duringFaultReason": null,
+        "delta": null,
+        "pct_change": null,
+        "pctChange": null,
+        "baseline_applicable": false,
+        "baselineApplicable": false,
+        "measured_directly": true,
+        "measuredDirectly": true,
+        "definition": "Count of duplicate record identifier keys observed in destination storage.",
+        "output_duplicates": 4730,
+        "outputDuplicates": 4730,
+        "source_duplicates": 4932,
+        "sourceDuplicates": 4932,
+        "fault_induced_duplicates": 0,
+        "faultInducedDuplicates": 0,
+        "aggregate": null
+      },
+      {
+        "metric": "recovery_time_seconds",
+        "label": "Recovery Time",
+        "unit": "seconds",
+        "normal": null,
+        "normal_reason": "n/a (by definition)",
+        "normalReason": "n/a (by definition)",
+        "normal_n_samples": null,
+        "normalNSamples": null,
+        "during_fault": 0.55,
+        "duringFault": 0.55,
+        "during_fault_reason": null,
+        "duringFaultReason": null,
+        "delta": null,
+        "pct_change": null,
+        "pctChange": null,
+        "baseline_applicable": false,
+        "baselineApplicable": false,
+        "measured_directly": true,
+        "measuredDirectly": true,
+        "definition": "Elapsed duration from fault revert until service health check passed.",
+        "aggregate": null
+      }
+    ]
+  },
+  "baseline": {
+    "timestamp": "2026-10-21T08:17:00.106146+00:00",
+    "baseline_captured_at": "2026-10-21T08:17:00.106146+00:00",
+    "baseline_duration_seconds": 10,
+    "availability_percentage": 100.0,
+    "availability_samples": [
+      {
+        "timestamp": "2026-10-21T08:17:00.106174+00:00",
+        "available": true
+      },
+      {
+        "timestamp": "2026-10-21T08:17:01.235638+00:00",
+        "available": true
+      },
+      {
+        "timestamp": "2026-10-21T08:17:02.375620+00:00",
+        "available": true
+      },
+      {
+        "timestamp": "2026-10-21T08:17:03.479387+00:00",
+        "available": true
+      },
+      {
+        "timestamp": "2026-10-21T08:17:04.554740+00:00",
+        "available": true
+      },
+      {
+        "timestamp": "2026-10-21T08:17:05.634544+00:00",
+        "available": true
+      },
+      {
+        "timestamp": "2026-10-21T08:17:06.723239+00:00",
+        "available": true
+      },
+      {
+        "timestamp": "2026-10-21T08:17:07.909614+00:00",
+        "available": true
+      },
+      {
+        "timestamp": "2026-10-21T08:17:08.971926+00:00",
+        "available": true
+      },
+      {
+        "timestamp": "2026-10-21T08:17:10.051538+00:00",
+        "available": true
+      }
+    ],
+    "throughput_records_per_sec": 1799.36,
+    "expected_record_count": 0,
+    "output_records": 0,
+    "duplicates": null,
+    "reasons": {
+      "duplicates": "not measured during baseline"
+    },
+    "pipeline_run_context": {
+      "records_processed": 0,
+      "output_location": {}
+    }
+  },
+  "pre_fault_accounting": {
+    "snapshot_timestamp": "2026-10-21T08:17:23.190838+00:00",
+    "pipeline_run_id": "78c7e74a-8f42-4f57-8263-7ac16689ccf4",
+    "records_received": 300000,
+    "records_processed": 38987,
+    "records_written": null
+  },
+  "preFaultAccounting": {
+    "snapshot_timestamp": "2026-10-21T08:17:23.190838+00:00",
+    "pipeline_run_id": "78c7e74a-8f42-4f57-8263-7ac16689ccf4",
+    "records_received": 300000,
+    "records_processed": 38987,
+    "records_written": null
+  },
+  "output_duplicates": 4730,
+  "source_duplicates": 4932,
+  "repetitions": 1,
+  "repetition_results": null,
+  "repetitionResults": null,
+  "aggregate_statistics": null,
+  "aggregateStatistics": null,
+  "report_id": "1257b2af-4ce5-4506-b931-a68e31b096ca",
+  "title": "Experiment Report: eval-spark-worker-stop-r1",
+  "createdAt": "2026-10-21T08:20:55.475384+00:00",
+  "aiAnalysis": null
+}

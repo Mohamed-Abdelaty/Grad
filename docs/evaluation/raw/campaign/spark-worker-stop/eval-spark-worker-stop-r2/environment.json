@@ -1,0 +1,221 @@
+{
+  "experiment_name": "eval-spark-worker-stop-r2",
+  "experiment_id": "fd00a52a-0934-4d28-a240-f2949d9e9a9e",
+  "target_service": "spark-worker",
+  "fault_type": "container_stop",
+  "repetition_index": 2,
+  "topic_name": "eval-stream-spark-worker-stop-r2-1792570921",
+  "pipeline_run_id": "f6bab6a8-4af8-484c-af63-6719a22ce7a2",
+  "output_path": "/data/output/pipe-eval-spark-worker-stop-r2-1792570928",
+  "physical_metrics": {
+    "output_path": "/data/output/pipe-eval-spark-worker-stop-r2-1792570928",
+    "expected_rows": 289744,
+    "physical_rows": 289744,
+    "unique_transaction_ids": 285014,
+    "duplicate_transaction_ids": 4730,
+    "baseline_csv_duplicates": 4730,
+    "excess_duplicates": 0,
+    "physical_data_loss": 0,
+    "file_count": 304,
+    "run_valid": true,
+    "run_classification": "VALID",
+    "multiset_comparison": {
+      "missing_rows": 0,
+      "extra_rows": 0,
+      "duplicate_beyond_baseline": 0,
+      "expected_rows": 289744,
+      "physical_rows": 289744,
+      "hdfs_path": "/data/output/pipe-eval-spark-worker-stop-r2-1792570928"
+    },
+    "platform_validator": {
+      "label": "platform validator (unreliable, uses tracker counters)",
+      "data_loss": 10256,
+      "duplicates": 0,
+      "expected_records": 300000,
+      "processed_records": 289744
+    }
+  },
+  "first_micro_batch_wait_seconds": 25.59,
+  "git_commit": "101ba491e5863c68121c462786af777ff0f8eca4",
+  "started_at": "2026-10-21T08:22:11.707256+00:00",
+  "finished_at": "2026-10-21T08:26:33.422338+00:00",
+  "terminal_status": "failed",
+  "host_free_ram_start_mb": 2844.9921875,
+  "host_free_ram_end_mb": 2185.66015625,
+  "host_memory_pressure": false,
+  "telemetry_samples": [
+    {
+      "timestamp": "2026-10-21T08:22:39.996614+00:00",
+      "elapsed_seconds": 0.0,
+      "free_ram_mb": 2122.87109375,
+      "pages_per_sec": 91.0247877316791
+    },
+    {
+      "timestamp": "2026-10-21T08:22:56.617951+00:00",
+      "elapsed_seconds": 16.7,
+      "free_ram_mb": 2025.39453125,
+      "pages_per_sec": 0.997861184337491
+    },
+    {
+      "timestamp": "2026-10-21T08:23:12.763933+00:00",
+      "elapsed_seconds": 33.2,
+      "free_ram_mb": 2110.171875,
+      "pages_per_sec": 495.83533169243
+    },
+    {
+      "timestamp": "2026-10-21T08:23:28.944833+00:00",
+      "elapsed_seconds": 49.4,
+      "free_ram_mb": 2255.9765625,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-21T08:23:45.746205+00:00",
+      "elapsed_seconds": 65.6,
+      "free_ram_mb": 2117.92578125,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-21T08:24:02.414790+00:00",
+      "elapsed_seconds": 82.4,
+      "free_ram_mb": 2049.22265625,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-21T08:24:19.144404+00:00",
+      "elapsed_seconds": 99.1,
+      "free_ram_mb": 2089.29296875,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-21T08:24:35.908356+00:00",
+      "elapsed_seconds": 115.8,
+      "free_ram_mb": 2013.8515625,
+      "pages_per_sec": 3.97157582894979
+    },
+    {
+      "timestamp": "2026-10-21T08:24:52.636676+00:00",
+      "elapsed_seconds": 132.5,
+      "free_ram_mb": 1954.671875,
+      "pages_per_sec": 911.047714763919
+    },
+    {
+      "timestamp": "2026-10-21T08:25:09.280634+00:00",
+      "elapsed_seconds": 149.3,
+      "free_ram_mb": 2006.4140625,
+      "pages_per_sec": 15.9500174303784
+    },
+    {
+      "timestamp": "2026-10-21T08:25:26.114277+00:00",
+      "elapsed_seconds": 165.9,
+      "free_ram_mb": 1910.32421875,
+      "pages_per_sec": 391.597649656814
+    },
+    {
+      "timestamp": "2026-10-21T08:25:42.800261+00:00",
+      "elapsed_seconds": 182.8,
+      "free_ram_mb": 1922.70703125,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-21T08:25:59.147661+00:00",
+      "elapsed_seconds": 199.4,
+      "free_ram_mb": 1936.8203125,
+      "pages_per_sec": 6.92928457215578
+    },
+    {
+      "timestamp": "2026-10-21T08:26:16.215369+00:00",
+      "elapsed_seconds": 215.8,
+      "free_ram_mb": 2027.85546875,
+      "pages_per_sec": 0.0
+    },
+    {
+      "timestamp": "2026-10-21T08:26:31.383953+00:00",
+      "elapsed_seconds": 230.9,
+      "free_ram_mb": 2070.3125,
+      "pages_per_sec": 7.01181631285042
+    }
+  ],
+  "spark_worker_cores_free_start": 2,
+  "kafka_data_dir_size_start": "5.4G",
+  "kafka_topic_count_start": 33,
+  "kafka_total_messages_start": 37296310,
+  "docker_stats_start": [
+    {
+      "BlockIO": "779MB / 1.25GB",
+      "CPUPerc": "6.24%",
+      "Container": "8dab2788f0ef8ab108a49e811e4e46abc5fb8c017f07fe25ee4c0ded5dc01863",
+      "ID": "8dab2788f0ef",
+      "MemPerc": "11.61%",
+      "MemUsage": "688.3MiB / 5.788GiB",
+      "Name": "platform-backend",
+      "NetIO": "686MB / 3.95GB",
+      "PIDs": "17"
+    },
+    {
+      "BlockIO": "71.3MB / 32.2MB",
+      "CPUPerc": "0.02%",
+      "Container": "281312fe67890c5d867aa5ebee39f9f7c189d13f6c95a2e28007e9369771f3c0",
+      "ID": "281312fe6789",
+      "MemPerc": "1.21%",
+      "MemUsage": "72.02MiB / 5.788GiB",
+      "Name": "platform-postgres",
+      "NetIO": "5.86MB / 23.3MB",
+      "PIDs": "8"
+    },
+    {
+      "BlockIO": "7.2MB / 177MB",
+      "CPUPerc": "0.12%",
+      "Container": "4b04c9938138fee8bb253dbd8191e60d0e02baa345752931c15c6c2b09e047e9",
+      "ID": "4b04c9938138",
+      "MemPerc": "3.54%",
+      "MemUsage": "210MiB / 5.788GiB",
+      "Name": "platform-spark-worker",
+      "NetIO": "169MB / 11.9MB",
+      "PIDs": "43"
+    },
+    {
+      "BlockIO": "15MB / 367MB",
+      "CPUPerc": "0.14%",
+      "Container": "58273a5e38d74ae6034ed61bd382b671b2dea8fe006b5eb36c147916db1d62b5",
+      "ID": "58273a5e38d7",
+      "MemPerc": "6.51%",
+      "MemUsage": "385.6MiB / 5.788GiB",
+      "Name": "platform-datanode",
+      "NetIO": "236MB / 589MB",
+      "PIDs": "64"
+    },
+    {
+      "BlockIO": "6.06MB / 58.2MB",
+      "CPUPerc": "1.91%",
+      "Container": "964f812a22d2de49d04bb1867f8e3be88a0e177b2ffce254265660e0268467ab",
+      "ID": "964f812a22d2",
+      "MemPerc": "9.52%",
+      "MemUsage": "564.1MiB / 5.788GiB",
+      "Name": "platform-kafka",
+      "NetIO": "48.2MB / 90.8MB",
+      "PIDs": "97"
+    },
+    {
+      "BlockIO": "34.1MB / 17.4MB",
+      "CPUPerc": "0.12%",
+      "Container": "df8176b4d1f919e0b5daf0d492689e9ae1be98384a5f3dbe59206d7bfbdc7c0f",
+      "ID": "df8176b4d1f9",
+      "MemPerc": "5.58%",
+      "MemUsage": "331MiB / 5.788GiB",
+      "Name": "platform-spark-master",
+      "NetIO": "4.97MB / 1.22MB",
+      "PIDs": "45"
+    },
+    {
+      "BlockIO": "144MB / 222MB",
+      "CPUPerc": "0.13%",
+      "Container": "27012bf67efa721f98dbeb7c2dcf4d60cbf7cc5030fa8a05c93d46923001958a",
+      "ID": "27012bf67efa",
+      "MemPerc": "12.78%",
+      "MemUsage": "757.2MiB / 5.788GiB",
+      "Name": "platform-namenode",
+      "NetIO": "52.3MB / 52.9MB",
+      "PIDs": "59"
+    }
+  ]
+}
