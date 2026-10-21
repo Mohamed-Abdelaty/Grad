@@ -1124,7 +1124,7 @@ class EvaluationHarness:
         # Step 4: Poll until terminal state with 15s telemetry sampling
         poll_start = time.monotonic()
         terminal_status = None
-        max_poll_time = 450.0
+        max_poll_time = 720.0
 
         telemetry_samples: list[dict[str, Any]] = []
         last_sample_time = 0.0
