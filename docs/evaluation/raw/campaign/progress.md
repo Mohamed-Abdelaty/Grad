@@ -52,7 +52,11 @@ Calibration throughput: ~1,472 rows/s steady-state (micro-batch telemetry in `ca
 ## datanode-stop (target: 5 reps)
 | Rep | Source | Physical Rows | Missing | Excess Dups | Recovery (s) | Valid |
 |---|---|---|---|---|---|---|
-| r1–r5 | — | — | — | — | — | ⏳ PENDING |
+| r1 | campaign | 289,744 | 0 | 0 | 0.54 | ✅ VALID |
+| r2 | campaign | 54,995 | 234,749 | 0 | 0.38 | ✅ VALID (fault crash) |
+| r3 | campaign | 289,744 | 0 | 0 | 0.39 | ✅ VALID |
+| r4 | campaign | 289,744 | 0 | 0 | 0.47 | ✅ VALID |
+| r5 | campaign | 54,990 | 234,754 | 0 | 0.41 | ✅ VALID (fault crash) |
 
 ---
 
@@ -80,3 +84,8 @@ Calibration throughput: ~1,472 rows/s steady-state (micro-batch telemetry in `ca
 | 2026-10-21T09:05 | spark-worker-restart | r3 | VALID | campaign, recovery 0.07 s, host_memory_pressure=false |
 | 2026-10-21T10:07 | spark-worker-restart | r4 | VALID | campaign, recovery 0.09 s, host_memory_pressure=true |
 | 2026-10-21T10:13 | spark-worker-restart | r5 | VALID | campaign, recovery 0.07 s, host_memory_pressure=true |
+| 2026-10-21T10:29 | datanode-stop | r1 | VALID | campaign, recovery 0.54 s, 289,744 rows, host_memory_pressure=false |
+| 2026-10-21T10:35 | datanode-stop | r2 | VALID | campaign, recovery 0.38 s, 54,995 rows (234,749 missing; HDFS 0-replica write failure), host_memory_pressure=false |
+| 2026-10-21T10:37 | datanode-stop | r3 | VALID | campaign, recovery 0.39 s, 289,744 rows, host_memory_pressure=false |
+| 2026-10-21T10:44 | datanode-stop | r4 | VALID | campaign, recovery 0.47 s, 289,744 rows, host_memory_pressure=false |
+| 2026-10-21T10:50 | datanode-stop | r5 | VALID | campaign, recovery 0.41 s, 54,990 rows (234,754 missing; HDFS 0-replica write failure), host_memory_pressure=false |
