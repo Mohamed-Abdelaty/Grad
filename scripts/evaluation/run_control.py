@@ -102,17 +102,17 @@ class ControlHarness:
     def _authenticate(self) -> None:
         """Authenticate with the backend API as admin."""
         res = self.client.post(
-            "/api/auth/token",
+            "/api/auth/login",
             data={"username": "admin", "password": "CHANGE_ME_in_production_use_a_long_random_string"},
         )
         if res.status_code != 200:
             res = self.client.post(
-                "/api/auth/token",
+                "/api/auth/login",
                 data={"username": "admin", "password": "admin"},
             )
         if res.status_code != 200:
             res = self.client.post(
-                "/api/auth/token",
+                "/api/auth/login",
                 data={"username": "admin", "password": "123456"},
             )
         if res.status_code != 200:
