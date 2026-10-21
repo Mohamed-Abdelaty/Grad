@@ -234,6 +234,12 @@
           "min": 13.18,
           "max": 27.68
         },
+        "post_warmup_baseline_throughput": {
+          "mean": 1488.81,
+          "std": 140.75,
+          "min": 1270.04,
+          "max": 1622.13
+        },
         "pre_fault_baseline_throughput": {
           "mean": 1558.05,
           "std": 131.4,
@@ -417,6 +423,12 @@
           "min": 1.38,
           "max": 7.78
         },
+        "post_warmup_baseline_throughput": {
+          "mean": 1591.71,
+          "std": 37.69,
+          "min": 1544.28,
+          "max": 1620.45
+        },
         "pre_fault_baseline_throughput": {
           "mean": 1439.2,
           "std": 133.96,
@@ -578,6 +590,12 @@
           "std": 5.5,
           "min": 11.92,
           "max": 26.01
+        },
+        "post_warmup_baseline_throughput": {
+          "mean": 1620.2,
+          "std": 50.26,
+          "min": 1551.12,
+          "max": 1693.17
         },
         "pre_fault_baseline_throughput": {
           "mean": 1679.09,
@@ -741,6 +759,12 @@
           "min": 0.74,
           "max": 3.65
         },
+        "post_warmup_baseline_throughput": {
+          "mean": 1651.56,
+          "std": 37.66,
+          "min": 1623.04,
+          "max": 1700.48
+        },
         "pre_fault_baseline_throughput": {
           "mean": 1439.22,
           "std": 250.82,
@@ -902,6 +926,12 @@
           "std": 2.1,
           "min": 20.01,
           "max": 24.05
+        },
+        "post_warmup_baseline_throughput": {
+          "mean": 1541.15,
+          "std": 54.1,
+          "min": 1490.4,
+          "max": 1621.46
         },
         "pre_fault_baseline_throughput": {
           "mean": 1379.28,
