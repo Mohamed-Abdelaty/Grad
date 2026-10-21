@@ -1,0 +1,28 @@
+{
+  "output_path": "/data/output/pipe-eval-spark-worker-restart-r2-1792573152",
+  "expected_rows": 289744,
+  "physical_rows": 289744,
+  "unique_transaction_ids": 285014,
+  "duplicate_transaction_ids": 4730,
+  "baseline_csv_duplicates": 4730,
+  "excess_duplicates": 0,
+  "physical_data_loss": 0,
+  "file_count": 304,
+  "run_valid": true,
+  "run_classification": "VALID",
+  "multiset_comparison": {
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0,
+    "expected_rows": 289744,
+    "physical_rows": 289744,
+    "hdfs_path": "/data/output/pipe-eval-spark-worker-restart-r2-1792573152"
+  },
+  "platform_validator": {
+    "label": "platform validator (unreliable, uses tracker counters)",
+    "data_loss": 10256,
+    "duplicates": 0,
+    "expected_records": 300000,
+    "processed_records": 289744
+  }
+}

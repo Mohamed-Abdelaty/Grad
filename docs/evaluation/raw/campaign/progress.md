@@ -43,7 +43,11 @@ Calibration throughput: ~1,472 rows/s steady-state (micro-batch telemetry in `ca
 ## spark-worker-restart (target: 5 reps)
 | Rep | Source | Physical Rows | Missing | Excess Dups | Recovery (s) | Valid |
 |---|---|---|---|---|---|---|
-| r1–r5 | — | — | — | — | — | ⏳ PENDING |
+| r1 | campaign | 289,744 | 0 | 0 | 0.13 | ✅ VALID |
+| r2 | campaign | 289,744 | 0 | 0 | 0.23 | ✅ VALID |
+| r3 | campaign | 289,744 | 0 | 0 | 0.07 | ✅ VALID |
+| r4 | campaign | 289,744 | 0 | 0 | 0.09 | ✅ VALID |
+| r5 | campaign | 289,744 | 0 | 0 | 0.07 | ✅ VALID |
 
 ## datanode-stop (target: 5 reps)
 | Rep | Source | Physical Rows | Missing | Excess Dups | Recovery (s) | Valid |
@@ -71,3 +75,8 @@ Calibration throughput: ~1,472 rows/s steady-state (micro-batch telemetry in `ca
 | 2026-10-21T08:27 | spark-worker-stop | r3 | VALID | campaign, recovery 0.56 s, host_memory_pressure=false |
 | 2026-10-21T08:34 | spark-worker-stop | r4 | VALID | campaign, recovery 0.32 s, host_memory_pressure=false |
 | 2026-10-21T08:41 | spark-worker-stop | r5 | VALID | campaign, recovery 0.59 s, host_memory_pressure=true |
+| 2026-10-21T08:53 | spark-worker-restart | r1 | VALID | campaign, recovery 0.13 s, host_memory_pressure=false |
+| 2026-10-21T08:59 | spark-worker-restart | r2 | VALID | campaign, recovery 0.23 s, host_memory_pressure=false |
+| 2026-10-21T09:05 | spark-worker-restart | r3 | VALID | campaign, recovery 0.07 s, host_memory_pressure=false |
+| 2026-10-21T10:07 | spark-worker-restart | r4 | VALID | campaign, recovery 0.09 s, host_memory_pressure=true |
+| 2026-10-21T10:13 | spark-worker-restart | r5 | VALID | campaign, recovery 0.07 s, host_memory_pressure=true |
