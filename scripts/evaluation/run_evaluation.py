@@ -795,6 +795,62 @@ def verify_cool_down_status(
     return True, "All cool-down checks passed"
 
 
+class ResilientHttpClient:
+    """HTTP client wrapper with automatic reconnection and retries on transient transport failures."""
+
+    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+        self.headers: dict[str, str] = {}
+        self._init_client()
+
+    def _init_client(self) -> None:
+        transport = httpx.HTTPTransport(retries=3)
+        self._client = httpx.Client(
+            base_url=self.base_url,
+            timeout=self.timeout,
+            transport=transport,
+            headers=dict(self.headers),
+        )
+
+    def request(self, method: str, url: str, **kwargs) -> httpx.Response:
+        max_attempts = 3
+        last_exc: Exception | None = None
+        for attempt in range(max_attempts):
+            try:
+                self._client.headers.update(self.headers)
+                return self._client.request(method, url, **kwargs)
+            except (httpx.TransportError, Exception) as exc:
+                last_exc = exc
+                logger.warning(
+                    "HTTP %s %s error (attempt %d/%d): %s. Reconnecting...",
+                    method,
+                    url,
+                    attempt + 1,
+                    max_attempts,
+                    exc,
+                )
+                time.sleep(1.0)
+                try:
+                    self._client.close()
+                except Exception:
+                    pass
+                self._init_client()
+        raise last_exc
+
+    def get(self, url: str, **kwargs) -> httpx.Response:
+        return self.request("GET", url, **kwargs)
+
+    def post(self, url: str, **kwargs) -> httpx.Response:
+        return self.request("POST", url, **kwargs)
+
+    def put(self, url: str, **kwargs) -> httpx.Response:
+        return self.request("PUT", url, **kwargs)
+
+    def delete(self, url: str, **kwargs) -> httpx.Response:
+        return self.request("DELETE", url, **kwargs)
+
+
 class EvaluationHarness:
     """Orchestrates sequential, reproducible execution of the evaluation matrix."""
 
@@ -811,7 +867,7 @@ class EvaluationHarness:
         self.password = password or os.environ.get("ADMIN_PASSWORD", "123456")
         self.matrix_path = Path(matrix_path)
         self.raw_output_dir = Path(raw_output_dir)
-        self.client = httpx.Client(base_url=self.base_url, timeout=30.0)
+        self.client = ResilientHttpClient(base_url=self.base_url, timeout=30.0)
         self.token: str | None = None
         self.last_topic_name: str | None = None
 
