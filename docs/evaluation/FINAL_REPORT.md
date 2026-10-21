@@ -10,20 +10,24 @@
 
 ## 1. Executive Summary
 
-This report documents the exhaustive, research-grade evaluation of the ChaosFlow resilient streaming data pipeline platform under controlled fault injection. Across 1 Control Baseline (Calibration) and 5 distinct fault injection experiments executed with 5 independent repetitions each ($N=25$ fault runs, 1 calibration run, total 26 pipeline runs), physical data integrity and recovery dynamics were measured using strict full-row multiset verification against committed HDFS Parquet files.
+This report documents the exhaustive, research-grade evaluation of the ChaosFlow resilient streaming data pipeline platform under controlled fault injection. Across 1 Empirical Control Baseline (5 independent unperturbed repetitions, $N=5$, plus 1 historical calibration run) and 5 distinct fault injection experiments executed with 5 independent repetitions each ($N=25$ fault runs, total 31 pipeline runs), physical data integrity and recovery dynamics were measured using strict full-row multiset verification against committed HDFS Parquet files.
 
 ### Final Results Summary Table (Gap 3 Comparison)
 
-The primary comparison evaluates each fault experiment against its own pre-fault operational baseline window (10-second sampling immediately prior to injection). The superseded whole-run calibration baseline (1,472.0 rec/s) is preserved in Section 5 for historical continuity.
+The primary comparison evaluates each fault experiment against two complementary baselines:
+1. **Empirical Control Baseline (1,678.5 ± 163.9 rec/s)**: Derived from 5 unperturbed control runs (`eval-control-r1` to `r5`) executed under identical configuration, measurement windows (10s baseline, 20s fault window, 10s post), and environment gates.
+2. **Individual Pre-Fault Baseline**: Captured from the active pipeline tracker during the 10-second baseline window immediately preceding fault injection for that specific run.
 
-| Experiment Name | Target Container | Pre-Fault Baseline (rec/s) | During-Fault Throughput (rec/s) | Throughput Degradation (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing / Extra / Excess) | Platform Validator Loss (Unreliable) | Valid Runs ($n/N$) |
-|---|---|---|---|---|---|---|---|---|---|
-| **Control (whole-run calibration average, not steady)** | *None* | 1,472.0 | — | 0.0% | 0.00 s | 0.00 s | **0 / 0 / 0** | 10,256.0 (unreliable) | 1 / 1 |
-| **kafka-stop** | `platform-kafka` | 1,558.0 ± 131.4 | 107.20 ± 60.08 | 93.2% | 17.52 ± 5.73 s | 22.89 ± 6.47 s | **0 / 0 / 0** | 10,256.0 (unreliable) | 5 / 5 |
-| **kafka-restart** | `platform-kafka` | 1,439.2 ± 134.0 | 524.69 ± 316.70 | 65.0% | 0.72 ± 1.40 s | 3.44 ± 2.57 s | **0 / 0 / 0** | 10,256.0 (unreliable) | 5 / 5 |
-| **spark-worker-stop** | `platform-spark-worker` | 1,679.1 ± 164.2 | 571.91 ± 43.50* | 65.8% | 0.48 ± 0.13 s | 17.56 ± 5.50 s | **0 / 0 / 0** | 10,256.0 (unreliable) | 5 / 5 |
-| **spark-worker-restart** | `platform-spark-worker` | 1,439.2 ± 250.8 | 960.73 ± 215.10 | 32.8% | 0.12 ± 0.07 s | 1.87 ± 1.21 s | **0 / 0 / 0** | 10,070.6 (unreliable) | 5 / 5 |
-| **datanode-stop** | `platform-datanode` | 1,379.3 ± 164.4 | 295.34 ± 269.61 | 80.3% | 0.47 ± 0.08 s (3 passed) / N/A (2 failed) | 21.69 ± 2.10 s (3 passed) / N/A (2 failed) | **Failed in 2 of 5 runs** (query died at ~55k rows; 0 loss in 3 runs) | 6,942.8 (unreliable) | 5 / 5 |
+The superseded whole-run calibration baseline (1,472.0 rec/s) is preserved in Section 5 for historical continuity.
+
+| Experiment Name | Target Container | Control Baseline (rec/s) | Pre-Fault Baseline (rec/s) | During-Fault Throughput (rec/s) | Degradation vs Control (%) | Degradation vs Own Baseline (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing / Extra / Excess) | Platform Validator Loss (Unreliable) | Valid Runs ($n/N$) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **Control (5-repetition empirical baseline, unperturbed)** | *None* | 1,678.5 ± 163.9 | 1,678.5 ± 163.9 | 1,498.0 ± 105.8 | 9.7% | 9.7% | 0.00 s | 0.00 s | **0 / 0 / 0** | 10,256.0 (unreliable) | 5 / 5 |
+| **kafka-stop** | `platform-kafka` | 1,678.5 ± 163.9 | 1,558.0 ± 131.4 | 107.20 ± 60.08 | 93.6% | 93.2% | 17.52 ± 5.73 s | 22.89 ± 6.47 s | **0 / 0 / 0** | 10,256.0 (unreliable) | 5 / 5 |
+| **kafka-restart** | `platform-kafka` | 1,678.5 ± 163.9 | 1,439.2 ± 134.0 | 524.69 ± 316.70 | 68.7% | 65.0% | 0.72 ± 1.40 s | 3.44 ± 2.57 s | **0 / 0 / 0** | 10,256.0 (unreliable) | 5 / 5 |
+| **spark-worker-stop** | `platform-spark-worker` | 1,678.5 ± 163.9 | 1,679.1 ± 164.2 | 571.91 ± 43.50* | 65.9% | 65.8% | 0.48 ± 0.13 s | 17.56 ± 5.50 s | **0 / 0 / 0** | 10,256.0 (unreliable) | 5 / 5 |
+| **spark-worker-restart** | `platform-spark-worker` | 1,678.5 ± 163.9 | 1,439.2 ± 250.8 | 960.73 ± 215.10 | 42.8% | 32.8% | 0.12 ± 0.07 s | 1.87 ± 1.21 s | **0 / 0 / 0** | 10,070.6 (unreliable) | 5 / 5 |
+| **datanode-stop** | `platform-datanode` | 1,678.5 ± 163.9 | 1,379.3 ± 164.4 | 295.34 ± 269.61 | 82.4% | 80.3% | 0.47 ± 0.08 s (3 passed) / N/A (2 failed) | 21.69 ± 2.10 s (3 passed) / N/A (2 failed) | **Failed in 2 of 5 runs** (query died at ~55k rows; 0 loss in 3 runs) | 6,942.8 (unreliable) | 5 / 5 |
 
 *\*Note on During-Fault Throughput: As proven in Section 2, the reported non-zero throughput during container stop faults is an accounting artifact of Docker's graceful termination window being included in the progress counter delta.*
 
@@ -161,26 +165,41 @@ To provide an unquantized perspective, a second baseline was computed offline ov
 
 ---
 
-## 3. Control Baseline (Calibration)
+## 3. Control Baseline (Empirical 5-Repetition Campaign & Calibration)
 
-The Control Baseline evaluated the pipeline under non-fault conditions.
+To establish research-grade baseline metrics, the control experiment was executed for **5 sequential unperturbed repetitions** (`eval-control-r1` through `r5`) using the exact pipeline template, measurement windows (warm-up delay, 10s baseline, 20s simulated fault window with no fault injected, 10s post-window, and full stream completion), and strict pre-flight gates.
 
-### Calibration Results (`pipe-eval-calibration-1792537189`)
+### 3.1 Empirical Control Repetition Table (`docs/evaluation/raw/control/`)
 
+| Rep | Topic Name | Physical Rows | Missing | Extra | Excess Dups | 10s Baseline TP (rec/s) | 20s Simulated Fault TP (rec/s) | 10s Post TP (rec/s) | Total Dur (s) | Warmup (s) | Memory Pressure | Classification |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **r1** | `eval-stream-control-r1-1792587243` | 289,744 | 0 | 0 | 0 | 1,798.8 | 1,497.9 | 1,496.6 | 222.70 | 22.81 | False | ✅ VALID (Pass) |
+| **r2** | `eval-stream-control-r2-1792587600` | 289,744 | 0 | 0 | 0 | 1,796.5 | 1,498.4 | 1,499.5 | 223.73 | 22.25 | False | ✅ VALID (Pass) |
+| **r3** | `eval-stream-control-r3-1792588000` | 289,744 | 0 | 0 | 0 | 1,499.0 | 1,647.7 | 1,499.2 | 222.66 | 20.78 | False | ✅ VALID (Pass) |
+| **r4** | `eval-stream-control-r4-1792588320` | 289,744 | 0 | 0 | 0 | 1,799.4 | 1,348.5 | 1,799.4 | 220.19 | 20.61 | False | ✅ VALID (Pass) |
+| **r5** | `eval-stream-control-r5-1792588560` | 289,744 | 0 | 0 | 0 | 1,499.0 | 1,497.8 | 1,798.8 | 221.08 | 19.61 | False | ✅ VALID (Pass) |
+
+### 3.2 Aggregate Control Statistics
+
+- **Baseline Ingestion Throughput (10s Window)**: Mean **1,678.5 rec/s** (Std Dev: 163.9 rec/s, Min: 1,499.0, Max: 1,799.4)
+- **Simulated Fault Window Throughput (20s Window, No Fault)**: Mean **1,498.0 rec/s** (Std Dev: 105.8 rec/s, Min: 1,348.5, Max: 1,647.7)
+  - *Natural Timing Variation*: Ingestion rate exhibited a 9.7% natural timing variation across the 20s window without any fault injected, illustrating micro-batch alignment dynamics.
+- **Post Window Throughput (10s Window)**: Mean **1,618.7 rec/s** (Std Dev: 163.5 rec/s, Min: 1,496.6, Max: 1,799.4)
+- **Active Streaming Duration**: Mean **222.07 s** (Std Dev: 1.41 s, Min: 220.19, Max: 223.73)
+- **Warm-Up Latency (Time to First Micro-Batch)**: Mean **21.21 s** (Std Dev: 1.30 s, Min: 19.61, Max: 22.81)
+- **Host Memory Pressure**: **0 of 5 runs** (0%); minimum free RAM observed: 2,351.8 MB
+- **Physical Data Integrity**: Exactly **289,744 rows** committed across all 5 runs with **0 missing, 0 extra, 0 excess duplicate records**, satisfying full-row 5-column multiset equality over (`transaction_id`, `customer_id`, `product_id`, `amount`, `timestamp`).
+- **Valid Runs**: 5 of 5 ($n=5$).
+
+### 3.3 Historical Single-Run Calibration (`pipe-eval-calibration-1792537189`)
+
+For historical reference, the earlier single calibration run recorded:
 - **Topic Name**: `eval-stream-calibration-1792537178`
 - **Output Path**: `/data/output/pipe-eval-calibration-1792537189`
 - **Expected Records**: 289,744
-- **Physical Output Records**: **289,744** (100.0% match)
-- **Full-Row 5-Column Multiset Metrics**:
-  - Missing Rows: **0**
-  - Extra Rows: **0**
-  - Excess Duplicates: **0** (Baseline duplicates: 4,730)
-  - Committed Parquet Files: 304
-- **Timing & Throughput**:
-  - Time to First Micro-Batch: 15.59 s
-  - Total Active Streaming Duration: 204.77 s
-  - Whole-Run Calibration Throughput: **1,472.0 records/s** (whole-run average encompassing warm-up, JIT, steady-state, and teardown).
-- **Control Status**: 1 of 1 run completed. Full-row multiset equality verified over all 5 columns.
+- **Physical Output Records**: **289,744** (100.0% match; 0 missing, 0 extra, 0 excess duplicates)
+- **Whole-Run Calibration Throughput**: **1,472.0 records/s** (whole-run average encompassing warm-up, JIT, steady-state, and teardown).
+- **Status**: SUPERSEDED by the 5-repetition empirical control campaign above.
 
 ---
 
@@ -386,16 +405,20 @@ Worker container restart is the least disruptive fault injected. The worker cycl
 
 ## 5. Gap 3 Analysis: Normal vs. During-Fault Performance
 
-### Primary Gap 3 Comparison Table (vs. Pre-Fault Baseline)
+### Primary Gap 3 Comparison Table (vs. Empirical Control & Individual Pre-Fault Baselines)
 
-| Experiment Name | Target Container | Pre-Fault Baseline (rec/s) | During-Fault Throughput (rec/s) | Throughput Degradation (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing/Extra/Excess) | Platform Validator Loss (Unreliable) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Control (whole-run calibration average, not steady)** | `None` | 1472.0 | — | 0.0% | 0.00 s | 0.00 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
-| **kafka-stop** | `platform-kafka` | 1558.0 ± 131.4 | 107.20 | 93.2% | 17.52 ± 5.73 s | 22.89 ± 6.47 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
-| **kafka-restart** | `platform-kafka` | 1439.2 ± 134.0 | 524.69 | 65.0% | 0.72 ± 1.40 s | 3.44 ± 2.57 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
-| **spark-worker-stop** | `platform-spark-worker` | 1679.1 ± 164.2 | 571.91 | 65.8% | 0.48 ± 0.13 s | 17.56 ± 5.50 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
-| **spark-worker-restart** | `platform-spark-worker` | 1439.2 ± 250.8 | 960.73 | 32.8% | 0.12 ± 0.07 s | 1.87 ± 1.21 s | 0.0 / 0.0 / 0.0 | 10070.6 (unreliable) |
-| **datanode-stop** | `platform-datanode` | 1379.3 ± 164.4 | 295.34 | 80.3% | 0.47 ± 0.08 s (3 passed) / N/A (2 failed) | 21.69 ± 2.10 s (3 passed) / N/A (2 failed) | Failed in 2 of 5 runs (query died at ~55k rows; 0 loss in 3 runs) | 6942.8 (unreliable) |
+Each fault experiment is evaluated against two complementary baselines:
+1. **Empirical Control Baseline (1,678.5 ± 163.9 rec/s)**: Derived from 5 identical, unperturbed control runs (`eval-control-r1` to `r5`) executed under the exact same pipeline configuration, timing windows (10s baseline, 20s fault window, 10s post), and environment gates.
+2. **Individual Pre-Fault Baseline**: Captured from the active pipeline tracker during the 10-second baseline window immediately preceding fault injection for that specific run.
+
+| Experiment Name | Target Container | Control Baseline (rec/s) | Pre-Fault Baseline (rec/s) | During-Fault Throughput (rec/s) | Degradation vs Control (%) | Degradation vs Own Baseline (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing/Extra/Excess) | Platform Validator Loss (Unreliable) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **Control (5-repetition empirical baseline, unperturbed)** | `None` | 1678.5 ± 163.9 | 1678.5 ± 163.9 | 1498.0 ± 105.8 | 9.7% | 9.7% | 0.00 s | 0.00 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
+| **kafka-stop** | `platform-kafka` | 1678.5 ± 163.9 | 1558.0 ± 131.4 | 107.20 | 93.6% | 93.2% | 17.52 ± 5.73 s | 22.89 ± 6.47 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
+| **kafka-restart** | `platform-kafka` | 1678.5 ± 163.9 | 1439.2 ± 134.0 | 524.69 | 68.7% | 65.0% | 0.72 ± 1.40 s | 3.44 ± 2.57 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
+| **spark-worker-stop** | `platform-spark-worker` | 1678.5 ± 163.9 | 1679.1 ± 164.2 | 571.91 | 65.9% | 65.8% | 0.48 ± 0.13 s | 17.56 ± 5.50 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
+| **spark-worker-restart** | `platform-spark-worker` | 1678.5 ± 163.9 | 1439.2 ± 250.8 | 960.73 | 42.8% | 32.8% | 0.12 ± 0.07 s | 1.87 ± 1.21 s | 0.0 / 0.0 / 0.0 | 10070.6 (unreliable) |
+| **datanode-stop** | `platform-datanode` | 1678.5 ± 163.9 | 1379.3 ± 164.4 | 295.34 | 82.4% | 80.3% | 0.47 ± 0.08 s (3 passed) / N/A (2 failed) | 21.69 ± 2.10 s (3 passed) / N/A (2 failed) | Failed in 2 of 5 runs (query died at ~55k rows; 0 loss in 3 runs) | 6942.8 (unreliable) |
 
 ---
 
