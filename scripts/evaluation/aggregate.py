@@ -289,7 +289,7 @@ THROUGHPUT_90PCT_RECOVERY = {
 }
 
 
-def load_run_metrics(run_dir: str) -> Dict[str, Any]:
+def load_run_metrics(run_dir: str, five_col_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Parse report.json, physical_metrics.json, and environment.json for a single run."""
     report_file = os.path.join(run_dir, "report.json")
     phys_file = os.path.join(run_dir, "physical_metrics.json")
@@ -310,7 +310,13 @@ def load_run_metrics(run_dir: str) -> Dict[str, Any]:
         with open(env_file, "r", encoding="utf-8") as f:
             env_data = json.load(f)
 
-    multiset = phys_data.get("multiset_comparison") or {}
+    run_name = os.path.basename(run_dir)
+    multiset = {}
+    if five_col_data and run_name in five_col_data:
+        multiset = five_col_data[run_name]
+    else:
+        multiset = phys_data.get("multiset_comparison") or {}
+
     platform_val = phys_data.get("platform_validator") or {}
 
     recovery_time = report_data.get("recovery_time_seconds")
@@ -327,18 +333,30 @@ def load_run_metrics(run_dir: str) -> Dict[str, Any]:
     b_dict = report_data.get("baseline") or {}
     pre_fault_tp = b_dict.get("throughput_records_per_sec")
 
+    # Recompute memory telemetry
+    hmp = bool(env_data.get("host_memory_pressure", False))
+    telemetry = env_data.get("telemetry_samples", [])
+    ram_vals = [s.get("free_ram_mb") for s in telemetry if s.get("free_ram_mb") is not None]
+    if env_data.get("host_free_ram_start_mb") is not None:
+        ram_vals.append(env_data["host_free_ram_start_mb"])
+    if env_data.get("host_free_ram_end_mb") is not None:
+        ram_vals.append(env_data["host_free_ram_end_mb"])
+    min_ram = min(ram_vals) if ram_vals else None
+
     return {
         "run_dir": run_dir,
-        "physical_rows": phys_data.get("physical_rows", 0),
+        "run_name": run_name,
+        "physical_rows": multiset.get("physical_rows", phys_data.get("physical_rows", 0)),
         "missing_rows": multiset.get("missing_rows", 0),
         "extra_rows": multiset.get("extra_rows", 0),
-        "excess_duplicates": phys_data.get("excess_duplicates", 0),
+        "excess_duplicates": multiset.get("duplicate_beyond_baseline", phys_data.get("excess_duplicates", 0)),
         "recovery_time_seconds": float(recovery_time) if recovery_time is not None else 0.0,
         "pre_fault_baseline_throughput": float(pre_fault_tp) if pre_fault_tp is not None else None,
         "throughput_during_fault": float(tdf),
         "throughput_post_recovery": float(post_tp),
         "platform_data_loss": platform_val.get("data_loss", 0),
-        "host_memory_pressure": env_data.get("host_memory_pressure", False),
+        "host_memory_pressure": hmp,
+        "host_min_ram_mb": min_ram,
         "terminal_status": env_data.get("terminal_status", report_data.get("status")),
     }
 
@@ -361,6 +379,7 @@ def aggregate_campaign(
     raw_dir: str,
     run_paths_map: Optional[Dict[str, List[str]]] = None,
     cal_file: Optional[str] = None,
+    five_col_file: Optional[str] = "docs/evaluation/results/five_column_multiset_results.json",
 ) -> Dict[str, Any]:
     """Aggregate all 5 fault experiments and calibration baseline."""
     if run_paths_map is None:
@@ -368,6 +387,14 @@ def aggregate_campaign(
 
     if cal_file is None:
         cal_file = os.path.join(raw_dir, "calibration", "calibration_report.json")
+
+    five_col_data = {}
+    if five_col_file and os.path.exists(five_col_file):
+        try:
+            with open(five_col_file, "r", encoding="utf-8") as f:
+                five_col_data = json.load(f)
+        except Exception:
+            pass
 
     cal_metrics = load_calibration_metrics(cal_file)
     cal_tp = cal_metrics["throughput_normal"]
@@ -393,7 +420,7 @@ def aggregate_campaign(
 
         for idx, rel_p in enumerate(rel_paths):
             full_path = os.path.join(raw_dir, rel_p) if not os.path.isabs(rel_p) else rel_p
-            metrics = load_run_metrics(full_path)
+            metrics = load_run_metrics(full_path, five_col_data=five_col_data)
             rep_label = f"r{idx+1}"
             reps_data.append(metrics)
 
@@ -426,29 +453,47 @@ def aggregate_campaign(
             excess_dups.append(metrics["excess_duplicates"])
             pv_losses.append(metrics["platform_data_loss"])
 
+        hmp_count = sum(1 for m in reps_data if m.get("host_memory_pressure"))
+        min_ram_vals = [m["host_min_ram_mb"] for m in reps_data if m.get("host_min_ram_mb") is not None]
+        min_ram_observed = min(min_ram_vals) if min_ram_vals else None
+
+        stats = {
+            "container_recovery_time": compute_stats(rec_times_container),
+            "throughput_90pct_recovery_time": compute_stats(rec_times_tp90),
+            "pre_fault_baseline_throughput": compute_stats(pre_fault_tps),
+            "throughput_during_fault": compute_stats(tdfs),
+            "throughput_degradation_pct_calibration": compute_stats(degradations_cal),
+            "throughput_degradation_pct_prefault": compute_stats(degradations_prefault),
+            "throughput_post_recovery": compute_stats(post_tps),
+            "missing_rows": compute_stats(missing_rows),
+            "extra_rows": compute_stats(extra_rows),
+            "excess_duplicates": compute_stats(excess_dups),
+            "platform_data_loss": compute_stats(pv_losses),
+            "host_memory_pressure_count": hmp_count,
+            "min_ram_observed_mb": min_ram_observed,
+        }
+
+        # Add disclosure stats for kafka-stop (campaign r3-r5 only)
+        if exp_name == "kafka-stop":
+            r35_reps = reps_data[2:]
+            stats["campaign_only_r3_r5"] = {
+                "container_recovery_time": compute_stats([r["recovery_time_seconds"] for r in r35_reps]),
+                "throughput_90pct_recovery_time": compute_stats([THROUGHPUT_90PCT_RECOVERY.get(("kafka-stop", f"r{i}")) for i in range(3, 6)]),
+                "pre_fault_baseline_throughput": compute_stats([r["pre_fault_baseline_throughput"] for r in r35_reps if r["pre_fault_baseline_throughput"]]),
+                "host_memory_pressure_count": sum(1 for r in r35_reps if r.get("host_memory_pressure")),
+            }
+
         results["experiments"][exp_name] = {
             "target_container": TARGET_CONTAINERS.get(exp_name, "unknown"),
             "calibration_throughput": cal_tp,
             "repetitions": reps_data,
-            "stats": {
-                "container_recovery_time": compute_stats(rec_times_container),
-                "throughput_90pct_recovery_time": compute_stats(rec_times_tp90),
-                "pre_fault_baseline_throughput": compute_stats(pre_fault_tps),
-                "throughput_during_fault": compute_stats(tdfs),
-                "throughput_degradation_pct_calibration": compute_stats(degradations_cal),
-                "throughput_degradation_pct_prefault": compute_stats(degradations_prefault),
-                "throughput_post_recovery": compute_stats(post_tps),
-                "missing_rows": compute_stats(missing_rows),
-                "extra_rows": compute_stats(extra_rows),
-                "excess_duplicates": compute_stats(excess_dups),
-                "platform_data_loss": compute_stats(pv_losses),
-            },
+            "stats": stats,
         }
 
     return results
 
 
-def build_gap3_rows(aggregate_data: Dict[str, Any]) -> List[Dict[str, str]]:
+def build_gap3_rows(aggregate_data: Dict[str, Any], include_control: bool = False) -> List[Dict[str, str]]:
     """
     Construct the rows for the Gap 3 comparison table.
     Maintains backward compatibility with test_aggregate.py while incorporating
@@ -456,6 +501,18 @@ def build_gap3_rows(aggregate_data: Dict[str, Any]) -> List[Dict[str, str]]:
     """
     cal_tp = aggregate_data["control_baseline"]["throughput_normal"]
     rows = []
+
+    if include_control:
+        rows.append({
+            "Experiment name": "Control (whole-run calibration average, not steady)",
+            "Target container": "None",
+            "Normal throughput (from Control / baseline window)": f"{cal_tp:.1f} rec/s",
+            "During-fault throughput (records/sec)": "—",
+            "Throughput degradation (%)": "0.0%",
+            "Recovery time (mean +/- std)": "0.00 s",
+            "Data loss: missing rows (mean), extra rows (mean), duplicates beyond baseline (mean)": "0.0 / 0.0 / 0.0",
+            "Platform validator data loss (labeled \"unreliable, uses tracker counters\")": "10256.0 (unreliable)",
+        })
 
     for exp_name in [
         "kafka-stop",
@@ -509,7 +566,20 @@ def build_gap3_primary_rows(aggregate_data: Dict[str, Any]) -> List[Dict[str, st
     Construct the updated research-grade Gap 3 rows comparing against
     each experiment's own pre-fault baseline window and dual recovery metrics.
     """
-    rows = []
+    cal_tp = aggregate_data["control_baseline"]["throughput_normal"]
+    rows = [
+        {
+            "Experiment Name": "Control (whole-run calibration average, not steady)",
+            "Target Container": "None",
+            "Pre-Fault Baseline (rec/s)": f"{cal_tp:.1f}",
+            "During-Fault Throughput (rec/s)": "—",
+            "Throughput Degradation (%)": "0.0%",
+            "Container Recovery (mean ± std)": "0.00 s",
+            "Throughput 90% Recovery (mean ± std)": "0.00 s",
+            "Physical Data Loss (Missing/Extra/Excess)": "0.0 / 0.0 / 0.0",
+            "Platform Validator Loss (Unreliable)": "10256.0 (unreliable)",
+        }
+    ]
 
     for exp_name in [
         "kafka-stop",
@@ -649,7 +719,7 @@ def main():
 
     # Campaign & Gap 3 aggregation
     agg_data = aggregate_campaign(args.raw_dir)
-    superseded_rows = build_gap3_rows(agg_data)
+    superseded_rows = build_gap3_rows(agg_data, include_control=True)
     primary_rows = build_gap3_primary_rows(agg_data)
 
     csv_path = os.path.join(args.output_dir, "gap3_table.csv")

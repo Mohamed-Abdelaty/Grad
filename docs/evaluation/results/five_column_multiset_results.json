@@ -1,0 +1,184 @@
+{
+  "calibration": {
+    "hdfs_path": "/data/output/pipe-eval-calibration-1792537189",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-kafka-stop-r1": {
+    "hdfs_path": "/data/output/pipe-eval-kafka-stop-r1-1792537912",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-kafka-stop-r2": {
+    "hdfs_path": "/data/output/pipe-eval-kafka-stop-r2-1792538260",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-kafka-stop-r3": {
+    "hdfs_path": "/data/output/pipe-eval-kafka-stop-r3-1792565647",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-kafka-stop-r4": {
+    "hdfs_path": "/data/output/pipe-eval-kafka-stop-r4-1792566046",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-kafka-stop-r5": {
+    "hdfs_path": "/data/output/pipe-eval-kafka-stop-r5-1792566448",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-kafka-restart-r1": {
+    "hdfs_path": "/data/output/pipe-eval-kafka-restart-r1-1792568030",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-kafka-restart-r2": {
+    "hdfs_path": "/data/output/pipe-eval-kafka-restart-r2-1792569070",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-kafka-restart-r3": {
+    "hdfs_path": "/data/output/pipe-eval-kafka-restart-r3-1792569392",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-kafka-restart-r4": {
+    "hdfs_path": "/data/output/pipe-eval-kafka-restart-r4-1792569833",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-kafka-restart-r5": {
+    "hdfs_path": "/data/output/pipe-eval-kafka-restart-r5-1792570149",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-spark-worker-stop-r1": {
+    "hdfs_path": "/data/output/pipe-eval-spark-worker-stop-r1-1792570594",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-spark-worker-stop-r2": {
+    "hdfs_path": "/data/output/pipe-eval-spark-worker-stop-r2-1792570928",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-spark-worker-stop-r3": {
+    "hdfs_path": "/data/output/pipe-eval-spark-worker-stop-r3-1792571274",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-spark-worker-stop-r4": {
+    "hdfs_path": "/data/output/pipe-eval-spark-worker-stop-r4-1792571664",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-spark-worker-stop-r5": {
+    "hdfs_path": "/data/output/pipe-eval-spark-worker-stop-r5-1792572065",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-spark-worker-restart-r1": {
+    "hdfs_path": "/data/output/pipe-eval-spark-worker-restart-r1-1792572806",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-spark-worker-restart-r2": {
+    "hdfs_path": "/data/output/pipe-eval-spark-worker-restart-r2-1792573152",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-spark-worker-restart-r3": {
+    "hdfs_path": "/data/output/pipe-eval-spark-worker-restart-r3-1792573506",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-spark-worker-restart-r4": {
+    "hdfs_path": "/data/output/pipe-eval-spark-worker-restart-r4-1792577255",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-spark-worker-restart-r5": {
+    "hdfs_path": "/data/output/pipe-eval-spark-worker-restart-r5-1792577601",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-datanode-stop-r1": {
+    "hdfs_path": "/data/output/pipe-eval-datanode-stop-r1-1792578578",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-datanode-stop-r2": {
+    "hdfs_path": "/data/output/pipe-eval-datanode-stop-r2-1792578914",
+    "physical_rows": 54995,
+    "missing_rows": 234749,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-datanode-stop-r3": {
+    "hdfs_path": "/data/output/pipe-eval-datanode-stop-r3-1792579060",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-datanode-stop-r4": {
+    "hdfs_path": "/data/output/pipe-eval-datanode-stop-r4-1792579480",
+    "physical_rows": 289744,
+    "missing_rows": 0,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  },
+  "eval-datanode-stop-r5": {
+    "hdfs_path": "/data/output/pipe-eval-datanode-stop-r5-1792579821",
+    "physical_rows": 54990,
+    "missing_rows": 234754,
+    "extra_rows": 0,
+    "duplicate_beyond_baseline": 0
+  }
+}

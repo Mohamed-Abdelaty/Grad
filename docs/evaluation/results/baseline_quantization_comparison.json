@@ -1,0 +1,187 @@
+{
+  "kafka-stop": [
+    {
+      "run": "eval-kafka-stop-r1",
+      "base_10s": 1499.46,
+      "full_pre_tp": 1622.13,
+      "warmup_end": "2026-10-20T23:12:27.619434+00:00",
+      "inj_start": "2026-10-20T23:12:50.411398+00:00"
+    },
+    {
+      "run": "eval-kafka-stop-r2",
+      "base_10s": 1498.9,
+      "full_pre_tp": 1483.8,
+      "warmup_end": "2026-10-20T23:18:07.287815+00:00",
+      "inj_start": "2026-10-20T23:18:30.287539+00:00"
+    },
+    {
+      "run": "eval-kafka-stop-r3",
+      "base_10s": 1499.4,
+      "full_pre_tp": 1465.17,
+      "warmup_end": "2026-10-21T06:54:54.800405+00:00",
+      "inj_start": "2026-10-21T06:55:18.468796+00:00"
+    },
+    {
+      "run": "eval-kafka-stop-r4",
+      "base_10s": 1499.4,
+      "full_pre_tp": 1602.91,
+      "warmup_end": "2026-10-21T07:01:32.736764+00:00",
+      "inj_start": "2026-10-21T07:01:55.624109+00:00"
+    },
+    {
+      "run": "eval-kafka-stop-r5",
+      "base_10s": 1793.11,
+      "full_pre_tp": 1270.04,
+      "warmup_end": "2026-10-21T07:08:14.609118+00:00",
+      "inj_start": "2026-10-21T07:08:38.276574+00:00"
+    }
+  ],
+  "kafka-restart": [
+    {
+      "run": "eval-kafka-restart-r1",
+      "base_10s": 1199.57,
+      "full_pre_tp": 1618.84,
+      "warmup_end": "2026-10-21T07:34:14.245978+00:00",
+      "inj_start": "2026-10-21T07:34:37.290712+00:00"
+    },
+    {
+      "run": "eval-kafka-restart-r2",
+      "base_10s": 1498.96,
+      "full_pre_tp": 1617.76,
+      "warmup_end": "2026-10-21T07:51:38.633295+00:00",
+      "inj_start": "2026-10-21T07:52:01.605574+00:00"
+    },
+    {
+      "run": "eval-kafka-restart-r3",
+      "base_10s": 1498.76,
+      "full_pre_tp": 1620.45,
+      "warmup_end": "2026-10-21T07:56:55.880126+00:00",
+      "inj_start": "2026-10-21T07:57:18.991764+00:00"
+    },
+    {
+      "run": "eval-kafka-restart-r4",
+      "base_10s": 1499.47,
+      "full_pre_tp": 1557.2,
+      "warmup_end": "2026-10-21T08:04:19.714908+00:00",
+      "inj_start": "2026-10-21T08:04:41.959955+00:00"
+    },
+    {
+      "run": "eval-kafka-restart-r5",
+      "base_10s": 1499.23,
+      "full_pre_tp": 1544.28,
+      "warmup_end": "2026-10-21T08:09:37.674982+00:00",
+      "inj_start": "2026-10-21T08:10:00.748042+00:00"
+    }
+  ],
+  "spark-worker-stop": [
+    {
+      "run": "eval-spark-worker-stop-r1",
+      "base_10s": 1799.36,
+      "full_pre_tp": 1618.02,
+      "warmup_end": "2026-10-21T08:16:59.993710+00:00",
+      "inj_start": "2026-10-21T08:17:23.194555+00:00"
+    },
+    {
+      "run": "eval-spark-worker-stop-r2",
+      "base_10s": 1499.17,
+      "full_pre_tp": 1619.77,
+      "warmup_end": "2026-10-21T08:22:37.484553+00:00",
+      "inj_start": "2026-10-21T08:23:00.579317+00:00"
+    },
+    {
+      "run": "eval-spark-worker-stop-r3",
+      "base_10s": 1799.06,
+      "full_pre_tp": 1693.17,
+      "warmup_end": "2026-10-21T08:28:29.197124+00:00",
+      "inj_start": "2026-10-21T08:28:51.778156+00:00"
+    },
+    {
+      "run": "eval-spark-worker-stop-r4",
+      "base_10s": 1499.16,
+      "full_pre_tp": 1618.94,
+      "warmup_end": "2026-10-21T08:34:44.053681+00:00",
+      "inj_start": "2026-10-21T08:35:07.281052+00:00"
+    },
+    {
+      "run": "eval-spark-worker-stop-r5",
+      "base_10s": 1798.72,
+      "full_pre_tp": 1551.12,
+      "warmup_end": "2026-10-21T08:41:25.429740+00:00",
+      "inj_start": "2026-10-21T08:41:48.685929+00:00"
+    }
+  ],
+  "spark-worker-restart": [
+    {
+      "run": "eval-spark-worker-restart-r1",
+      "base_10s": 1199.56,
+      "full_pre_tp": 1624.51,
+      "warmup_end": "2026-10-21T08:53:48.638192+00:00",
+      "inj_start": "2026-10-21T08:54:11.559320+00:00"
+    },
+    {
+      "run": "eval-spark-worker-restart-r2",
+      "base_10s": 1199.17,
+      "full_pre_tp": 1700.48,
+      "warmup_end": "2026-10-21T08:59:35.259061+00:00",
+      "inj_start": "2026-10-21T08:59:57.365165+00:00"
+    },
+    {
+      "run": "eval-spark-worker-restart-r3",
+      "base_10s": 1798.93,
+      "full_pre_tp": 1684.16,
+      "warmup_end": "2026-10-21T09:05:28.232527+00:00",
+      "inj_start": "2026-10-21T09:05:51.748870+00:00"
+    },
+    {
+      "run": "eval-spark-worker-restart-r4",
+      "base_10s": 1498.96,
+      "full_pre_tp": 1623.04,
+      "warmup_end": "2026-10-21T10:07:57.262656+00:00",
+      "inj_start": "2026-10-21T10:08:20.421624+00:00"
+    },
+    {
+      "run": "eval-spark-worker-restart-r5",
+      "base_10s": 1499.47,
+      "full_pre_tp": 1625.61,
+      "warmup_end": "2026-10-21T10:13:45.936856+00:00",
+      "inj_start": "2026-10-21T10:14:09.042611+00:00"
+    }
+  ],
+  "datanode-stop": [
+    {
+      "run": "eval-datanode-stop-r1",
+      "base_10s": 1499.07,
+      "full_pre_tp": 1621.46,
+      "warmup_end": "2026-10-21T10:29:57.706670+00:00",
+      "inj_start": "2026-10-21T10:30:20.708803+00:00"
+    },
+    {
+      "run": "eval-datanode-stop-r2",
+      "base_10s": 1199.17,
+      "full_pre_tp": 1552.77,
+      "warmup_end": "2026-10-21T10:35:36.344849+00:00",
+      "inj_start": "2026-10-21T10:35:59.856231+00:00"
+    },
+    {
+      "run": "eval-datanode-stop-r3",
+      "base_10s": 1499.46,
+      "full_pre_tp": 1491.4,
+      "warmup_end": "2026-10-21T10:38:03.278274+00:00",
+      "inj_start": "2026-10-21T10:38:26.214178+00:00"
+    },
+    {
+      "run": "eval-datanode-stop-r4",
+      "base_10s": 1499.45,
+      "full_pre_tp": 1490.4,
+      "warmup_end": "2026-10-21T10:45:03.084261+00:00",
+      "inj_start": "2026-10-21T10:45:26.084112+00:00"
+    },
+    {
+      "run": "eval-datanode-stop-r5",
+      "base_10s": 1199.25,
+      "full_pre_tp": 1549.71,
+      "warmup_end": "2026-10-21T10:50:43.543598+00:00",
+      "inj_start": "2026-10-21T10:51:07.732106+00:00"
+    }
+  ]
+}

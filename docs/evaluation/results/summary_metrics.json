@@ -11,6 +11,7 @@
       "repetitions": [
         {
           "run_dir": "docs/evaluation/raw\\pilot-v3/eval-kafka-stop-r1",
+          "run_name": "eval-kafka-stop-r1",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -21,10 +22,12 @@
           "throughput_post_recovery": 1216.35,
           "platform_data_loss": 10256,
           "host_memory_pressure": true,
+          "host_min_ram_mb": 1739.390625,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\pilot-v3/eval-kafka-stop-r2",
+          "run_name": "eval-kafka-stop-r2",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -35,10 +38,12 @@
           "throughput_post_recovery": 1190.44,
           "platform_data_loss": 10256,
           "host_memory_pressure": true,
+          "host_min_ram_mb": 1832.36328125,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/kafka-stop/eval-kafka-stop-r3",
+          "run_name": "eval-kafka-stop-r3",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -49,10 +54,12 @@
           "throughput_post_recovery": 1140.92,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 2800.65234375,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/kafka-stop/eval-kafka-stop-r4",
+          "run_name": "eval-kafka-stop-r4",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -63,10 +70,12 @@
           "throughput_post_recovery": 1113.46,
           "platform_data_loss": 10256,
           "host_memory_pressure": true,
+          "host_min_ram_mb": 2179.77734375,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/kafka-stop/eval-kafka-stop-r5",
+          "run_name": "eval-kafka-stop-r5",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -77,6 +86,7 @@
           "throughput_post_recovery": 1127.81,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 2408.59765625,
           "terminal_status": "failed"
         }
       ],
@@ -146,6 +156,29 @@
           "std": 0.0,
           "min": 10256,
           "max": 10256
+        },
+        "host_memory_pressure_count": 3,
+        "min_ram_observed_mb": 1739.390625,
+        "campaign_only_r3_r5": {
+          "container_recovery_time": {
+            "mean": 21.6,
+            "std": 1.21,
+            "min": 20.83,
+            "max": 23.0
+          },
+          "throughput_90pct_recovery_time": {
+            "mean": 27.35,
+            "std": 0.36,
+            "min": 26.97,
+            "max": 27.68
+          },
+          "pre_fault_baseline_throughput": {
+            "mean": 1597.3,
+            "std": 169.57,
+            "min": 1499.4,
+            "max": 1793.11
+          },
+          "host_memory_pressure_count": 1
         }
       }
     },
@@ -155,6 +188,7 @@
       "repetitions": [
         {
           "run_dir": "docs/evaluation/raw\\campaign/kafka-restart/eval-kafka-restart-r1",
+          "run_name": "eval-kafka-restart-r1",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -165,10 +199,12 @@
           "throughput_post_recovery": 1004.33,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1772.73046875,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/kafka-restart/eval-kafka-restart-r2",
+          "run_name": "eval-kafka-restart-r2",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -179,10 +215,12 @@
           "throughput_post_recovery": 1319.86,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1676.328125,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/kafka-restart/eval-kafka-restart-r3",
+          "run_name": "eval-kafka-restart-r3",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -193,10 +231,12 @@
           "throughput_post_recovery": 1316.39,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 2042.4375,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/kafka-restart/eval-kafka-restart-r4",
+          "run_name": "eval-kafka-restart-r4",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -207,10 +247,12 @@
           "throughput_post_recovery": 1324.72,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1822.91796875,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/kafka-restart/eval-kafka-restart-r5",
+          "run_name": "eval-kafka-restart-r5",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -221,6 +263,7 @@
           "throughput_post_recovery": 1338.17,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1930.26171875,
           "terminal_status": "failed"
         }
       ],
@@ -290,7 +333,9 @@
           "std": 0.0,
           "min": 10256,
           "max": 10256
-        }
+        },
+        "host_memory_pressure_count": 0,
+        "min_ram_observed_mb": 1676.328125
       }
     },
     "spark-worker-stop": {
@@ -299,6 +344,7 @@
       "repetitions": [
         {
           "run_dir": "docs/evaluation/raw\\campaign/spark-worker-stop/eval-spark-worker-stop-r1",
+          "run_name": "eval-spark-worker-stop-r1",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -309,10 +355,12 @@
           "throughput_post_recovery": 1230.62,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1981.45703125,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/spark-worker-stop/eval-spark-worker-stop-r2",
+          "run_name": "eval-spark-worker-stop-r2",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -323,10 +371,12 @@
           "throughput_post_recovery": 1231.95,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1910.32421875,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/spark-worker-stop/eval-spark-worker-stop-r3",
+          "run_name": "eval-spark-worker-stop-r3",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -337,10 +387,12 @@
           "throughput_post_recovery": 1187.4,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1867.08984375,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/spark-worker-stop/eval-spark-worker-stop-r4",
+          "run_name": "eval-spark-worker-stop-r4",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -351,10 +403,12 @@
           "throughput_post_recovery": 1249.72,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1768.3515625,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/spark-worker-stop/eval-spark-worker-stop-r5",
+          "run_name": "eval-spark-worker-stop-r5",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -365,6 +419,7 @@
           "throughput_post_recovery": 1205.13,
           "platform_data_loss": 10256,
           "host_memory_pressure": true,
+          "host_min_ram_mb": 1691.39453125,
           "terminal_status": "failed"
         }
       ],
@@ -434,7 +489,9 @@
           "std": 0.0,
           "min": 10256,
           "max": 10256
-        }
+        },
+        "host_memory_pressure_count": 1,
+        "min_ram_observed_mb": 1691.39453125
       }
     },
     "spark-worker-restart": {
@@ -443,6 +500,7 @@
       "repetitions": [
         {
           "run_dir": "docs/evaluation/raw\\campaign/spark-worker-restart/eval-spark-worker-restart-r1",
+          "run_name": "eval-spark-worker-restart-r1",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -453,10 +511,12 @@
           "throughput_post_recovery": 1367.7,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1673.64453125,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/spark-worker-restart/eval-spark-worker-restart-r2",
+          "run_name": "eval-spark-worker-restart-r2",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -467,10 +527,12 @@
           "throughput_post_recovery": 1311.46,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1760.22265625,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/spark-worker-restart/eval-spark-worker-restart-r3",
+          "run_name": "eval-spark-worker-restart-r3",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -481,10 +543,12 @@
           "throughput_post_recovery": 1365.81,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1997.234375,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/spark-worker-restart/eval-spark-worker-restart-r4",
+          "run_name": "eval-spark-worker-restart-r4",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -495,10 +559,12 @@
           "throughput_post_recovery": 1357.1,
           "platform_data_loss": 9329,
           "host_memory_pressure": true,
+          "host_min_ram_mb": 1986.24609375,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/spark-worker-restart/eval-spark-worker-restart-r5",
+          "run_name": "eval-spark-worker-restart-r5",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -509,6 +575,7 @@
           "throughput_post_recovery": 1350.65,
           "platform_data_loss": 10256,
           "host_memory_pressure": true,
+          "host_min_ram_mb": 1455.78125,
           "terminal_status": "failed"
         }
       ],
@@ -578,7 +645,9 @@
           "std": 414.57,
           "min": 9329,
           "max": 10256
-        }
+        },
+        "host_memory_pressure_count": 2,
+        "min_ram_observed_mb": 1455.78125
       }
     },
     "datanode-stop": {
@@ -587,6 +656,7 @@
       "repetitions": [
         {
           "run_dir": "docs/evaluation/raw\\campaign/datanode-stop/eval-datanode-stop-r1",
+          "run_name": "eval-datanode-stop-r1",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -597,10 +667,12 @@
           "throughput_post_recovery": 1179.02,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1565.4140625,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/datanode-stop/eval-datanode-stop-r2",
+          "run_name": "eval-datanode-stop-r2",
           "physical_rows": 54995,
           "missing_rows": 234749,
           "extra_rows": 0,
@@ -611,10 +683,12 @@
           "throughput_post_recovery": 953.07,
           "platform_data_loss": 1968,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 2225.015625,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/datanode-stop/eval-datanode-stop-r3",
+          "run_name": "eval-datanode-stop-r3",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -625,10 +699,12 @@
           "throughput_post_recovery": 1189.98,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1833.7578125,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/datanode-stop/eval-datanode-stop-r4",
+          "run_name": "eval-datanode-stop-r4",
           "physical_rows": 289744,
           "missing_rows": 0,
           "extra_rows": 0,
@@ -639,10 +715,12 @@
           "throughput_post_recovery": 1188.07,
           "platform_data_loss": 10256,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 1813.98046875,
           "terminal_status": "failed"
         },
         {
           "run_dir": "docs/evaluation/raw\\campaign/datanode-stop/eval-datanode-stop-r5",
+          "run_name": "eval-datanode-stop-r5",
           "physical_rows": 54990,
           "missing_rows": 234754,
           "extra_rows": 0,
@@ -653,6 +731,7 @@
           "throughput_post_recovery": 942.83,
           "platform_data_loss": 1978,
           "host_memory_pressure": false,
+          "host_min_ram_mb": 2402.98046875,
           "terminal_status": "failed"
         }
       ],
@@ -722,7 +801,9 @@
           "std": 4536.79,
           "min": 1968,
           "max": 10256
-        }
+        },
+        "host_memory_pressure_count": 0,
+        "min_ram_observed_mb": 1565.4140625
       }
     }
   }

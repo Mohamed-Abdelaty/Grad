@@ -6,6 +6,7 @@ Each fault experiment was monitored during its own 10-second pre-fault operation
 
 | Experiment Name | Target Container | Pre-Fault Baseline (rec/s) | During-Fault Throughput (rec/s) | Throughput Degradation (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing/Extra/Excess) | Platform Validator Loss (Unreliable) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Control (whole-run calibration average, not steady) | None | 1472.0 | — | 0.0% | 0.00 s | 0.00 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
 | kafka-stop | platform-kafka | 1558.0 ± 131.4 | 107.20 | 93.2% | 17.52 ± 5.73 s | 22.89 ± 6.47 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
 | kafka-restart | platform-kafka | 1439.2 ± 134.0 | 524.69 | 65.0% | 0.72 ± 1.40 s | 3.44 ± 2.57 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
 | spark-worker-stop | platform-spark-worker | 1679.1 ± 164.2 | 571.91 | 65.8% | 0.48 ± 0.13 s | 17.56 ± 5.50 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
@@ -26,6 +27,7 @@ Each fault experiment was monitored during its own 10-second pre-fault operation
 
 | Experiment name | Target container | Normal throughput (from Control / baseline window) | During-fault throughput (records/sec) | Throughput degradation (%) | Recovery time (mean +/- std) | Data loss: missing rows (mean), extra rows (mean), duplicates beyond baseline (mean) | Platform validator data loss (labeled "unreliable, uses tracker counters") |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| Control (whole-run calibration average, not steady) | None | 1472.0 rec/s | — | 0.0% | 0.00 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
 | kafka-stop | platform-kafka | 1472.0 rec/s | 107.20 | 92.7% | 17.52 ± 5.73 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
 | kafka-restart | platform-kafka | 1472.0 rec/s | 524.69 | 64.4% | 0.72 ± 1.40 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
 | spark-worker-stop | platform-spark-worker | 1472.0 rec/s | 571.91 | 61.1% | 0.48 ± 0.13 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) |
