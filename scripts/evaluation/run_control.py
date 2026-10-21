@@ -43,6 +43,7 @@ if str(_SCRIPT_DIR) not in sys.path:
 # Import helpers from run_evaluation
 try:
     from scripts.evaluation.run_evaluation import (
+        build_pipeline_yaml,
         check_hdfs_metadata_exists,
         compute_multiset_comparison,
         get_docker_stats_snapshot,
@@ -60,6 +61,7 @@ try:
     )
 except ImportError:
     from run_evaluation import (
+        build_pipeline_yaml,
         check_hdfs_metadata_exists,
         compute_multiset_comparison,
         get_docker_stats_snapshot,
@@ -239,47 +241,12 @@ class ControlHarness:
 
         # Build pipeline YAML
         p_name = f"pipe-{exp_name}"
-        p_dict = {
-            "name": p_name,
-            "pipeline": {
-                "name": p_name,
-                "input": {
-                    "type": "file",
-                    "path": pipeline_template.get("source_path", "/app/sample-data/sales_300k.csv"),
-                    "format": "csv",
-                    "options": {"header": "true", "inferSchema": "true"},
-                },
-                "streaming": {
-                    "source": {
-                        "type": "kafka",
-                        "topic": topic_name,
-                        "bootstrap_servers": "kafka:9092",
-                        "starting_offsets": "earliest",
-                        "fail_on_data_loss": "false",
-                        "max_offsets_per_trigger": pipeline_template.get("max_offsets_per_trigger", 3000),
-                    },
-                    "trigger": {
-                        "type": "processing_time",
-                        "interval": f"{pipeline_template.get('trigger_interval_seconds', 2)} seconds",
-                    },
-                    "checkpoint_location": f"/checkpoints/streaming-{exp_name}-{rep_ts}",
-                    "watermark": {"event_time_column": "timestamp", "delay_threshold": "10 seconds"},
-                },
-                "processing": {
-                    "operations": [
-                        {"type": "remove_nulls"},
-                        {"type": "filter", "condition": "amount > 0"},
-                    ]
-                },
-                "output": {
-                    "type": "file",
-                    "path": rep_output_path,
-                    "format": "parquet",
-                    "mode": "append",
-                },
-            },
-        }
-        p_yaml = yaml.dump(p_dict, default_flow_style=False)
+        p_yaml = build_pipeline_yaml(
+            template=pipeline_template,
+            topic_name=topic_name,
+            pipeline_name=p_name,
+            output_path=rep_output_path,
+        )
 
         t_start_iso = datetime.now(tz=timezone.utc).isoformat()
         t_start_mono = time.monotonic()
@@ -289,7 +256,9 @@ class ControlHarness:
         if p_res.status_code not in (200, 202):
             raise RuntimeError(f"Control pipeline launch failed ({p_res.status_code}): {p_res.text}")
         p_data = p_res.json()
-        pipeline_run_id = p_data["pipeline_run_id"]
+        pipeline_run_id = p_data.get("pipeline_run_id")
+        if not pipeline_run_id:
+            raise RuntimeError(f"Control pipeline launch rejected or invalid: {p_data}")
         logger.info("Launched Control Pipeline Run ID: %s", pipeline_run_id)
 
         # Step 2: Poll until first micro-batch completes (Warm-up window)
