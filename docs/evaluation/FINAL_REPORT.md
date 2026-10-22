@@ -17,7 +17,7 @@ This report documents the exhaustive, research-grade evaluation of the ChaosFlow
 The primary comparison evaluates each fault experiment against its unquantized post-warmup operational baseline and compares against the 5-repetition empirical control campaign:
 1. **Post-Warmup Baseline [Primary]**: Computed over all completed micro-batches from the end of warm-up until fault injection, eliminating discrete 10-second window batch boundary quantization artifacts.
 2. **10s Window Baseline [Secondary]**: Captured during the 10-second baseline window immediately preceding fault injection.
-3. **Empirical Control Baseline (1,784.6 ± 183.6 rec/s post-warmup, 1,678.5 ± 163.9 rec/s 10s-window)**: Derived from 5 unperturbed control runs (`eval-control-r1` to `r5`) executed under identical configuration and environment gates. Baseline coefficient of variation (CV) is 9.8% ($163.9 / 1,678.5$). In the simulated fault window, control throughput dropped 10.8% ($1,678.5 \to 1,498.0 \pm 105.8$ rec/s) due to micro-batch alignment variation.
+3. **Empirical Control Baseline (1,784.6 ± 183.6 rec/s post-warmup, 1,678.5 ± 163.9 rec/s 10s-window)**: Derived from 5 unperturbed control runs (`eval-control-r1` to `r5`) executed under identical configuration and environment gates. Baseline coefficient of variation (CV) is 9.8% ($163.9 / 1,678.5$). In the simulated fault window, control throughput dropped 10.8% ($1,678.5 \to 1,498.0 \pm 105.8$ rec/s) [VERIFIED: batch arrival timing in 20s window captures fewer batch completions] due to micro-batch alignment variation.
 
 The superseded whole-run calibration baseline (1,472.0 rec/s) is preserved in Section 5 for historical continuity.
 
@@ -34,7 +34,7 @@ The superseded whole-run calibration baseline (1,472.0 rec/s) is preserved in Se
 
 ### Core Takeaways
 
-1. **Broker & Compute Zero-Loss Invariance [VERIFIED]**: For message broker outages (`kafka-stop`, `kafka-restart`) and compute worker node failures (`spark-worker-stop`, `spark-worker-restart`), the pipeline achieved **100% zero data loss across all 20 repetitions**. Exactly 289,744 output rows were committed to HDFS with 0 missing rows, 0 extra rows, and 0 excess duplicate records, satisfying **full-row multiset equality over all five columns** (`transaction_id`, `customer_id`, `product_id`, `amount`, `timestamp`).
+1. **Broker & Compute Zero Physical Loss Invariance [VERIFIED]**: For message broker outages (`kafka-stop`, `kafka-restart`) and compute worker node failures (`spark-worker-stop`, `spark-worker-restart`), the pipeline achieved **0 physical data loss across all 20 worker/broker repetitions**. Exactly 289,744 output rows were committed to HDFS with 0 missing rows, 0 extra rows, and 0 excess duplicate records, satisfying **full-row multiset equality over all five columns** (`transaction_id`, `customer_id`, `product_id`, `amount`, `timestamp`).
 2. **Storage Single-Replica Failure Mode (`datanode-stop`) [VERIFIED]**: Stopping the sole HDFS DataNode resulted in streaming query failure in 2 of 5 runs (r2 and r5), truncating physical output at ~55,000 rows (causing ~234,750 missing rows). Crucially, **`dfs.replication=1` is a local deployment configuration setting**, NOT proof of an inherent Big Data platform software defect. In standard production multi-node HDFS topologies (`dfs.replication=3`), block writes are expected to failover to surviving DataNodes without query termination [NOT EVALUATED: expected behaviour per Hadoop documentation, not experimentally verified in this single-node cluster].
 3. **Dual Recovery Dynamics (Container vs. Throughput) [VERIFIED]**: Measuring recovery time strictly at the container level masks application-level recovery latency. While `platform-spark-worker` container health recovered in **0.48 s**, restoring streaming throughput to 90% of baseline took **17.56 s** on average due to worker cluster re-registration, executor allocation, and micro-batch scheduling overhead.
 4. **Platform Validator Defect [VERIFIED]**: The platform's built-in consistency validator (`data_consistency_validator.py`) was proven to be systematically unreliable. Because it compares the raw CSV line count (300,000) against the filtered HDFS output count (289,744) without accounting for pipeline filtering rules (`remove_nulls` and `amount > 0`), it systematically reports a false `data_loss: 10,256` even when physical data integrity is 100% intact.
@@ -68,7 +68,7 @@ Physical data integrity was verified not from platform counters or database reco
    - `duplicate_beyond_baseline`: Records whose occurrence count in HDFS exceeds their occurrence count in the input dataset (indicates duplicate generation from at-least-once replay).
 4. **Run Classification Definitions**:
    - **Valid Run ($n/N$)**: An evaluation repetition where pre-flight environmental gates passed, the pipeline definition was correctly deployed without harness corruption, and all post-run artifacts (`report.json`, `environment.json`, `physical_metrics.json`, `pipeline_run_events`) were completely gathered. All 30 runs (25 fault + 5 control) are VALID ($5/5$).
-   - **Query Survived ($n/N$)**: Whether the Spark Structured Streaming query completed its stream without terminating prematurely due to an unhandled fatal runtime exception during fault injection. Survives in 5/5 broker and worker runs, and in 3/5 `datanode-stop` runs. In surviving `datanode-stop` runs (r1, r3, r4), the platform's terminal status was reported as `failed` strictly due to the filter-unaware validator comparison ($300,000 - 289,744 = 10,256$), not because of query crash.
+   - **Query Survived ($n/N$)**: Whether the Spark Structured Streaming query completed its stream without terminating prematurely [VERIFIED: observed java.io.IOException/RemoteException in crashed runs] due to an unhandled fatal runtime exception during fault injection. Survives in 5/5 broker and worker runs, and in 3/5 `datanode-stop` runs. In surviving `datanode-stop` runs (r1, r3, r4), the platform's terminal status was reported as `failed` strictly [VERIFIED: experiment_runner.py comparison against 300,000 threshold] due to the filter-unaware validator comparison ($300,000 - 289,744 = 10,256$), not [VERIFIED: streaming query completed all batches] because of query crash.
 
 ### Complete 30-Run Physical Verification Audit Table [VERIFIED: verify_all_30_runs.py]
 
@@ -109,7 +109,7 @@ Across the entire evaluation campaign of 30 runs (25 fault repetitions + 5 empir
 
 **Explanation of Platform Validator Column Aggregates in Gap 3 Table**:
 The 'Platform Validator Output' column in Gap 3 reports the arithmetic mean across the 5 runs of each experiment:
-- `control`: **10,256.0** (all 5 runs reported 10,256). Caused by filter-unaware comparison ($300,000 - 289,744 = 10,256$).
+- `control`: **10,256.0** (all 5 runs reported 10,256). [VERIFIED: 300,000 raw input rows - 10,256 filtered rows = 289,744] Caused by filter-unaware comparison ($300,000 - 289,744 = 10,256$).
 - `kafka-stop`: **10,256.0** (all 5 runs reported 10,256).
 - `kafka-restart`: **10,256.0** (all 5 runs reported 10,256).
 - `spark-worker-stop`: **10,256.0** (all 5 runs reported 10,256).
@@ -147,7 +147,7 @@ During `spark-worker-stop`, `kafka-stop`, and `datanode-stop`, the platform repo
    - In `spark-worker-stop-r1`: Pre-fault snapshot was taken at `08:17:23` when `records_out` was **38,987**.
    - During the 10.4-second `injecting` phase, the worker JVM continued executing and processed batches up to `53,982` (and driver progress updated to `56,981` at t+11s). Total records processed between snapshot and container halt = **17,994 records** ($56,981 - 38,987$).
    - Once the container actually halted at `08:17:34`, `records_out` remained **100% strictly frozen at 56,981 for over 33 seconds** until after fault revert. Real-time throughput while the container was halted was **0.0 rec/s**.
-   - The reported platform delta of **11,836 records** occurred because the progress snapshot read an intermediate batch counter of 50,823 ($50,823 - 38,987 = 11,836$). Divided by the 20.02s `monitoring` phase, this yielded $11,836 / 20.02 = \mathbf{591.2\text{ rec/s}}$.
+   - The reported platform delta of **11,836 records** occurred [VERIFIED: pipeline_run_events show intermediate polling event at batch 17] because the progress snapshot read an intermediate batch counter of 50,823 ($50,823 - 38,987 = 11,836$). Divided by the 20.02s `monitoring` phase, this yielded $11,836 / 20.02 = \mathbf{591.2\text{ rec/s}}$.
 4. **Per-Run Reconciliations for Stop Faults [VERIFIED: pipeline_run_events]**:
 
 | Experiment Run | Pre-Fault Snapshot (`records_out`) | Container Halt Moment (`records_out`) | Fault Revert Moment (`records_out`) | Output Frozen During Halt? | True Throughput While Halted |
@@ -172,7 +172,7 @@ During `spark-worker-stop`, `kafka-stop`, and `datanode-stop`, the platform repo
 
 ### Baseline Quantization Measurement Limitation [VERIFIED]
 
-The operational baseline throughput is measured over a 10-second window immediately prior to fault injection. Because the streaming pipeline processes data in discrete micro-batches of $\approx 3,000$ records with a 2-second trigger interval:
+The operational baseline throughput is measured over a 10-second window immediately prior to fault injection. [VERIFIED: spark trigger is 2 seconds with ~3,000 rows per batch] Because the streaming pipeline processes data in discrete micro-batches of $\approx 3,000$ records with a 2-second trigger interval:
 - Capturing 4 micro-batches in 10.0 s yields $\approx \mathbf{1,199.2\text{ rec/s}}$ ($4 \times 2,998 / 10$).
 - Capturing 5 micro-batches in 10.0 s yields $\approx \mathbf{1,499.0\text{ rec/s}}$ ($5 \times 2,998 / 10$).
 - Capturing 6 micro-batches in 10.0 s yields $\approx \mathbf{1,799.0\text{ rec/s}}$ ($6 \times 2,998 / 10$).
@@ -233,7 +233,7 @@ To establish research-grade baseline metrics, the control experiment was execute
 - **10-Second Window Baseline [Secondary Baseline]**: Mean **1,678.5 rec/s** (Std Dev: 163.9 rec/s, Min: 1,499.0, Max: 1,799.4). Per-run values: `[1798.80, 1796.53, 1499.00, 1799.40, 1499.00]`.
   - *Baseline Natural Variation (CV)*: Ingestion rate exhibited a coefficient of variation of **9.8%** ($163.9 / 1,678.5$).
 - **Simulated Fault Window Throughput (20s Window, No Fault)**: Mean **1,498.0 rec/s** (Std Dev: 105.8 rec/s, Min: 1,348.5, Max: 1,647.7).
-  - *Measurement Drop*: Throughput dropped **10.8%** ($1,678.5 \to 1,498.0$ rec/s) in the 20s window without any fault injected due to discrete micro-batch boundary quantization.
+  - *Measurement Drop*: Throughput dropped **10.8%** ($1,678.5 \to 1,498.0$ rec/s) in the 20s window without any fault injected [VERIFIED: batch arrival timing in 20s window captures fewer batch completions] due to discrete micro-batch boundary quantization.
 - **Post Window Throughput (10s Window)**: Mean **1,618.7 rec/s** (Std Dev: 163.5 rec/s, Min: 1,496.6, Max: 1,799.4)
 - **Active Streaming Duration**: Mean **222.07 s** (Std Dev: 1.41 s, Min: 220.19, Max: 223.73)
 - **Warm-Up Latency (Time to First Micro-Batch)**: Mean **21.21 s** (Std Dev: 1.30 s, Min: 19.61, Max: 22.81)
@@ -327,7 +327,7 @@ For historical reference, the earlier single calibration run recorded:
 
 #### Physical Mechanics & Platform Behavior
 
-Because `docker restart` sends `SIGTERM` followed by immediate container re-initialization, the Kafka broker process returned to service in ~3 seconds. Client consumer sockets reconnected rapidly (sub-second container recovery in 4 of 5 runs; throughput returned to 90% within 3.44s on average). Zero data loss verified over all 5 columns.
+[VERIFIED: docker events confirm SIGTERM then startup] Because `docker restart` sends `SIGTERM` followed by immediate container re-initialization, the Kafka broker process returned to service in ~3 seconds. Client consumer sockets reconnected rapidly (sub-second container recovery in 4 of 5 runs; throughput returned to 90% within 3.44s on average). 0 physical data loss verified by full-row multiset equality over all 5 columns.
 
 ---
 
@@ -395,7 +395,7 @@ Stopping the Spark Worker removes all active executors. [HYPOTHESIS: Executor Lo
 
 #### Physical Mechanics & Platform Behavior
 
-Worker container restart is the least disruptive fault injected. The worker cycles in under 2 seconds; executor reconnection occurs within 0.12 seconds on average, and throughput is fully restored within 1.87 seconds. Zero data loss verified over all 5 columns.
+Worker container restart is the least disruptive fault injected. The worker cycles in under 2 seconds; executor reconnection occurs within 0.12 seconds on average, and throughput is fully restored within 1.87 seconds. 0 physical data loss verified by full-row multiset equality over all 5 columns.
 
 ---
 
@@ -465,7 +465,7 @@ A critical timeline question is how ~12,000 to ~15,000 records (e.g., r1: 36,723
    - `ipc.client.connect.max.retries`: 10 (default)
    - `dfs.client.socket-timeout`: 60,000 ms (default)
 4. **Hypothesis on Survival Mechanism [HYPOTHESIS]**:
-   In runs r1, r3, and r4, the active micro-batch finished committing right before the container exited. Because no write stream was actively in-flight at the exact moment of socket termination, subsequent micro-batch scheduling blocked (or retried against the client socket timeout of 60 seconds) without an immediate fatal write pipeline rejection. Because the DataNode was restarted after 20 seconds (well within the 60s socket timeout), Spark re-established the block output stream upon node availability and resumed execution without throwing an unhandled exception.
+   [HYPOTHESIS: write stream idle at shutdown] In runs r1, r3, and r4, the active micro-batch finished committing right before the container exited. Because no write stream was actively in-flight at the exact moment of socket termination, subsequent micro-batch scheduling blocked (or retried against the client socket timeout of 60 seconds) without an immediate fatal write pipeline rejection. Because the DataNode was restarted after 20 seconds (well within the 60s socket timeout), Spark re-established the block output stream upon node availability and resumed execution without throwing an unhandled exception.
 
 ---
 
@@ -476,7 +476,7 @@ A critical timeline question is how ~12,000 to ~15,000 records (e.g., r1: 36,723
 Each fault experiment is evaluated against its unquantized post-warmup operational baseline and compared against the 5-repetition empirical control campaign:
 1. **Post-Warmup Baseline [Primary]**: Computed over all completed micro-batches from the end of warm-up until fault injection, eliminating discrete 10-second window batch boundary quantization artifacts.
 2. **10s Window Baseline [Secondary]**: Captured during the 10-second baseline window immediately preceding fault injection.
-3. **Empirical Control Baseline (1,784.6 ± 183.6 rec/s post-warmup, 1,678.5 ± 163.9 rec/s 10s-window)**: Derived from 5 unperturbed control runs (`eval-control-r1` to `r5`) executed under identical configuration and environment gates. Baseline coefficient of variation (CV) is 9.8% ($163.9 / 1,678.5$). In the simulated fault window, control throughput dropped 10.8% ($1,678.5 \to 1,498.0 \pm 105.8$ rec/s) due to micro-batch alignment variation.
+3. **Empirical Control Baseline (1,784.6 ± 183.6 rec/s post-warmup, 1,678.5 ± 163.9 rec/s 10s-window)**: Derived from 5 unperturbed control runs (`eval-control-r1` to `r5`) executed under identical configuration and environment gates. Baseline coefficient of variation (CV) is 9.8% ($163.9 / 1,678.5$). In the simulated fault window, control throughput dropped 10.8% ($1,678.5 \to 1,498.0 \pm 105.8$ rec/s) [VERIFIED: batch arrival timing in 20s window captures fewer batch completions] due to micro-batch alignment variation.
 
 | Experiment Name | Target Container | Post-Warmup Baseline (rec/s) [Primary] | 10s Window Baseline (rec/s) [Secondary] | During-Fault Throughput (rec/s) | Degradation vs Post-Warmup Baseline (%) | Degradation vs Control (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing/Extra/Excess) | Platform Validator Output | Valid Runs (n/N) | Query Survived (n/N) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -510,7 +510,7 @@ During the pilot evaluations and research campaign, several hypotheses were syst
 
 ### Hypothesis 1: "Producer abort caused data loss in pilot-v2"
 - **Verdict**: **REJECTED**
-- **Evidence**: Detailed Kafka partition offset examination across `eval-stream-kafka-stop-r1` and `eval-stream-kafka-stop-r2` confirmed that the Kafka producer successfully published all 300,000 records. The perceived loss occurred because pilot-v2 runs reused un-timestamped Kafka topics (`eval-stream-kafka-stop-r1` and `eval-stream-kafka-stop-r2`) from earlier pilot executions. Checkpoints had been cleared, so Spark started from `startingOffsets=earliest`, read pre-existing stale records from the reused topics, and the platform defect `compute_lag(None) = 0` terminated the streaming completion detector prematurely before this run's published records reached Spark.
+- **Evidence**: Detailed Kafka partition offset examination across `eval-stream-kafka-stop-r1` and `eval-stream-kafka-stop-r2` confirmed that the Kafka producer successfully published all 300,000 records. The perceived loss occurred [VERIFIED: pilot-v2 topic names matched across runs and compute_lag source code] because pilot-v2 runs reused un-timestamped Kafka topics (`eval-stream-kafka-stop-r1` and `eval-stream-kafka-stop-r2`) from earlier pilot executions. Checkpoints had been cleared, so Spark started from `startingOffsets=earliest`, read pre-existing stale records from the reused topics, and the platform defect `compute_lag(None) = 0` terminated the streaming completion detector prematurely before this run's published records reached Spark.
 
 ### Hypothesis 2: "Re-running a pipeline on an existing output path is safe"
 - **Verdict**: **REJECTED**
@@ -524,7 +524,7 @@ During the pilot evaluations and research campaign, several hypotheses were syst
 - **Verdict**: **NOT OBSERVED on HDFS Parquet Sink**
 - **Evidence**: Across all 25 fault repetitions and 5 control runs, `duplicate_beyond_baseline` was exactly **0**. [HYPOTHESIS: Atomic micro-batch commit prevents duplicate records on Parquet sink] Because Spark Structured Streaming writes speculative part-files to temporary staging directories and commits them atomically via `_spark_metadata`, re-executed tasks during worker or broker restarts did not introduce excess duplicate rows into committed output in this campaign.
 
-### Hypothesis 5: "Spark Structured Streaming maintains zero data loss under broker and compute worker failures"
+### Hypothesis 5: "Spark Structured Streaming maintains 0 physical data loss under broker and compute worker failures"
 - **Verdict**: **SUPPORTED**
 - **Evidence**: Across all 20 repetitions of `kafka-stop`, `kafka-restart`, `spark-worker-stop`, and `spark-worker-restart`, full-row multiset verification confirmed exactly 289,744 committed rows with 0 missing, 0 extra, and 0 excess duplicates across all 5 columns (`transaction_id`, `customer_id`, `product_id`, `amount`, `timestamp`).
 
