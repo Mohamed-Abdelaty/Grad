@@ -1,0 +1,2901 @@
+{
+  "metadata": {
+    "description": "ChaosFlow Evaluation Single Source of Truth (Master Results)",
+    "generated_at": "2026-10-22T07:21:48.272703+00:00",
+    "statistical_convention": {
+      "standard_deviation": "sample standard deviation (ddof=1, N-1 denominator)",
+      "control_during_fault_reference_rec_per_sec": 1498.0,
+      "timezone": "UTC (ISO 8601 timestamps throughout)"
+    },
+    "source_dataset": {
+      "path": "backend/sample-data/sales_300k.csv",
+      "raw_csv_rows": 300000,
+      "filter_removed_rows": 10256,
+      "null_amount_rows": 5124,
+      "non_positive_amount_rows": 5132,
+      "expected_post_filter_rows": 289744,
+      "baseline_csv_duplicates": 4730
+    }
+  },
+  "experiments": {
+    "control": {
+      "n_runs": 5,
+      "survived_count": 5,
+      "data_complete_count": 5,
+      "post_warmup_baseline": {
+        "n": 5,
+        "mean": 1784.56,
+        "std": 183.6409,
+        "min": 1646.43,
+        "max": 1987.86,
+        "ddof": 1
+      },
+      "baseline_10s_window": {
+        "n": 5,
+        "mean": 1678.546,
+        "std": 163.9058,
+        "min": 1499.0,
+        "max": 1799.4,
+        "ddof": 1
+      },
+      "throughput_during_fault_window": {
+        "n": 5,
+        "mean": 1498.052,
+        "std": 105.7551,
+        "min": 1348.54,
+        "max": 1647.66,
+        "ddof": 1
+      },
+      "degradation_pct_vs_post_warmup": {
+        "n": 5,
+        "mean": 15.0555,
+        "std": 12.9555,
+        "min": 0.1503,
+        "max": 32.1612,
+        "ddof": 1
+      },
+      "degradation_pct_vs_control": {
+        "n": 5,
+        "mean": -0.0035,
+        "std": 7.0598,
+        "min": -9.9907,
+        "max": 9.9773,
+        "ddof": 1
+      },
+      "container_recovery_seconds": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ddof": 1
+      },
+      "throughput_90pct_recovery_seconds": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ddof": 1
+      },
+      "missing_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "extra_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "excess_duplicates": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "platform_validator_data_loss": {
+        "n": 5,
+        "mean": 10256.0,
+        "std": 0.0,
+        "min": 10256,
+        "max": 10256,
+        "ddof": 1
+      },
+      "host_memory_pressure_count": 0,
+      "host_min_ram_mb": 2243.34375
+    },
+    "kafka-stop": {
+      "n_runs": 5,
+      "survived_count": 5,
+      "data_complete_count": 5,
+      "post_warmup_baseline": {
+        "n": 5,
+        "mean": 1488.81,
+        "std": 140.7456,
+        "min": 1270.04,
+        "max": 1622.13,
+        "ddof": 1
+      },
+      "baseline_10s_window": {
+        "n": 5,
+        "mean": 1558.054,
+        "std": 131.4005,
+        "min": 1498.9,
+        "max": 1793.11,
+        "ddof": 1
+      },
+      "throughput_during_fault_window": {
+        "n": 5,
+        "mean": 107.196,
+        "std": 60.0812,
+        "min": 0.0,
+        "max": 139.17,
+        "ddof": 1
+      },
+      "degradation_pct_vs_post_warmup": {
+        "n": 5,
+        "mean": 92.5729,
+        "std": 4.2628,
+        "min": 89.3429,
+        "max": 100.0,
+        "ddof": 1
+      },
+      "degradation_pct_vs_control": {
+        "n": 5,
+        "mean": 92.8441,
+        "std": 4.0108,
+        "min": 90.7096,
+        "max": 100.0,
+        "ddof": 1
+      },
+      "container_recovery_seconds": {
+        "n": 5,
+        "mean": 17.52,
+        "std": 5.7313,
+        "min": 10.06,
+        "max": 23.0,
+        "ddof": 1
+      },
+      "throughput_90pct_recovery_seconds": {
+        "n": 5,
+        "mean": 22.89,
+        "std": 6.4715,
+        "min": 13.18,
+        "max": 27.68,
+        "ddof": 1
+      },
+      "missing_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "extra_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "excess_duplicates": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "platform_validator_data_loss": {
+        "n": 5,
+        "mean": 10256.0,
+        "std": 0.0,
+        "min": 10256,
+        "max": 10256,
+        "ddof": 1
+      },
+      "host_memory_pressure_count": 3,
+      "host_min_ram_mb": 1739.390625,
+      "campaign_only_r3_r5": {
+        "n_runs": 3,
+        "throughput_during_fault_window": {
+          "n": 3,
+          "mean": 132.27,
+          "std": 4.4484,
+          "min": 127.17,
+          "max": 135.35,
+          "ddof": 1
+        },
+        "degradation_pct_vs_post_warmup": {
+          "n": 3,
+          "mean": 90.7479,
+          "std": 1.3638,
+          "min": 89.3429,
+          "max": 92.0663,
+          "ddof": 1
+        },
+        "degradation_pct_vs_control": {
+          "n": 3,
+          "mean": 91.1702,
+          "std": 0.297,
+          "min": 90.9646,
+          "max": 91.5107,
+          "ddof": 1
+        },
+        "container_recovery_seconds": {
+          "n": 3,
+          "mean": 21.6,
+          "std": 1.2145,
+          "min": 20.83,
+          "max": 23.0,
+          "ddof": 1
+        },
+        "throughput_90pct_recovery_seconds": {
+          "n": 3,
+          "mean": 27.3467,
+          "std": 0.357,
+          "min": 26.97,
+          "max": 27.68,
+          "ddof": 1
+        },
+        "host_memory_pressure_count": 1
+      }
+    },
+    "kafka-restart": {
+      "n_runs": 5,
+      "survived_count": 5,
+      "data_complete_count": 5,
+      "post_warmup_baseline": {
+        "n": 5,
+        "mean": 1591.706,
+        "std": 37.6868,
+        "min": 1544.28,
+        "max": 1620.45,
+        "ddof": 1
+      },
+      "baseline_10s_window": {
+        "n": 5,
+        "mean": 1439.198,
+        "std": 133.9564,
+        "min": 1199.57,
+        "max": 1499.47,
+        "ddof": 1
+      },
+      "throughput_during_fault_window": {
+        "n": 5,
+        "mean": 524.688,
+        "std": 316.6989,
+        "min": 0.0,
+        "max": 838.66,
+        "ddof": 1
+      },
+      "degradation_pct_vs_post_warmup": {
+        "n": 5,
+        "mean": 66.755,
+        "std": 20.4144,
+        "min": 45.6925,
+        "max": 100.0,
+        "ddof": 1
+      },
+      "degradation_pct_vs_control": {
+        "n": 5,
+        "mean": 64.9741,
+        "std": 21.1414,
+        "min": 44.0147,
+        "max": 100.0,
+        "ddof": 1
+      },
+      "container_recovery_seconds": {
+        "n": 5,
+        "mean": 0.718,
+        "std": 1.3989,
+        "min": 0.07,
+        "max": 3.22,
+        "ddof": 1
+      },
+      "throughput_90pct_recovery_seconds": {
+        "n": 5,
+        "mean": 3.438,
+        "std": 2.5701,
+        "min": 1.38,
+        "max": 7.78,
+        "ddof": 1
+      },
+      "missing_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "extra_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "excess_duplicates": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "platform_validator_data_loss": {
+        "n": 5,
+        "mean": 10256.0,
+        "std": 0.0,
+        "min": 10256,
+        "max": 10256,
+        "ddof": 1
+      },
+      "host_memory_pressure_count": 0,
+      "host_min_ram_mb": 1676.328125
+    },
+    "spark-worker-stop": {
+      "n_runs": 5,
+      "survived_count": 5,
+      "data_complete_count": 5,
+      "post_warmup_baseline": {
+        "n": 5,
+        "mean": 1620.204,
+        "std": 50.2573,
+        "min": 1551.12,
+        "max": 1693.17,
+        "ddof": 1
+      },
+      "baseline_10s_window": {
+        "n": 5,
+        "mean": 1679.094,
+        "std": 164.2521,
+        "min": 1499.16,
+        "max": 1799.36,
+        "ddof": 1
+      },
+      "throughput_during_fault_window": {
+        "n": 5,
+        "mean": 571.914,
+        "std": 43.5015,
+        "min": 494.18,
+        "max": 593.18,
+        "ddof": 1
+      },
+      "degradation_pct_vs_post_warmup": {
+        "n": 5,
+        "mean": 64.6714,
+        "std": 2.9554,
+        "min": 61.7818,
+        "max": 69.4751,
+        "ddof": 1
+      },
+      "degradation_pct_vs_control": {
+        "n": 5,
+        "mean": 61.8215,
+        "std": 2.904,
+        "min": 60.4019,
+        "max": 67.0107,
+        "ddof": 1
+      },
+      "container_recovery_seconds": {
+        "n": 5,
+        "mean": 0.476,
+        "std": 0.1258,
+        "min": 0.32,
+        "max": 0.59,
+        "ddof": 1
+      },
+      "throughput_90pct_recovery_seconds": {
+        "n": 5,
+        "mean": 17.564,
+        "std": 5.4968,
+        "min": 11.92,
+        "max": 26.01,
+        "ddof": 1
+      },
+      "missing_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "extra_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "excess_duplicates": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "platform_validator_data_loss": {
+        "n": 5,
+        "mean": 10256.0,
+        "std": 0.0,
+        "min": 10256,
+        "max": 10256,
+        "ddof": 1
+      },
+      "host_memory_pressure_count": 1,
+      "host_min_ram_mb": 1691.39453125
+    },
+    "spark-worker-restart": {
+      "n_runs": 5,
+      "survived_count": 5,
+      "data_complete_count": 5,
+      "post_warmup_baseline": {
+        "n": 5,
+        "mean": 1651.56,
+        "std": 37.6644,
+        "min": 1623.04,
+        "max": 1700.48,
+        "ddof": 1
+      },
+      "baseline_10s_window": {
+        "n": 5,
+        "mean": 1439.218,
+        "std": 250.8242,
+        "min": 1199.17,
+        "max": 1798.93,
+        "ddof": 1
+      },
+      "throughput_during_fault_window": {
+        "n": 5,
+        "mean": 960.734,
+        "std": 215.0991,
+        "min": 583.45,
+        "max": 1080.04,
+        "ddof": 1
+      },
+      "degradation_pct_vs_post_warmup": {
+        "n": 5,
+        "mean": 41.6473,
+        "std": 13.671,
+        "min": 33.4557,
+        "max": 65.6891,
+        "ddof": 1
+      },
+      "degradation_pct_vs_control": {
+        "n": 5,
+        "mean": 35.8656,
+        "std": 14.3591,
+        "min": 27.9012,
+        "max": 61.0514,
+        "ddof": 1
+      },
+      "container_recovery_seconds": {
+        "n": 5,
+        "mean": 0.118,
+        "std": 0.0672,
+        "min": 0.07,
+        "max": 0.23,
+        "ddof": 1
+      },
+      "throughput_90pct_recovery_seconds": {
+        "n": 5,
+        "mean": 1.866,
+        "std": 1.2121,
+        "min": 0.74,
+        "max": 3.65,
+        "ddof": 1
+      },
+      "missing_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "extra_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "excess_duplicates": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "platform_validator_data_loss": {
+        "n": 5,
+        "mean": 10070.6,
+        "std": 414.567,
+        "min": 9329,
+        "max": 10256,
+        "ddof": 1
+      },
+      "host_memory_pressure_count": 2,
+      "host_min_ram_mb": 1455.78125
+    },
+    "datanode-stop": {
+      "n_runs": 5,
+      "survived_count": 3,
+      "data_complete_count": 3,
+      "post_warmup_baseline": {
+        "n": 5,
+        "mean": 1541.148,
+        "std": 54.1032,
+        "min": 1490.4,
+        "max": 1621.46,
+        "ddof": 1
+      },
+      "baseline_10s_window": {
+        "n": 5,
+        "mean": 1379.28,
+        "std": 164.3807,
+        "min": 1199.17,
+        "max": 1499.46,
+        "ddof": 1
+      },
+      "throughput_during_fault_window": {
+        "n": 3,
+        "mean": 492.2333,
+        "std": 0.3073,
+        "min": 491.95,
+        "max": 492.56,
+        "ddof": 1
+      },
+      "degradation_pct_vs_post_warmup": {
+        "n": 3,
+        "mean": 67.8698,
+        "std": 1.5506,
+        "min": 66.9512,
+        "max": 69.6601,
+        "ddof": 1
+      },
+      "degradation_pct_vs_control": {
+        "n": 3,
+        "mean": 67.1406,
+        "std": 0.0205,
+        "min": 67.1188,
+        "max": 67.1595,
+        "ddof": 1
+      },
+      "container_recovery_seconds": {
+        "n": 3,
+        "mean": 0.4667,
+        "std": 0.0751,
+        "min": 0.39,
+        "max": 0.54,
+        "ddof": 1
+      },
+      "throughput_90pct_recovery_seconds": {
+        "n": 3,
+        "mean": 21.69,
+        "std": 2.1041,
+        "min": 20.01,
+        "max": 24.05,
+        "ddof": 1
+      },
+      "missing_rows": {
+        "n": 5,
+        "mean": 93900.6,
+        "std": 128578.692,
+        "min": 0,
+        "max": 234754,
+        "ddof": 1
+      },
+      "extra_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "excess_duplicates": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "platform_validator_data_loss": {
+        "n": 5,
+        "mean": 6942.8,
+        "std": 4536.7873,
+        "min": 1968,
+        "max": 10256,
+        "ddof": 1
+      },
+      "host_memory_pressure_count": 0,
+      "host_min_ram_mb": 1565.4140625,
+      "surviving_only": {
+        "n_runs": 3,
+        "throughput_during_fault_window": {
+          "n": 3,
+          "mean": 492.2333,
+          "std": 0.3073,
+          "min": 491.95,
+          "max": 492.56,
+          "ddof": 1
+        },
+        "degradation_pct_vs_post_warmup": {
+          "n": 3,
+          "mean": 67.8698,
+          "std": 1.5506,
+          "min": 66.9512,
+          "max": 69.6601,
+          "ddof": 1
+        },
+        "degradation_pct_vs_control": {
+          "n": 3,
+          "mean": 67.1406,
+          "std": 0.0205,
+          "min": 67.1188,
+          "max": 67.1595,
+          "ddof": 1
+        },
+        "container_recovery_seconds": {
+          "n": 3,
+          "mean": 0.4667,
+          "std": 0.0751,
+          "min": 0.39,
+          "max": 0.54,
+          "ddof": 1
+        },
+        "throughput_90pct_recovery_seconds": {
+          "n": 3,
+          "mean": 21.69,
+          "std": 2.1041,
+          "min": 20.01,
+          "max": 24.05,
+          "ddof": 1
+        }
+      }
+    }
+  },
+  "runs": [
+    {
+      "experiment": "control",
+      "repetition": "r1",
+      "run_name": "eval-control-r1",
+      "provenance": "campaign",
+      "target_container": "None",
+      "target_service": "none",
+      "fault_type": "no_fault",
+      "pipeline_run_id": "d9e56a60-e3a2-4737-925b-865b979d7af2",
+      "git_commit": "862f5a5f0d1738e8b23318c6b3f26817a9de2708",
+      "timestamps": {
+        "snapshot_ts": null,
+        "docker_stop_issued_ts": null,
+        "container_exited_ts": null,
+        "stop_latency_seconds": null,
+        "fault_window_start_ts": null,
+        "fault_window_end_ts": null,
+        "fault_window_seconds": null,
+        "fault_reverted_ts": null,
+        "container_recovered_ts": null,
+        "warmup_end_ts": "2026-10-21T12:56:44.747876+00:00",
+        "inj_start_ts": "2026-10-21T12:56:54.750000+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": null,
+        "during_fault_delta_records": 29980,
+        "during_fault_window_seconds": 20.02
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1798.8,
+        "post_warmup_baseline_rec_per_sec": 1983.53,
+        "warmup_delay_seconds": 22.81,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 1497.88,
+        "throughput_true_halted_rec_per_sec": 1497.88
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.0,
+        "throughput_90pct_recovery_seconds": 0.0
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "succeeded",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3664.5078125,
+        "host_free_ram_end_mb": 2585.03515625,
+        "host_min_ram_observed_mb": 2533.84375
+      }
+    },
+    {
+      "experiment": "control",
+      "repetition": "r2",
+      "run_name": "eval-control-r2",
+      "provenance": "campaign",
+      "target_container": "None",
+      "target_service": "none",
+      "fault_type": "no_fault",
+      "pipeline_run_id": "70873f6a-db61-42b3-95fa-62a24ccae081",
+      "git_commit": "862f5a5f0d1738e8b23318c6b3f26817a9de2708",
+      "timestamps": {
+        "snapshot_ts": null,
+        "docker_stop_issued_ts": null,
+        "container_exited_ts": null,
+        "stop_latency_seconds": null,
+        "fault_window_start_ts": null,
+        "fault_window_end_ts": null,
+        "fault_window_seconds": null,
+        "fault_reverted_ts": null,
+        "container_recovered_ts": null,
+        "warmup_end_ts": "2026-10-21T13:03:20.174115+00:00",
+        "inj_start_ts": "2026-10-21T13:03:30.200000+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": null,
+        "during_fault_delta_records": 29990,
+        "during_fault_window_seconds": 20.02
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1796.53,
+        "post_warmup_baseline_rec_per_sec": 1654.84,
+        "warmup_delay_seconds": 22.25,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 1498.38,
+        "throughput_true_halted_rec_per_sec": 1498.38
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.0,
+        "throughput_90pct_recovery_seconds": 0.0
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "succeeded",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3749.953125,
+        "host_free_ram_end_mb": 2478.765625,
+        "host_min_ram_observed_mb": 2469.6484375
+      }
+    },
+    {
+      "experiment": "control",
+      "repetition": "r3",
+      "run_name": "eval-control-r3",
+      "provenance": "campaign",
+      "target_container": "None",
+      "target_service": "none",
+      "fault_type": "no_fault",
+      "pipeline_run_id": "7ee6e289-386e-4818-91ee-e16cabf8dcec",
+      "git_commit": "862f5a5f0d1738e8b23318c6b3f26817a9de2708",
+      "timestamps": {
+        "snapshot_ts": null,
+        "docker_stop_issued_ts": null,
+        "container_exited_ts": null,
+        "stop_latency_seconds": null,
+        "fault_window_start_ts": null,
+        "fault_window_end_ts": null,
+        "fault_window_seconds": null,
+        "fault_reverted_ts": null,
+        "container_recovered_ts": null,
+        "warmup_end_ts": "2026-10-21T13:08:15.310490+00:00",
+        "inj_start_ts": "2026-10-21T13:08:25.320000+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": null,
+        "during_fault_delta_records": 32978,
+        "during_fault_window_seconds": 20.02
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.0,
+        "post_warmup_baseline_rec_per_sec": 1650.14,
+        "warmup_delay_seconds": 20.78,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 1647.66,
+        "throughput_true_halted_rec_per_sec": 1647.66
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.0,
+        "throughput_90pct_recovery_seconds": 0.0
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "succeeded",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3722.05859375,
+        "host_free_ram_end_mb": 2929.2734375,
+        "host_min_ram_observed_mb": 2481.16796875
+      }
+    },
+    {
+      "experiment": "control",
+      "repetition": "r4",
+      "run_name": "eval-control-r4",
+      "provenance": "campaign",
+      "target_container": "None",
+      "target_service": "none",
+      "fault_type": "no_fault",
+      "pipeline_run_id": "ccf97759-fc25-4be6-8e19-3feeed60854d",
+      "git_commit": "862f5a5f0d1738e8b23318c6b3f26817a9de2708",
+      "timestamps": {
+        "snapshot_ts": null,
+        "docker_stop_issued_ts": null,
+        "container_exited_ts": null,
+        "stop_latency_seconds": null,
+        "fault_window_start_ts": null,
+        "fault_window_end_ts": null,
+        "fault_window_seconds": null,
+        "fault_reverted_ts": null,
+        "container_recovered_ts": null,
+        "warmup_end_ts": "2026-10-21T13:13:12.936887+00:00",
+        "inj_start_ts": "2026-10-21T13:13:22.950000+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": null,
+        "during_fault_delta_records": 26991,
+        "during_fault_window_seconds": 20.02
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1799.4,
+        "post_warmup_baseline_rec_per_sec": 1987.86,
+        "warmup_delay_seconds": 20.61,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 1348.54,
+        "throughput_true_halted_rec_per_sec": 1348.54
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.0,
+        "throughput_90pct_recovery_seconds": 0.0
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "succeeded",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3691.06640625,
+        "host_free_ram_end_mb": 2352.578125,
+        "host_min_ram_observed_mb": 2243.34375
+      }
+    },
+    {
+      "experiment": "control",
+      "repetition": "r5",
+      "run_name": "eval-control-r5",
+      "provenance": "campaign",
+      "target_container": "None",
+      "target_service": "none",
+      "fault_type": "no_fault",
+      "pipeline_run_id": "2c2a5076-276a-46ab-ae7e-b87b8ad63d84",
+      "git_commit": "862f5a5f0d1738e8b23318c6b3f26817a9de2708",
+      "timestamps": {
+        "snapshot_ts": null,
+        "docker_stop_issued_ts": null,
+        "container_exited_ts": null,
+        "stop_latency_seconds": null,
+        "fault_window_start_ts": null,
+        "fault_window_end_ts": null,
+        "fault_window_seconds": null,
+        "fault_reverted_ts": null,
+        "container_recovered_ts": null,
+        "warmup_end_ts": "2026-10-21T13:18:05.705230+00:00",
+        "inj_start_ts": "2026-10-21T13:18:15.720000+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": null,
+        "during_fault_delta_records": 29980,
+        "during_fault_window_seconds": 20.02
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.0,
+        "post_warmup_baseline_rec_per_sec": 1646.43,
+        "warmup_delay_seconds": 19.61,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 1497.8,
+        "throughput_true_halted_rec_per_sec": 1497.8
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.0,
+        "throughput_90pct_recovery_seconds": 0.0
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "succeeded",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3449.78515625,
+        "host_free_ram_end_mb": 2351.76953125,
+        "host_min_ram_observed_mb": 2351.76953125
+      }
+    },
+    {
+      "experiment": "kafka-stop",
+      "repetition": "r1",
+      "run_name": "eval-kafka-stop-r1",
+      "provenance": "pilot-v3",
+      "target_container": "platform-kafka",
+      "target_service": "kafka",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "16de5509-9d65-47c9-bcfa-6ea49d810a66",
+      "git_commit": "1e8e35868cc443e9fa3b47d5f8fb3cb2e7efbe3f",
+      "timestamps": {
+        "snapshot_ts": "2026-10-20T23:12:50.408742+00:00",
+        "docker_stop_issued_ts": "2026-10-20T23:12:50.411398+00:00",
+        "container_exited_ts": "2026-10-20T23:12:51.806431+00:00",
+        "stop_latency_seconds": 1.395,
+        "fault_window_start_ts": "2026-10-20T23:12:51.806431+00:00",
+        "fault_window_end_ts": "2026-10-20T23:13:11.830263+00:00",
+        "fault_window_seconds": 20.0238,
+        "fault_reverted_ts": "2026-10-20T23:13:11.834248+00:00",
+        "container_recovered_ts": "2026-10-20T23:13:21.892533+00:00",
+        "warmup_end_ts": "2026-10-20T23:12:27.619434+00:00",
+        "inj_start_ts": "2026-10-20T23:12:50.411398+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38986,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.46,
+        "post_warmup_baseline_rec_per_sec": 1622.13,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 0.0,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 10.06,
+        "throughput_90pct_recovery_seconds": 13.18
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": true,
+        "host_free_ram_start_mb": 3353.01171875,
+        "host_free_ram_end_mb": 2827.87109375,
+        "host_min_ram_observed_mb": 1739.390625
+      }
+    },
+    {
+      "experiment": "kafka-stop",
+      "repetition": "r2",
+      "run_name": "eval-kafka-stop-r2",
+      "provenance": "pilot-v3",
+      "target_container": "platform-kafka",
+      "target_service": "kafka",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "e74d9029-9769-48a9-abf1-5864db12f21b",
+      "git_commit": "1e8e35868cc443e9fa3b47d5f8fb3cb2e7efbe3f",
+      "timestamps": {
+        "snapshot_ts": "2026-10-20T23:18:30.284013+00:00",
+        "docker_stop_issued_ts": "2026-10-20T23:18:30.287539+00:00",
+        "container_exited_ts": "2026-10-20T23:18:31.804067+00:00",
+        "stop_latency_seconds": 1.5165,
+        "fault_window_start_ts": "2026-10-20T23:18:31.804067+00:00",
+        "fault_window_end_ts": "2026-10-20T23:18:51.832148+00:00",
+        "fault_window_seconds": 20.0281,
+        "fault_reverted_ts": "2026-10-20T23:18:51.836238+00:00",
+        "container_recovered_ts": "2026-10-20T23:19:04.571400+00:00",
+        "warmup_end_ts": "2026-10-20T23:18:07.287815+00:00",
+        "inj_start_ts": "2026-10-20T23:18:30.287539+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38974,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1498.9,
+        "post_warmup_baseline_rec_per_sec": 1483.8,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 139.17,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 12.74,
+        "throughput_90pct_recovery_seconds": 19.23
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": true,
+        "host_free_ram_start_mb": 3155.86328125,
+        "host_free_ram_end_mb": 3357.28125,
+        "host_min_ram_observed_mb": 1832.36328125
+      }
+    },
+    {
+      "experiment": "kafka-stop",
+      "repetition": "r3",
+      "run_name": "eval-kafka-stop-r3",
+      "provenance": "campaign",
+      "target_container": "platform-kafka",
+      "target_service": "kafka",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "ca73a5ef-999b-4bab-9190-6763ccf22492",
+      "git_commit": "b5189fdc4308b4beb49073e28c10cf7c5b6f762b",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T06:55:18.466533+00:00",
+        "docker_stop_issued_ts": "2026-10-21T06:55:18.468796+00:00",
+        "container_exited_ts": "2026-10-21T06:55:20.766362+00:00",
+        "stop_latency_seconds": 2.2976,
+        "fault_window_start_ts": "2026-10-21T06:55:20.766362+00:00",
+        "fault_window_end_ts": "2026-10-21T06:55:40.806784+00:00",
+        "fault_window_seconds": 20.0404,
+        "fault_reverted_ts": "2026-10-21T06:55:40.812151+00:00",
+        "container_recovered_ts": "2026-10-21T06:56:01.779755+00:00",
+        "warmup_end_ts": "2026-10-21T06:54:54.800405+00:00",
+        "inj_start_ts": "2026-10-21T06:55:18.468796+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38987,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.4,
+        "post_warmup_baseline_rec_per_sec": 1465.17,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 134.29,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 20.97,
+        "throughput_90pct_recovery_seconds": 27.68
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 4616.515625,
+        "host_free_ram_end_mb": 3179.0,
+        "host_min_ram_observed_mb": 2800.65234375
+      }
+    },
+    {
+      "experiment": "kafka-stop",
+      "repetition": "r4",
+      "run_name": "eval-kafka-stop-r4",
+      "provenance": "campaign",
+      "target_container": "platform-kafka",
+      "target_service": "kafka",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "4975b91b-0ce8-40fb-8d30-66cc7e835317",
+      "git_commit": "b5189fdc4308b4beb49073e28c10cf7c5b6f762b",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T07:01:55.619887+00:00",
+        "docker_stop_issued_ts": "2026-10-21T07:01:55.624109+00:00",
+        "container_exited_ts": "2026-10-21T07:01:58.032276+00:00",
+        "stop_latency_seconds": 2.4082,
+        "fault_window_start_ts": "2026-10-21T07:01:58.032276+00:00",
+        "fault_window_end_ts": "2026-10-21T07:02:19.217912+00:00",
+        "fault_window_seconds": 21.1856,
+        "fault_reverted_ts": "2026-10-21T07:02:19.224858+00:00",
+        "container_recovered_ts": "2026-10-21T07:02:42.221031+00:00",
+        "warmup_end_ts": "2026-10-21T07:01:32.736764+00:00",
+        "inj_start_ts": "2026-10-21T07:01:55.624109+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 36687,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.4,
+        "post_warmup_baseline_rec_per_sec": 1602.91,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 127.17,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 23.0,
+        "throughput_90pct_recovery_seconds": 27.39
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": true,
+        "host_free_ram_start_mb": 3218.58984375,
+        "host_free_ram_end_mb": 2921.66796875,
+        "host_min_ram_observed_mb": 2179.77734375
+      }
+    },
+    {
+      "experiment": "kafka-stop",
+      "repetition": "r5",
+      "run_name": "eval-kafka-stop-r5",
+      "provenance": "campaign",
+      "target_container": "platform-kafka",
+      "target_service": "kafka",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "1298dcdf-1e7c-4ef9-800f-f09280432965",
+      "git_commit": "b5189fdc4308b4beb49073e28c10cf7c5b6f762b",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T07:08:38.273956+00:00",
+        "docker_stop_issued_ts": "2026-10-21T07:08:38.276574+00:00",
+        "container_exited_ts": "2026-10-21T07:08:40.403280+00:00",
+        "stop_latency_seconds": 2.1267,
+        "fault_window_start_ts": "2026-10-21T07:08:40.403280+00:00",
+        "fault_window_end_ts": "2026-10-21T07:09:00.436998+00:00",
+        "fault_window_seconds": 20.0337,
+        "fault_reverted_ts": "2026-10-21T07:09:00.442832+00:00",
+        "container_recovered_ts": "2026-10-21T07:09:21.274950+00:00",
+        "warmup_end_ts": "2026-10-21T07:08:14.609118+00:00",
+        "inj_start_ts": "2026-10-21T07:08:38.276574+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 32989,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1793.11,
+        "post_warmup_baseline_rec_per_sec": 1270.04,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 135.35,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 20.83,
+        "throughput_90pct_recovery_seconds": 26.97
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3653.57421875,
+        "host_free_ram_end_mb": 3649.33203125,
+        "host_min_ram_observed_mb": 2408.59765625
+      }
+    },
+    {
+      "experiment": "kafka-restart",
+      "repetition": "r1",
+      "run_name": "eval-kafka-restart-r1",
+      "provenance": "campaign",
+      "target_container": "platform-kafka",
+      "target_service": "kafka",
+      "fault_type": "container_restart",
+      "pipeline_run_id": "9165306f-9252-4d00-a834-a7d02c47bad7",
+      "git_commit": "1c75f66db650254e92978ac44a8aae73a840e5d0",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T07:34:37.285456+00:00",
+        "docker_stop_issued_ts": "2026-10-21T07:34:37.290712+00:00",
+        "container_exited_ts": "2026-10-21T07:34:41.559503+00:00",
+        "stop_latency_seconds": 4.2688,
+        "fault_window_start_ts": "2026-10-21T07:34:41.559503+00:00",
+        "fault_window_end_ts": "2026-10-21T07:35:02.035797+00:00",
+        "fault_window_seconds": 20.4763,
+        "fault_reverted_ts": "2026-10-21T07:35:02.042640+00:00",
+        "container_recovered_ts": "2026-10-21T07:35:05.265910+00:00",
+        "warmup_end_ts": "2026-10-21T07:34:14.245978+00:00",
+        "inj_start_ts": "2026-10-21T07:34:37.290712+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38986,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1199.57,
+        "post_warmup_baseline_rec_per_sec": 1618.84,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 0.0,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 3.22,
+        "throughput_90pct_recovery_seconds": 7.78
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3242.578125,
+        "host_free_ram_end_mb": 2619.6171875,
+        "host_min_ram_observed_mb": 1772.73046875
+      }
+    },
+    {
+      "experiment": "kafka-restart",
+      "repetition": "r2",
+      "run_name": "eval-kafka-restart-r2",
+      "provenance": "campaign",
+      "target_container": "platform-kafka",
+      "target_service": "kafka",
+      "fault_type": "container_restart",
+      "pipeline_run_id": "00fa1f54-9c66-4afb-8378-60b06c377531",
+      "git_commit": "1c75f66db650254e92978ac44a8aae73a840e5d0",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T07:52:01.604382+00:00",
+        "docker_stop_issued_ts": "2026-10-21T07:52:01.605574+00:00",
+        "container_exited_ts": "2026-10-21T07:52:03.251589+00:00",
+        "stop_latency_seconds": 1.646,
+        "fault_window_start_ts": "2026-10-21T07:52:03.251589+00:00",
+        "fault_window_end_ts": "2026-10-21T07:52:23.417319+00:00",
+        "fault_window_seconds": 20.1657,
+        "fault_reverted_ts": "2026-10-21T07:52:23.420018+00:00",
+        "container_recovered_ts": "2026-10-21T07:52:23.517667+00:00",
+        "warmup_end_ts": "2026-10-21T07:51:38.633295+00:00",
+        "inj_start_ts": "2026-10-21T07:52:01.605574+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 41972,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1498.96,
+        "post_warmup_baseline_rec_per_sec": 1617.76,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 549.95,
+        "throughput_true_halted_rec_per_sec": 549.95
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.1,
+        "throughput_90pct_recovery_seconds": 3.68
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 2823.75,
+        "host_free_ram_end_mb": 2801.08203125,
+        "host_min_ram_observed_mb": 1676.328125
+      }
+    },
+    {
+      "experiment": "kafka-restart",
+      "repetition": "r3",
+      "run_name": "eval-kafka-restart-r3",
+      "provenance": "campaign",
+      "target_container": "platform-kafka",
+      "target_service": "kafka",
+      "fault_type": "container_restart",
+      "pipeline_run_id": "35b38af7-3cb0-45f1-9b37-4aa199f67705",
+      "git_commit": "1c75f66db650254e92978ac44a8aae73a840e5d0",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T07:57:18.990411+00:00",
+        "docker_stop_issued_ts": "2026-10-21T07:57:18.991764+00:00",
+        "container_exited_ts": "2026-10-21T07:57:20.715482+00:00",
+        "stop_latency_seconds": 1.7237,
+        "fault_window_start_ts": "2026-10-21T07:57:20.715482+00:00",
+        "fault_window_end_ts": "2026-10-21T07:57:40.857440+00:00",
+        "fault_window_seconds": 20.142,
+        "fault_reverted_ts": "2026-10-21T07:57:40.869185+00:00",
+        "container_recovered_ts": "2026-10-21T07:57:41.002010+00:00",
+        "warmup_end_ts": "2026-10-21T07:56:55.880126+00:00",
+        "inj_start_ts": "2026-10-21T07:57:18.991764+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38974,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1498.76,
+        "post_warmup_baseline_rec_per_sec": 1620.45,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 548.56,
+        "throughput_true_halted_rec_per_sec": 548.56
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.13,
+        "throughput_90pct_recovery_seconds": 1.38
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3403.83203125,
+        "host_free_ram_end_mb": 3170.67578125,
+        "host_min_ram_observed_mb": 2042.4375
+      }
+    },
+    {
+      "experiment": "kafka-restart",
+      "repetition": "r4",
+      "run_name": "eval-kafka-restart-r4",
+      "provenance": "campaign",
+      "target_container": "platform-kafka",
+      "target_service": "kafka",
+      "fault_type": "container_restart",
+      "pipeline_run_id": "026c1b2e-6c8b-49cd-9fe8-f533d80269ab",
+      "git_commit": "1c75f66db650254e92978ac44a8aae73a840e5d0",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T08:04:41.958617+00:00",
+        "docker_stop_issued_ts": "2026-10-21T08:04:41.959955+00:00",
+        "container_exited_ts": "2026-10-21T08:04:43.784686+00:00",
+        "stop_latency_seconds": 1.8247,
+        "fault_window_start_ts": "2026-10-21T08:04:43.784686+00:00",
+        "fault_window_end_ts": "2026-10-21T08:05:03.813778+00:00",
+        "fault_window_seconds": 20.0291,
+        "fault_reverted_ts": "2026-10-21T08:05:03.816639+00:00",
+        "container_recovered_ts": "2026-10-21T08:05:03.886919+00:00",
+        "warmup_end_ts": "2026-10-21T08:04:19.714908+00:00",
+        "inj_start_ts": "2026-10-21T08:04:41.959955+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38986,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.47,
+        "post_warmup_baseline_rec_per_sec": 1557.2,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 686.27,
+        "throughput_true_halted_rec_per_sec": 686.27
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.07,
+        "throughput_90pct_recovery_seconds": 2.38
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3890.73828125,
+        "host_free_ram_end_mb": 2452.3828125,
+        "host_min_ram_observed_mb": 1822.91796875
+      }
+    },
+    {
+      "experiment": "kafka-restart",
+      "repetition": "r5",
+      "run_name": "eval-kafka-restart-r5",
+      "provenance": "campaign",
+      "target_container": "platform-kafka",
+      "target_service": "kafka",
+      "fault_type": "container_restart",
+      "pipeline_run_id": "5a422054-b81d-4bf4-b3a2-9ea383217912",
+      "git_commit": "1c75f66db650254e92978ac44a8aae73a840e5d0",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T08:10:00.746725+00:00",
+        "docker_stop_issued_ts": "2026-10-21T08:10:00.748042+00:00",
+        "container_exited_ts": "2026-10-21T08:10:02.191855+00:00",
+        "stop_latency_seconds": 1.4438,
+        "fault_window_start_ts": "2026-10-21T08:10:02.191855+00:00",
+        "fault_window_end_ts": "2026-10-21T08:10:22.209849+00:00",
+        "fault_window_seconds": 20.018,
+        "fault_reverted_ts": "2026-10-21T08:10:22.212675+00:00",
+        "container_recovered_ts": "2026-10-21T08:10:22.285214+00:00",
+        "warmup_end_ts": "2026-10-21T08:09:37.674982+00:00",
+        "inj_start_ts": "2026-10-21T08:10:00.748042+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 36075,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.23,
+        "post_warmup_baseline_rec_per_sec": 1544.28,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 838.66,
+        "throughput_true_halted_rec_per_sec": 838.66
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.07,
+        "throughput_90pct_recovery_seconds": 1.97
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 2863.1328125,
+        "host_free_ram_end_mb": 3276.3203125,
+        "host_min_ram_observed_mb": 1930.26171875
+      }
+    },
+    {
+      "experiment": "spark-worker-stop",
+      "repetition": "r1",
+      "run_name": "eval-spark-worker-stop-r1",
+      "provenance": "campaign",
+      "target_container": "platform-spark-worker",
+      "target_service": "spark-worker",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "78c7e74a-8f42-4f57-8263-7ac16689ccf4",
+      "git_commit": "101ba491e5863c68121c462786af777ff0f8eca4",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T08:17:23.190838+00:00",
+        "docker_stop_issued_ts": "2026-10-21T08:17:23.194555+00:00",
+        "container_exited_ts": "2026-10-21T08:17:33.613898+00:00",
+        "stop_latency_seconds": 10.4193,
+        "fault_window_start_ts": "2026-10-21T08:17:33.613898+00:00",
+        "fault_window_end_ts": "2026-10-21T08:17:53.630714+00:00",
+        "fault_window_seconds": 20.0168,
+        "fault_reverted_ts": "2026-10-21T08:17:53.634258+00:00",
+        "container_recovered_ts": "2026-10-21T08:17:54.181758+00:00",
+        "warmup_end_ts": "2026-10-21T08:16:59.993710+00:00",
+        "inj_start_ts": "2026-10-21T08:17:23.194555+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38987,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1799.36,
+        "post_warmup_baseline_rec_per_sec": 1618.02,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 591.34,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.55,
+        "throughput_90pct_recovery_seconds": 16.07
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3611.6640625,
+        "host_free_ram_end_mb": 2524.953125,
+        "host_min_ram_observed_mb": 1981.45703125
+      }
+    },
+    {
+      "experiment": "spark-worker-stop",
+      "repetition": "r2",
+      "run_name": "eval-spark-worker-stop-r2",
+      "provenance": "campaign",
+      "target_container": "platform-spark-worker",
+      "target_service": "spark-worker",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "f6bab6a8-4af8-484c-af63-6719a22ce7a2",
+      "git_commit": "101ba491e5863c68121c462786af777ff0f8eca4",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T08:23:00.578178+00:00",
+        "docker_stop_issued_ts": "2026-10-21T08:23:00.579317+00:00",
+        "container_exited_ts": "2026-10-21T08:23:10.891742+00:00",
+        "stop_latency_seconds": 10.3124,
+        "fault_window_start_ts": "2026-10-21T08:23:10.891742+00:00",
+        "fault_window_end_ts": "2026-10-21T08:23:30.909229+00:00",
+        "fault_window_seconds": 20.0175,
+        "fault_reverted_ts": "2026-10-21T08:23:30.912421+00:00",
+        "container_recovered_ts": "2026-10-21T08:23:31.269376+00:00",
+        "warmup_end_ts": "2026-10-21T08:22:37.484553+00:00",
+        "inj_start_ts": "2026-10-21T08:23:00.579317+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38982,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.17,
+        "post_warmup_baseline_rec_per_sec": 1619.77,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 593.18,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.36,
+        "throughput_90pct_recovery_seconds": 14.21
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 2844.9921875,
+        "host_free_ram_end_mb": 2185.66015625,
+        "host_min_ram_observed_mb": 1910.32421875
+      }
+    },
+    {
+      "experiment": "spark-worker-stop",
+      "repetition": "r3",
+      "run_name": "eval-spark-worker-stop-r3",
+      "provenance": "campaign",
+      "target_container": "platform-spark-worker",
+      "target_service": "spark-worker",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "08a1abac-4ca4-48d1-a0d8-c7a78aa5d007",
+      "git_commit": "101ba491e5863c68121c462786af777ff0f8eca4",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T08:28:51.776445+00:00",
+        "docker_stop_issued_ts": "2026-10-21T08:28:51.778156+00:00",
+        "container_exited_ts": "2026-10-21T08:29:02.327160+00:00",
+        "stop_latency_seconds": 10.549,
+        "fault_window_start_ts": "2026-10-21T08:29:02.327160+00:00",
+        "fault_window_end_ts": "2026-10-21T08:29:22.369191+00:00",
+        "fault_window_seconds": 20.042,
+        "fault_reverted_ts": "2026-10-21T08:29:22.374553+00:00",
+        "container_recovered_ts": "2026-10-21T08:29:22.933722+00:00",
+        "warmup_end_ts": "2026-10-21T08:28:29.197124+00:00",
+        "inj_start_ts": "2026-10-21T08:28:51.778156+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38980,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1799.06,
+        "post_warmup_baseline_rec_per_sec": 1693.17,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 588.06,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.56,
+        "throughput_90pct_recovery_seconds": 19.61
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 2611.63671875,
+        "host_free_ram_end_mb": 2514.8125,
+        "host_min_ram_observed_mb": 1867.08984375
+      }
+    },
+    {
+      "experiment": "spark-worker-stop",
+      "repetition": "r4",
+      "run_name": "eval-spark-worker-stop-r4",
+      "provenance": "campaign",
+      "target_container": "platform-spark-worker",
+      "target_service": "spark-worker",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "a50ebfcc-51cc-4a51-9c62-9c3f2c3a944b",
+      "git_commit": "101ba491e5863c68121c462786af777ff0f8eca4",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T08:35:07.279777+00:00",
+        "docker_stop_issued_ts": "2026-10-21T08:35:07.281052+00:00",
+        "container_exited_ts": "2026-10-21T08:35:17.613803+00:00",
+        "stop_latency_seconds": 10.3328,
+        "fault_window_start_ts": "2026-10-21T08:35:17.613803+00:00",
+        "fault_window_end_ts": "2026-10-21T08:35:37.629478+00:00",
+        "fault_window_seconds": 20.0157,
+        "fault_reverted_ts": "2026-10-21T08:35:37.633075+00:00",
+        "container_recovered_ts": "2026-10-21T08:35:37.957810+00:00",
+        "warmup_end_ts": "2026-10-21T08:34:44.053681+00:00",
+        "inj_start_ts": "2026-10-21T08:35:07.281052+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 41978,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.16,
+        "post_warmup_baseline_rec_per_sec": 1618.94,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 494.18,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.32,
+        "throughput_90pct_recovery_seconds": 11.92
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3018.4140625,
+        "host_free_ram_end_mb": 2491.546875,
+        "host_min_ram_observed_mb": 1768.3515625
+      }
+    },
+    {
+      "experiment": "spark-worker-stop",
+      "repetition": "r5",
+      "run_name": "eval-spark-worker-stop-r5",
+      "provenance": "campaign",
+      "target_container": "platform-spark-worker",
+      "target_service": "spark-worker",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "d8c0258c-aee7-42ad-9714-5172695dc8ad",
+      "git_commit": "101ba491e5863c68121c462786af777ff0f8eca4",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T08:41:48.682930+00:00",
+        "docker_stop_issued_ts": "2026-10-21T08:41:48.685929+00:00",
+        "container_exited_ts": "2026-10-21T08:41:59.016747+00:00",
+        "stop_latency_seconds": 10.3308,
+        "fault_window_start_ts": "2026-10-21T08:41:59.016747+00:00",
+        "fault_window_end_ts": "2026-10-21T08:42:19.042753+00:00",
+        "fault_window_seconds": 20.026,
+        "fault_reverted_ts": "2026-10-21T08:42:19.048290+00:00",
+        "container_recovered_ts": "2026-10-21T08:42:19.636169+00:00",
+        "warmup_end_ts": "2026-10-21T08:41:25.429740+00:00",
+        "inj_start_ts": "2026-10-21T08:41:48.685929+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38975,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1798.72,
+        "post_warmup_baseline_rec_per_sec": 1551.12,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 592.81,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.59,
+        "throughput_90pct_recovery_seconds": 26.01
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": true,
+        "host_free_ram_start_mb": 3133.4765625,
+        "host_free_ram_end_mb": 3042.421875,
+        "host_min_ram_observed_mb": 1691.39453125
+      }
+    },
+    {
+      "experiment": "spark-worker-restart",
+      "repetition": "r1",
+      "run_name": "eval-spark-worker-restart-r1",
+      "provenance": "campaign",
+      "target_container": "platform-spark-worker",
+      "target_service": "spark-worker",
+      "fault_type": "container_restart",
+      "pipeline_run_id": "8eb20183-11de-4459-bd46-86fb06673787",
+      "git_commit": "398d948d476a74579092b301511d8d58c4d9a73f",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T08:54:11.557623+00:00",
+        "docker_stop_issued_ts": "2026-10-21T08:54:11.559320+00:00",
+        "container_exited_ts": "2026-10-21T08:54:22.077246+00:00",
+        "stop_latency_seconds": 10.5179,
+        "fault_window_start_ts": "2026-10-21T08:54:22.077246+00:00",
+        "fault_window_end_ts": "2026-10-21T08:54:42.105016+00:00",
+        "fault_window_seconds": 20.0278,
+        "fault_reverted_ts": "2026-10-21T08:54:42.108892+00:00",
+        "container_recovered_ts": "2026-10-21T08:54:42.237866+00:00",
+        "warmup_end_ts": "2026-10-21T08:53:48.638192+00:00",
+        "inj_start_ts": "2026-10-21T08:54:11.559320+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 41986,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1199.56,
+        "post_warmup_baseline_rec_per_sec": 1624.51,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 1080.04,
+        "throughput_true_halted_rec_per_sec": 1080.04
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.13,
+        "throughput_90pct_recovery_seconds": 1.9
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 2912.44921875,
+        "host_free_ram_end_mb": 2394.3828125,
+        "host_min_ram_observed_mb": 1673.64453125
+      }
+    },
+    {
+      "experiment": "spark-worker-restart",
+      "repetition": "r2",
+      "run_name": "eval-spark-worker-restart-r2",
+      "provenance": "campaign",
+      "target_container": "platform-spark-worker",
+      "target_service": "spark-worker",
+      "fault_type": "container_restart",
+      "pipeline_run_id": "aa8be37c-fdeb-4e99-bccd-4efb5550f611",
+      "git_commit": "398d948d476a74579092b301511d8d58c4d9a73f",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T08:59:57.363082+00:00",
+        "docker_stop_issued_ts": "2026-10-21T08:59:57.365165+00:00",
+        "container_exited_ts": "2026-10-21T09:00:08.145869+00:00",
+        "stop_latency_seconds": 10.7807,
+        "fault_window_start_ts": "2026-10-21T09:00:08.145869+00:00",
+        "fault_window_end_ts": "2026-10-21T09:00:28.188082+00:00",
+        "fault_window_seconds": 20.0422,
+        "fault_reverted_ts": "2026-10-21T09:00:28.196245+00:00",
+        "container_recovered_ts": "2026-10-21T09:00:28.424586+00:00",
+        "warmup_end_ts": "2026-10-21T08:59:35.259061+00:00",
+        "inj_start_ts": "2026-10-21T08:59:57.365165+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38974,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1199.17,
+        "post_warmup_baseline_rec_per_sec": 1700.48,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 583.45,
+        "throughput_true_halted_rec_per_sec": 583.45
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.23,
+        "throughput_90pct_recovery_seconds": 3.65
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3152.67578125,
+        "host_free_ram_end_mb": 2475.84375,
+        "host_min_ram_observed_mb": 1760.22265625
+      }
+    },
+    {
+      "experiment": "spark-worker-restart",
+      "repetition": "r3",
+      "run_name": "eval-spark-worker-restart-r3",
+      "provenance": "campaign",
+      "target_container": "platform-spark-worker",
+      "target_service": "spark-worker",
+      "fault_type": "container_restart",
+      "pipeline_run_id": "7d8a200d-43d4-4690-a9d0-6e9b9e474c51",
+      "git_commit": "398d948d476a74579092b301511d8d58c4d9a73f",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T09:05:51.746756+00:00",
+        "docker_stop_issued_ts": "2026-10-21T09:05:51.748870+00:00",
+        "container_exited_ts": "2026-10-21T09:06:02.313685+00:00",
+        "stop_latency_seconds": 10.5648,
+        "fault_window_start_ts": "2026-10-21T09:06:02.313685+00:00",
+        "fault_window_end_ts": "2026-10-21T09:06:22.341638+00:00",
+        "fault_window_seconds": 20.028,
+        "fault_reverted_ts": "2026-10-21T09:06:22.344861+00:00",
+        "container_recovered_ts": "2026-10-21T09:06:22.417986+00:00",
+        "warmup_end_ts": "2026-10-21T09:05:28.232527+00:00",
+        "inj_start_ts": "2026-10-21T09:05:51.748870+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 41976,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1798.93,
+        "post_warmup_baseline_rec_per_sec": 1684.16,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 1078.26,
+        "throughput_true_halted_rec_per_sec": 1078.26
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.07,
+        "throughput_90pct_recovery_seconds": 2.29
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3190.484375,
+        "host_free_ram_end_mb": 2383.53515625,
+        "host_min_ram_observed_mb": 1997.234375
+      }
+    },
+    {
+      "experiment": "spark-worker-restart",
+      "repetition": "r4",
+      "run_name": "eval-spark-worker-restart-r4",
+      "provenance": "campaign",
+      "target_container": "platform-spark-worker",
+      "target_service": "spark-worker",
+      "fault_type": "container_restart",
+      "pipeline_run_id": "97373f40-05dc-498a-81d2-1e7fd9700b6c",
+      "git_commit": "fd1a8495ac774c2e776138209cf0dcfc6ac7d8f6",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T10:08:20.420524+00:00",
+        "docker_stop_issued_ts": "2026-10-21T10:08:20.421624+00:00",
+        "container_exited_ts": "2026-10-21T10:08:30.931277+00:00",
+        "stop_latency_seconds": 10.5097,
+        "fault_window_start_ts": "2026-10-21T10:08:30.931277+00:00",
+        "fault_window_end_ts": "2026-10-21T10:08:50.961094+00:00",
+        "fault_window_seconds": 20.0298,
+        "fault_reverted_ts": "2026-10-21T10:08:50.964552+00:00",
+        "container_recovered_ts": "2026-10-21T10:08:51.058459+00:00",
+        "warmup_end_ts": "2026-10-21T10:07:57.262656+00:00",
+        "inj_start_ts": "2026-10-21T10:08:20.421624+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38976,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1498.96,
+        "post_warmup_baseline_rec_per_sec": 1623.04,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 1080.04,
+        "throughput_true_halted_rec_per_sec": 1080.04
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.09,
+        "throughput_90pct_recovery_seconds": 0.74
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 9329,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 290671
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": true,
+        "host_free_ram_start_mb": 3237.0078125,
+        "host_free_ram_end_mb": 2282.78515625,
+        "host_min_ram_observed_mb": 1986.24609375
+      }
+    },
+    {
+      "experiment": "spark-worker-restart",
+      "repetition": "r5",
+      "run_name": "eval-spark-worker-restart-r5",
+      "provenance": "campaign",
+      "target_container": "platform-spark-worker",
+      "target_service": "spark-worker",
+      "fault_type": "container_restart",
+      "pipeline_run_id": "304a257f-da36-4548-bf0c-5762058f260c",
+      "git_commit": "fd1a8495ac774c2e776138209cf0dcfc6ac7d8f6",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T10:14:09.041001+00:00",
+        "docker_stop_issued_ts": "2026-10-21T10:14:09.042611+00:00",
+        "container_exited_ts": "2026-10-21T10:14:19.573684+00:00",
+        "stop_latency_seconds": 10.5311,
+        "fault_window_start_ts": "2026-10-21T10:14:19.573684+00:00",
+        "fault_window_end_ts": "2026-10-21T10:14:39.595205+00:00",
+        "fault_window_seconds": 20.0215,
+        "fault_reverted_ts": "2026-10-21T10:14:39.598658+00:00",
+        "container_recovered_ts": "2026-10-21T10:14:39.671436+00:00",
+        "warmup_end_ts": "2026-10-21T10:13:45.936856+00:00",
+        "inj_start_ts": "2026-10-21T10:14:09.042611+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38987,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.47,
+        "post_warmup_baseline_rec_per_sec": 1625.61,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 981.88,
+        "throughput_true_halted_rec_per_sec": 981.88
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.07,
+        "throughput_90pct_recovery_seconds": 0.75
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": true,
+        "host_free_ram_start_mb": 2571.265625,
+        "host_free_ram_end_mb": 2116.41796875,
+        "host_min_ram_observed_mb": 1455.78125
+      }
+    },
+    {
+      "experiment": "datanode-stop",
+      "repetition": "r1",
+      "run_name": "eval-datanode-stop-r1",
+      "provenance": "campaign",
+      "target_container": "platform-datanode",
+      "target_service": "datanode",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "6a8be505-922e-48b2-82a2-c0fdc66396f8",
+      "git_commit": "9b52db4a5b34c7249835ea71f7b6f274d29a7359",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T10:30:20.707373+00:00",
+        "docker_stop_issued_ts": "2026-10-21T10:30:20.708803+00:00",
+        "container_exited_ts": "2026-10-21T10:30:31.168290+00:00",
+        "stop_latency_seconds": 10.4595,
+        "fault_window_start_ts": "2026-10-21T10:30:31.168290+00:00",
+        "fault_window_end_ts": "2026-10-21T10:30:51.187308+00:00",
+        "fault_window_seconds": 20.019,
+        "fault_reverted_ts": "2026-10-21T10:30:51.191813+00:00",
+        "container_recovered_ts": "2026-10-21T10:30:51.731343+00:00",
+        "warmup_end_ts": "2026-10-21T10:29:57.706670+00:00",
+        "inj_start_ts": "2026-10-21T10:30:20.708803+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 36723,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.07,
+        "post_warmup_baseline_rec_per_sec": 1621.46,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 491.95,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.54,
+        "throughput_90pct_recovery_seconds": 24.05
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 2934.65234375,
+        "host_free_ram_end_mb": 2967.27734375,
+        "host_min_ram_observed_mb": 1565.4140625
+      }
+    },
+    {
+      "experiment": "datanode-stop",
+      "repetition": "r2",
+      "run_name": "eval-datanode-stop-r2",
+      "provenance": "campaign",
+      "target_container": "platform-datanode",
+      "target_service": "datanode",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "93bfc0c6-a851-45ac-8778-b5d3ad501fb0",
+      "git_commit": "9b52db4a5b34c7249835ea71f7b6f274d29a7359",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T10:35:59.855097+00:00",
+        "docker_stop_issued_ts": "2026-10-21T10:35:59.856231+00:00",
+        "container_exited_ts": "2026-10-21T10:36:10.282788+00:00",
+        "stop_latency_seconds": 10.4266,
+        "fault_window_start_ts": "2026-10-21T10:36:10.282788+00:00",
+        "fault_window_end_ts": "2026-10-21T10:36:30.298171+00:00",
+        "fault_window_seconds": 20.0154,
+        "fault_reverted_ts": "2026-10-21T10:36:30.300247+00:00",
+        "container_recovered_ts": "2026-10-21T10:36:30.680972+00:00",
+        "warmup_end_ts": "2026-10-21T10:35:36.344849+00:00",
+        "inj_start_ts": "2026-10-21T10:35:59.856231+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 41973,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1199.17,
+        "post_warmup_baseline_rec_per_sec": 1552.77,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": null,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": null,
+        "throughput_90pct_recovery_seconds": null
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 54995,
+        "missing_rows": 234749,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 54109
+      },
+      "validator": {
+        "output_data_loss": 1968,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 56963,
+        "processed_records": 54995
+      },
+      "statuses": {
+        "driver_status": "FAILED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "DATA LOSS",
+        "query_survived": false,
+        "data_complete": false
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3229.00390625,
+        "host_free_ram_end_mb": 3016.328125,
+        "host_min_ram_observed_mb": 2225.015625
+      }
+    },
+    {
+      "experiment": "datanode-stop",
+      "repetition": "r3",
+      "run_name": "eval-datanode-stop-r3",
+      "provenance": "campaign",
+      "target_container": "platform-datanode",
+      "target_service": "datanode",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "3e33732a-caaa-404b-8061-51c204f7919b",
+      "git_commit": "9b52db4a5b34c7249835ea71f7b6f274d29a7359",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T10:38:26.212883+00:00",
+        "docker_stop_issued_ts": "2026-10-21T10:38:26.214178+00:00",
+        "container_exited_ts": "2026-10-21T10:38:36.659556+00:00",
+        "stop_latency_seconds": 10.4454,
+        "fault_window_start_ts": "2026-10-21T10:38:36.659556+00:00",
+        "fault_window_end_ts": "2026-10-21T10:38:56.686585+00:00",
+        "fault_window_seconds": 20.027,
+        "fault_reverted_ts": "2026-10-21T10:38:56.689607+00:00",
+        "container_recovered_ts": "2026-10-21T10:38:57.076870+00:00",
+        "warmup_end_ts": "2026-10-21T10:38:03.278274+00:00",
+        "inj_start_ts": "2026-10-21T10:38:26.214178+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38987,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.46,
+        "post_warmup_baseline_rec_per_sec": 1491.4,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 492.19,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.39,
+        "throughput_90pct_recovery_seconds": 20.01
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3558.3125,
+        "host_free_ram_end_mb": 2658.15234375,
+        "host_min_ram_observed_mb": 1833.7578125
+      }
+    },
+    {
+      "experiment": "datanode-stop",
+      "repetition": "r4",
+      "run_name": "eval-datanode-stop-r4",
+      "provenance": "campaign",
+      "target_container": "platform-datanode",
+      "target_service": "datanode",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "b24212d1-d1ff-4db0-b8a1-169b94270cee",
+      "git_commit": "9b52db4a5b34c7249835ea71f7b6f274d29a7359",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T10:45:26.082567+00:00",
+        "docker_stop_issued_ts": "2026-10-21T10:45:26.084112+00:00",
+        "container_exited_ts": "2026-10-21T10:45:36.510258+00:00",
+        "stop_latency_seconds": 10.4261,
+        "fault_window_start_ts": "2026-10-21T10:45:36.510258+00:00",
+        "fault_window_end_ts": "2026-10-21T10:45:56.533952+00:00",
+        "fault_window_seconds": 20.0237,
+        "fault_reverted_ts": "2026-10-21T10:45:56.536717+00:00",
+        "container_recovered_ts": "2026-10-21T10:45:57.011642+00:00",
+        "warmup_end_ts": "2026-10-21T10:45:03.084261+00:00",
+        "inj_start_ts": "2026-10-21T10:45:26.084112+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38987,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1499.45,
+        "post_warmup_baseline_rec_per_sec": 1490.4,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": 492.56,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": 0.47,
+        "throughput_90pct_recovery_seconds": 21.01
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 289744,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 285014
+      },
+      "validator": {
+        "output_data_loss": 10256,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 300000,
+        "processed_records": 289744
+      },
+      "statuses": {
+        "driver_status": "FINISHED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "VALID",
+        "query_survived": true,
+        "data_complete": true
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 2870.1015625,
+        "host_free_ram_end_mb": 3278.1953125,
+        "host_min_ram_observed_mb": 1813.98046875
+      }
+    },
+    {
+      "experiment": "datanode-stop",
+      "repetition": "r5",
+      "run_name": "eval-datanode-stop-r5",
+      "provenance": "campaign",
+      "target_container": "platform-datanode",
+      "target_service": "datanode",
+      "fault_type": "container_stop",
+      "pipeline_run_id": "c715704e-5ecc-4691-85c8-9c7bc01f8a4f",
+      "git_commit": "9b52db4a5b34c7249835ea71f7b6f274d29a7359",
+      "timestamps": {
+        "snapshot_ts": "2026-10-21T10:51:07.729891+00:00",
+        "docker_stop_issued_ts": "2026-10-21T10:51:07.732106+00:00",
+        "container_exited_ts": "2026-10-21T10:51:18.184885+00:00",
+        "stop_latency_seconds": 10.4528,
+        "fault_window_start_ts": "2026-10-21T10:51:18.184885+00:00",
+        "fault_window_end_ts": "2026-10-21T10:51:38.199381+00:00",
+        "fault_window_seconds": 20.0145,
+        "fault_reverted_ts": "2026-10-21T10:51:38.203125+00:00",
+        "container_recovered_ts": "2026-10-21T10:51:38.609240+00:00",
+        "warmup_end_ts": "2026-10-21T10:50:43.543598+00:00",
+        "inj_start_ts": "2026-10-21T10:51:07.732106+00:00"
+      },
+      "records_accounting": {
+        "snapshot_records_processed": 38977,
+        "during_fault_delta_records": null,
+        "during_fault_window_seconds": null
+      },
+      "baselines": {
+        "baseline_10s_window_rec_per_sec": 1199.25,
+        "post_warmup_baseline_rec_per_sec": 1549.71,
+        "warmup_delay_seconds": null,
+        "warmup_cutoff_batch_id": 0
+      },
+      "during_fault": {
+        "throughput_window_rec_per_sec": null,
+        "throughput_true_halted_rec_per_sec": 0.0
+      },
+      "recovery": {
+        "container_recovery_seconds": null,
+        "throughput_90pct_recovery_seconds": null
+      },
+      "data_integrity": {
+        "producer_published_records": 300000,
+        "kafka_end_offsets": 300000,
+        "expected_post_filter_rows": 289744,
+        "physical_committed_rows": 54990,
+        "missing_rows": 234754,
+        "extra_rows": 0,
+        "excess_duplicates": 0,
+        "baseline_csv_duplicates": 4730,
+        "unique_transaction_ids": 54097
+      },
+      "validator": {
+        "output_data_loss": 1978,
+        "counter_read": "spark.recordsOut",
+        "expected_records": 56968,
+        "processed_records": 54990
+      },
+      "statuses": {
+        "driver_status": "FAILED",
+        "platform_status": "failed",
+        "validator_verdict": "FAIL",
+        "physical_loss_verdict": "DATA LOSS",
+        "query_survived": false,
+        "data_complete": false
+      },
+      "host_environment": {
+        "host_memory_pressure": false,
+        "host_free_ram_start_mb": 3526.79296875,
+        "host_free_ram_end_mb": 3303.0390625,
+        "host_min_ram_observed_mb": 2402.98046875
+      }
+    }
+  ]
+}
