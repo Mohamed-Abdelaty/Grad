@@ -46,12 +46,12 @@ def generate_gap3_primary_table(master: Dict[str, Any]) -> str:
     lines = [
         "| Experiment Name | Target Container | Post-Warmup Baseline (rec/s) [Primary] | 10s Window Baseline (rec/s) [Secondary] | During-Fault Throughput (rec/s) | Degradation vs Post-Warmup Baseline (%) | Degradation vs Control (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing/Extra/Excess) | Platform Validator Output | Executed (n/N) | Query Survived (n/N) | Data-Complete (n/N) |",
         "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
-        f"| **Control** (5-repetition empirical baseline, unperturbed) | None | {fmt_stat(c['post_warmup_baseline'], 1)} | {fmt_stat(c['baseline_10s_window'], 1)} | {fmt_stat(c['throughput_during_fault_window'], 1)} (unperturbed) | Within control variation (10.8% drop to simulated window) | Baseline reference (0%) | {fmt_stat(c['container_recovery_seconds'], 2)} s | {fmt_stat(c['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(c['platform_validator_data_loss'], 1)} (filter-unaware comparison, 0 physical loss) | 5 / 5 | 5 / 5 | 5 / 5 |",
-        f"| **kafka-stop** | platform-kafka | {fmt_stat(ks['post_warmup_baseline'], 1)} | {fmt_stat(ks['baseline_10s_window'], 1)} | {fmt_float(ks['throughput_during_fault_window']['mean'])} (window incl. in-flight batch) / 0.00 (true halted) | 92.6% (window) / 100% (halted) | 92.8% (window) / 100% (halted) | {fmt_stat(ks['container_recovery_seconds'], 2)} s | {fmt_stat(ks['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(ks['platform_validator_data_loss'], 1)} (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |",
-        f"| **kafka-restart** | platform-kafka | {fmt_stat(kr['post_warmup_baseline'], 1)} | {fmt_stat(kr['baseline_10s_window'], 1)} | {fmt_float(kr['throughput_during_fault_window']['mean'])} (transient ~3s restart) | {fmt_float(kr['degradation_pct_vs_post_warmup']['mean'], 1)}% | {fmt_float(kr['degradation_pct_vs_control']['mean'], 1)}% | {fmt_stat(kr['container_recovery_seconds'], 2)} s | {fmt_stat(kr['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(kr['platform_validator_data_loss'], 1)} (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |",
+        f"| **Control** (5-repetition empirical baseline, unperturbed) | None | {fmt_stat(c['post_warmup_baseline'], 1)} | {fmt_stat(c['baseline_10s_window'], 1)} | {fmt_stat(c['throughput_during_fault_window'], 1)} (unperturbed) | 16.1% drop to simulated window (-10.8% vs 10s baseline) | Baseline reference (0%) | {fmt_stat(c['container_recovery_seconds'], 2)} s | {fmt_stat(c['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(c['platform_validator_data_loss'], 1)} (filter-unaware comparison, 0 physical loss) | 5 / 5 | 5 / 5 | 5 / 5 |",
+        f"| **kafka-stop** | platform-kafka | {fmt_stat(ks['post_warmup_baseline'], 1)} | {fmt_stat(ks['baseline_10s_window'], 1)} | {fmt_float(ks['throughput_during_fault_window']['mean'])} (window incl. in-flight batch) / 0.00 (true halted) | 92.8% (window) / 100% (halted) | 92.8% (window) / 100% (halted) | {fmt_stat(ks['container_recovery_seconds'], 2)} s | {fmt_stat(ks['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(ks['platform_validator_data_loss'], 1)} (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |",
+        f"| **kafka-restart** | platform-kafka | {fmt_stat(kr['post_warmup_baseline'], 1)} | {fmt_stat(kr['baseline_10s_window'], 1)} | {fmt_float(kr['throughput_during_fault_window']['mean'])} (transient ~3s restart) | {fmt_float(kr['degradation_ratio_of_means_vs_post_warmup'], 1)}% | {fmt_float(kr['degradation_ratio_of_means_vs_control'], 1)}% | {fmt_stat(kr['container_recovery_seconds'], 2)} s | {fmt_stat(kr['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(kr['platform_validator_data_loss'], 1)} (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |",
         f"| **spark-worker-stop** | platform-spark-worker | {fmt_stat(ws['post_warmup_baseline'], 1)} | {fmt_stat(ws['baseline_10s_window'], 1)} | {fmt_float(ws['throughput_during_fault_window']['mean'])} (window incl. pre-halt drain) / 0.00 (true halted) | 64.7% (window) / 100% (halted) | 61.8% (window) / 100% (halted) | {fmt_stat(ws['container_recovery_seconds'], 2)} s | {fmt_stat(ws['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(ws['platform_validator_data_loss'], 1)} (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |",
-        f"| **spark-worker-restart** | platform-spark-worker | {fmt_stat(wr['post_warmup_baseline'], 1)} | {fmt_stat(wr['baseline_10s_window'], 1)} | {fmt_float(wr['throughput_during_fault_window']['mean'])} (transient ~2s restart) | {fmt_float(wr['degradation_pct_vs_post_warmup']['mean'], 1)}% | {fmt_float(wr['degradation_pct_vs_control']['mean'], 1)}% (transient ~2s restart) | {fmt_stat(wr['container_recovery_seconds'], 2)} s | {fmt_stat(wr['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(wr['platform_validator_data_loss'], 1)} (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |",
-        f"| **datanode-stop** | platform-datanode | {fmt_stat(ds['post_warmup_baseline'], 1)} | {fmt_stat(ds['baseline_10s_window'], 1)} | {fmt_float(ds['surviving_only']['throughput_during_fault_window']['mean'])} (surviving window) / 295.34 (all 5 runs) / 0.00 (true halted) | 67.9% (surviving window) / 100% (halted/crashed) | 67.1% (surviving window) / 100% (halted/crashed) | {fmt_stat(ds['surviving_only']['container_recovery_seconds'], 2)} s (3 passed) / N/A (2 failed) | {fmt_stat(ds['surviving_only']['throughput_90pct_recovery_seconds'], 2)} s (3 passed) / N/A (2 failed) | Failed in 2 of 5 runs (query died at ~55k rows; 0 loss in 3 runs) | {fmt_stat(ds['platform_validator_data_loss'], 1)} (unreliable) | 5 / 5 | 3 / 5 | 3 / 5 |",
+        f"| **spark-worker-restart** | platform-spark-worker | {fmt_stat(wr['post_warmup_baseline'], 1)} | {fmt_stat(wr['baseline_10s_window'], 1)} | {fmt_float(wr['throughput_during_fault_window']['mean'])} (transient ~2s restart) | {fmt_float(wr['degradation_ratio_of_means_vs_post_warmup'], 1)}% | {fmt_float(wr['degradation_ratio_of_means_vs_control'], 1)}% (transient ~2s restart) | {fmt_stat(wr['container_recovery_seconds'], 2)} s | {fmt_stat(wr['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(wr['platform_validator_data_loss'], 1)} (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |",
+        f"| **datanode-stop** | platform-datanode | {fmt_stat(ds['post_warmup_baseline'], 1)} | {fmt_stat(ds['baseline_10s_window'], 1)} | {fmt_float(ds['surviving_only']['throughput_during_fault_window']['mean'])} (surviving window) / 295.34 (all 5 runs) / 0.00 (true halted) | 67.9% (surviving window) / 80.8% (all 5 runs) / 100% (halted/crashed) | 67.1% (surviving window) / 80.3% (all 5 runs) / 100% (halted/crashed) | {fmt_stat(ds['surviving_only']['container_recovery_seconds'], 2)} s (3 passed) / N/A (2 failed) | {fmt_stat(ds['surviving_only']['throughput_90pct_recovery_seconds'], 2)} s (3 passed) / N/A (2 failed) | Failed in 2 of 5 runs (query died at ~55k rows; 0 loss in 3 runs) | {fmt_stat(ds['platform_validator_data_loss'], 1)} (unreliable) | 5 / 5 | 3 / 5 | 3 / 5 |",
     ]
     return "\n".join(lines)
 
@@ -239,8 +239,10 @@ Evaluates system degradation, physical data integrity (5-column multiset equalit
 3. **During-Fault Throughput (Stop Faults)**: Dual reporting:
    - *Window Throughput*: Cumulative delta divided by 20.0s window length (includes ~10s in-flight task drain prior to container halt).
    - *True Halted Throughput*: 0.00 rec/s across all stop faults after container process termination.
-4. **Degradation vs Control (%)**: Uniformly computed against the empirical control during-fault throughput (1,498.0 rec/s) for all scenarios:
-   $$\\text{{Degradation}} = \\frac{{1498.0 - \\text{{Throughput}}_{{\\text{{during-fault}}}}}}{{1498.0}} \\times 100$$
+4. **Degradation Formula (Ratio of Means)**: Uniformly computed using ratio of means for all rows:
+   $$\\text{{Degradation}} = \\left(1 - \\frac{{\\text{{mean}}(\\text{{Throughput}}_{{\\text{{during-fault}}}})}}{{\\text{{mean}}(\\text{{Baseline Throughput}})}}\\right) \\times 100$$
+   Against Control, the uniform empirical reference is 1,498.1 rec/s (mean of 5 unperturbed control runs: 1498.052 -> 1498.1).
+   *Baseline Comparability Note*: Control post-warmup baseline was measured over 10.0s (capturing early post-warmup burst of ~20,000 records at ~1,980 rec/s), whereas fault runs used ~23s steady-state baselines (~36,000 records at ~1,560 rec/s). Consequently, the control throughput during the simulated window (1,498.1 rec/s) is 16.1% below its own post-warmup baseline and 10.8% below its 10s baseline.
 5. **Dual Recovery Metrics**:
    - *Container Recovery*: Elapsed time from fault revert command until container health check passes.
    - *Throughput 90% Recovery*: Time required for pipeline streaming throughput to return to >= 90% of pre-fault baseline.
@@ -263,7 +265,7 @@ Evaluates system degradation, physical data integrity (5-column multiset equalit
         if "<!-- BEGIN GENERATED:gap3_primary_table -->" not in content:
             # Wrap the table in Section 1 / Executive Summary
             content = re.sub(
-                r"(\|[^\n]+\|\n\| :---[^\n]+\|\n(?:\|[^\n]+\|\n)+)(?=\n### Key Takeaways)",
+                r"(\|[^\r\n]+Post-Warmup Baseline[^\r\n]+\|\r?\n\|(?:[:\s\-]+\|)+\r?\n(?:\|[^\r\n]+\|\r?\n)+)(?=\r?\n\s*\*\\?\*Note on During-Fault Throughput|\r?\n\s*### Core Takeaways)",
                 r"<!-- BEGIN GENERATED:gap3_primary_table -->\n\1<!-- END GENERATED:gap3_primary_table -->",
                 content,
                 count=1,
@@ -271,7 +273,7 @@ Evaluates system degradation, physical data integrity (5-column multiset equalit
 
         if "<!-- BEGIN GENERATED:audit_30_runs_table -->" not in content:
             content = re.sub(
-                r"(\|[^\n]+Committed Rows[^\n]+\|\n\| :---[^\n]+\|\n(?:\|[^\n]+\|\n)+)(?=\n\n---|\n\n### Audit Findings)",
+                r"(\|[^\r\n]+Committed Rows[^\r\n]+\|\r?\n\|(?:[:\s\-]+\|)+\r?\n(?:\|[^\r\n]+\|\r?\n)+)(?=\r?\n\s*\*\*Explanation of Platform Validator Column Aggregates|\r?\n\s*### Audit Findings)",
                 r"<!-- BEGIN GENERATED:audit_30_runs_table -->\n\1<!-- END GENERATED:audit_30_runs_table -->",
                 content,
                 count=1,
@@ -279,7 +281,7 @@ Evaluates system degradation, physical data integrity (5-column multiset equalit
 
         if "<!-- BEGIN GENERATED:stop_faults_records_reconciliation_table -->" not in content:
             content = re.sub(
-                r"(\|[^\n]+Pre-Fault Snapshot \(`records_out`\)[^\n]+\|\n\| :---[^\n]+\|\n(?:\|[^\n]+\|\n)+)(?=\n\n### Root Cause Breakdown)",
+                r"(\|[^\r\n]+Pre-Fault Snapshot \(`records_out`\)[^\r\n]+\|\r?\n\|(?:[:\s\-]+\|)+\r?\n(?:\|[^\r\n]+\|\r?\n)+)(?=\r?\n\s*\*\\?\*Note on kafka-stop|\r?\n\s*### Root Cause Breakdown)",
                 r"<!-- BEGIN GENERATED:stop_faults_records_reconciliation_table -->\n\1<!-- END GENERATED:stop_faults_records_reconciliation_table -->",
                 content,
                 count=1,
@@ -287,7 +289,7 @@ Evaluates system degradation, physical data integrity (5-column multiset equalit
 
         if "<!-- BEGIN GENERATED:baseline_quantization_table -->" not in content:
             content = re.sub(
-                r"(\|[^\n]+10-Second Window Baseline[^\n]+\|\n\| :---[^\n]+\|\n(?:\|[^\n]+\|\n)+)(?=\n\n### Analytical Implication)",
+                r"(\|[^\r\n]+10-Second Window Baseline[^\r\n]+\|\r?\n\|(?:[:\s\-]+\|)+\r?\n(?:\|[^\r\n]+\|\r?\n)+)(?=\r?\n\s*\\?\*+Degradation percentages|\r?\n\s*### Analytical Implication)",
                 r"<!-- BEGIN GENERATED:baseline_quantization_table -->\n\1<!-- END GENERATED:baseline_quantization_table -->",
                 content,
                 count=1,
@@ -295,7 +297,7 @@ Evaluates system degradation, physical data integrity (5-column multiset equalit
 
         if "<!-- BEGIN GENERATED:datanode_timeline_table -->" not in content:
             content = re.sub(
-                r"(\|[^\n]+Pre-Fault Snapshot TS[^\n]+\|\n\| :---[^\n]+\|\n(?:\|[^\n]+\|\n)+)(?=\n\n### Root Cause Analysis: Surviving)",
+                r"(\|[^\r\n]+Pre-Fault Snapshot TS[^\r\n]+\|\r?\n\|(?:[:\s\-]+\|)+\r?\n(?:\|[^\r\n]+\|\r?\n)+)(?=\r?\n\s*\*\\?\*Note on r5 revert counter|\r?\n\s*### Root Cause Analysis: Surviving)",
                 r"<!-- BEGIN GENERATED:datanode_timeline_table -->\n\1<!-- END GENERATED:datanode_timeline_table -->",
                 content,
                 count=1,
@@ -303,8 +305,8 @@ Evaluates system degradation, physical data integrity (5-column multiset equalit
 
         if "<!-- BEGIN GENERATED:gap3_section5_table -->" not in content:
             content = re.sub(
-                r"(## 5\. Gap 3 Resilience: Primary vs Superseded Tables\n\n### 5\.1 Primary Gap 3 Results\n\n)(\|[^\n]+\|\n\| :---[^\n]+\|\n(?:\|[^\n]+\|\n)+)(?=\n\n### 5\.2 Superseded Whole-Run)",
-                r"\1<!-- BEGIN GENERATED:gap3_section5_table -->\n\2<!-- END GENERATED:gap3_section5_table -->",
+                r"(### Primary Gap 3 Comparison Table[\s\S]*?\r?\n\r?\n)(\|[^\r\n]+Post-Warmup Baseline[\s\S]*?\| 6942\.8 \(unreliable\) \| 5 / 5 \| 3 / 5 \|)(?=\r?\n\r?\n---\r?\n\r?\n### Superseded Baseline Table)",
+                r"\1<!-- BEGIN GENERATED:gap3_section5_table -->\n\2\n<!-- END GENERATED:gap3_section5_table -->",
                 content,
                 count=1,
             )

@@ -1,10 +1,10 @@
 {
   "metadata": {
     "description": "ChaosFlow Evaluation Single Source of Truth (Master Results)",
-    "generated_at": "2026-10-22T07:21:48.272703+00:00",
+    "generated_at": "2026-10-23T13:56:09.671214+00:00",
     "statistical_convention": {
       "standard_deviation": "sample standard deviation (ddof=1, N-1 denominator)",
-      "control_during_fault_reference_rec_per_sec": 1498.0,
+      "control_during_fault_reference_rec_per_sec": 1498.1,
       "timezone": "UTC (ISO 8601 timestamps throughout)"
     },
     "source_dataset": {
@@ -46,6 +46,8 @@
         "max": 1647.66,
         "ddof": 1
       },
+      "degradation_ratio_of_means_vs_post_warmup": 16.1,
+      "degradation_ratio_of_means_vs_control": 0.0,
       "degradation_pct_vs_post_warmup": {
         "n": 5,
         "mean": 15.0555,
@@ -56,10 +58,10 @@
       },
       "degradation_pct_vs_control": {
         "n": 5,
-        "mean": -0.0035,
-        "std": 7.0598,
-        "min": -9.9907,
-        "max": 9.9773,
+        "mean": 0.0032,
+        "std": 7.0593,
+        "min": -9.9833,
+        "max": 9.9833,
         "ddof": 1
       },
       "container_recovery_seconds": {
@@ -141,6 +143,8 @@
         "max": 139.17,
         "ddof": 1
       },
+      "degradation_ratio_of_means_vs_post_warmup": 92.8,
+      "degradation_ratio_of_means_vs_control": 92.8,
       "degradation_pct_vs_post_warmup": {
         "n": 5,
         "mean": 92.5729,
@@ -151,9 +155,9 @@
       },
       "degradation_pct_vs_control": {
         "n": 5,
-        "mean": 92.8441,
-        "std": 4.0108,
-        "min": 90.7096,
+        "mean": 92.8445,
+        "std": 4.0105,
+        "min": 90.7102,
         "max": 100.0,
         "ddof": 1
       },
@@ -209,6 +213,22 @@
       "host_min_ram_mb": 1739.390625,
       "campaign_only_r3_r5": {
         "n_runs": 3,
+        "post_warmup_baseline": {
+          "n": 3,
+          "mean": 1446.04,
+          "std": 167.2575,
+          "min": 1270.04,
+          "max": 1602.91,
+          "ddof": 1
+        },
+        "baseline_10s_window": {
+          "n": 3,
+          "mean": 1597.3033,
+          "std": 169.5735,
+          "min": 1499.4,
+          "max": 1793.11,
+          "ddof": 1
+        },
         "throughput_during_fault_window": {
           "n": 3,
           "mean": 132.27,
@@ -217,6 +237,8 @@
           "max": 135.35,
           "ddof": 1
         },
+        "degradation_ratio_of_means_vs_post_warmup": 90.9,
+        "degradation_ratio_of_means_vs_control": 91.2,
         "degradation_pct_vs_post_warmup": {
           "n": 3,
           "mean": 90.7479,
@@ -227,10 +249,10 @@
         },
         "degradation_pct_vs_control": {
           "n": 3,
-          "mean": 91.1702,
-          "std": 0.297,
-          "min": 90.9646,
-          "max": 91.5107,
+          "mean": 91.1708,
+          "std": 0.2969,
+          "min": 90.9652,
+          "max": 91.5112,
           "ddof": 1
         },
         "container_recovery_seconds": {
@@ -280,6 +302,8 @@
         "max": 838.66,
         "ddof": 1
       },
+      "degradation_ratio_of_means_vs_post_warmup": 67.0,
+      "degradation_ratio_of_means_vs_control": 65.0,
       "degradation_pct_vs_post_warmup": {
         "n": 5,
         "mean": 66.755,
@@ -290,9 +314,9 @@
       },
       "degradation_pct_vs_control": {
         "n": 5,
-        "mean": 64.9741,
-        "std": 21.1414,
-        "min": 44.0147,
+        "mean": 64.9764,
+        "std": 21.14,
+        "min": 44.0184,
         "max": 100.0,
         "ddof": 1
       },
@@ -375,6 +399,8 @@
         "max": 593.18,
         "ddof": 1
       },
+      "degradation_ratio_of_means_vs_post_warmup": 64.7,
+      "degradation_ratio_of_means_vs_control": 61.8,
       "degradation_pct_vs_post_warmup": {
         "n": 5,
         "mean": 64.6714,
@@ -385,10 +411,10 @@
       },
       "degradation_pct_vs_control": {
         "n": 5,
-        "mean": 61.8215,
-        "std": 2.904,
-        "min": 60.4019,
-        "max": 67.0107,
+        "mean": 61.824,
+        "std": 2.9038,
+        "min": 60.4045,
+        "max": 67.0129,
         "ddof": 1
       },
       "container_recovery_seconds": {
@@ -470,6 +496,8 @@
         "max": 1080.04,
         "ddof": 1
       },
+      "degradation_ratio_of_means_vs_post_warmup": 41.8,
+      "degradation_ratio_of_means_vs_control": 35.9,
       "degradation_pct_vs_post_warmup": {
         "n": 5,
         "mean": 41.6473,
@@ -480,10 +508,10 @@
       },
       "degradation_pct_vs_control": {
         "n": 5,
-        "mean": 35.8656,
-        "std": 14.3591,
-        "min": 27.9012,
-        "max": 61.0514,
+        "mean": 35.8698,
+        "std": 14.3581,
+        "min": 27.906,
+        "max": 61.054,
         "ddof": 1
       },
       "container_recovery_seconds": {
@@ -565,6 +593,8 @@
         "max": 492.56,
         "ddof": 1
       },
+      "degradation_ratio_of_means_vs_post_warmup": 68.1,
+      "degradation_ratio_of_means_vs_control": 67.1,
       "degradation_pct_vs_post_warmup": {
         "n": 3,
         "mean": 67.8698,
@@ -575,10 +605,10 @@
       },
       "degradation_pct_vs_control": {
         "n": 3,
-        "mean": 67.1406,
+        "mean": 67.1428,
         "std": 0.0205,
-        "min": 67.1188,
-        "max": 67.1595,
+        "min": 67.121,
+        "max": 67.1617,
         "ddof": 1
       },
       "container_recovery_seconds": {
@@ -633,6 +663,14 @@
       "host_min_ram_mb": 1565.4140625,
       "surviving_only": {
         "n_runs": 3,
+        "post_warmup_baseline": {
+          "n": 3,
+          "mean": 1534.42,
+          "std": 75.3805,
+          "min": 1490.4,
+          "max": 1621.46,
+          "ddof": 1
+        },
         "throughput_during_fault_window": {
           "n": 3,
           "mean": 492.2333,
@@ -641,6 +679,8 @@
           "max": 492.56,
           "ddof": 1
         },
+        "degradation_ratio_of_means_vs_post_warmup": 67.9,
+        "degradation_ratio_of_means_vs_control": 67.1,
         "degradation_pct_vs_post_warmup": {
           "n": 3,
           "mean": 67.8698,
@@ -651,10 +691,10 @@
         },
         "degradation_pct_vs_control": {
           "n": 3,
-          "mean": 67.1406,
+          "mean": 67.1428,
           "std": 0.0205,
-          "min": 67.1188,
-          "max": 67.1595,
+          "min": 67.121,
+          "max": 67.1617,
           "ddof": 1
         },
         "container_recovery_seconds": {

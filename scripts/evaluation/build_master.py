@@ -430,11 +430,11 @@ def build_master(base_path: Path) -> Dict[str, Any]:
         runs_master.append(run_record)
 
     # Compute experiment-level aggregates
-    # Control during-fault throughput reference = 1,498.0 rec/s (mean of 5 unperturbed control runs)
+    # Control during-fault throughput reference = 1,498.1 rec/s (mean of 5 unperturbed control runs: 1498.052 -> 1498.1)
     control_runs = [r for r in runs_master if r["experiment"] == "control"]
     ctrl_during_fault_vals = [r["during_fault"]["throughput_window_rec_per_sec"] for r in control_runs]
     ctrl_during_fault_stats = compute_sample_stats(ctrl_during_fault_vals, ddof=1)
-    control_reference_tp = 1498.00  # fixed uniform reference
+    control_reference_tp = round(ctrl_during_fault_stats["mean"], 1)  # 1498.1 empirical reference
 
     experiments_master = {}
     for exp_id in ["control", "kafka-stop", "kafka-restart", "spark-worker-stop", "spark-worker-restart", "datanode-stop"]:
@@ -450,7 +450,15 @@ def build_master(base_path: Path) -> Dict[str, Any]:
         excs_dups = [r["data_integrity"]["excess_duplicates"] for r in exp_runs]
         pv_losses = [r["validator"]["output_data_loss"] for r in exp_runs]
         
-        # Degradation vs Post-Warmup Baseline
+        # Mean of post-warmup baseline and during-fault throughput
+        mean_pw = compute_sample_stats(pw_tps, ddof=1)["mean"]
+        mean_tdf = compute_sample_stats(tdf_tps, ddof=1)["mean"]
+
+        # Ratio-of-means degradation: 1 - mean(during) / mean(baseline)
+        ratio_of_means_deg_pw = round((1.0 - mean_tdf / mean_pw) * 100.0, 1) if mean_pw else 0.0
+        ratio_of_means_deg_ctrl = round((1.0 - mean_tdf / control_reference_tp) * 100.0, 1)
+
+        # Per-run degradations (kept for secondary distribution reporting)
         deg_pw_vals = []
         for r in exp_runs:
             pw = r["baselines"]["post_warmup_baseline_rec_per_sec"]
@@ -458,7 +466,7 @@ def build_master(base_path: Path) -> Dict[str, Any]:
             if pw and tdf is not None:
                 deg_pw_vals.append(((pw - tdf) / pw) * 100.0)
 
-        # Uniform degradation vs Control (reference = 1,498.0 rec/s)
+        # Uniform degradation vs Control (reference = 1,498.1 rec/s)
         deg_ctrl_vals = []
         for r in exp_runs:
             tdf = r["during_fault"]["throughput_window_rec_per_sec"]
@@ -477,6 +485,8 @@ def build_master(base_path: Path) -> Dict[str, Any]:
             "post_warmup_baseline": compute_sample_stats(pw_tps, ddof=1),
             "baseline_10s_window": compute_sample_stats(b10_tps, ddof=1),
             "throughput_during_fault_window": compute_sample_stats(tdf_tps, ddof=1),
+            "degradation_ratio_of_means_vs_post_warmup": ratio_of_means_deg_pw,
+            "degradation_ratio_of_means_vs_control": ratio_of_means_deg_ctrl,
             "degradation_pct_vs_post_warmup": compute_sample_stats(deg_pw_vals, ddof=1),
             "degradation_pct_vs_control": compute_sample_stats(deg_ctrl_vals, ddof=1),
             "container_recovery_seconds": compute_sample_stats(rec_cont, ddof=1),
@@ -495,9 +505,14 @@ def build_master(base_path: Path) -> Dict[str, Any]:
             surv_pw = [r["baselines"]["post_warmup_baseline_rec_per_sec"] for r in exp_runs if r["statuses"]["query_survived"]]
             surv_deg_pw = [((p - t) / p) * 100.0 for p, t in zip(surv_pw, surv_tdfs)]
             surv_deg_ctrl = [((control_reference_tp - t) / control_reference_tp) * 100.0 for t in surv_tdfs]
+            surv_m_tdf = compute_sample_stats(surv_tdfs, ddof=1)["mean"]
+            surv_m_pw = compute_sample_stats(surv_pw, ddof=1)["mean"]
             exp_stats["surviving_only"] = {
                 "n_runs": len(surv_tdfs),
+                "post_warmup_baseline": compute_sample_stats(surv_pw, ddof=1),
                 "throughput_during_fault_window": compute_sample_stats(surv_tdfs, ddof=1),
+                "degradation_ratio_of_means_vs_post_warmup": round((1.0 - surv_m_tdf / surv_m_pw) * 100.0, 1),
+                "degradation_ratio_of_means_vs_control": round((1.0 - surv_m_tdf / control_reference_tp) * 100.0, 1),
                 "degradation_pct_vs_post_warmup": compute_sample_stats(surv_deg_pw, ddof=1),
                 "degradation_pct_vs_control": compute_sample_stats(surv_deg_ctrl, ddof=1),
                 "container_recovery_seconds": compute_sample_stats(rec_cont, ddof=1),
@@ -511,11 +526,18 @@ def build_master(base_path: Path) -> Dict[str, Any]:
             c_rec_cont = [r["recovery"]["container_recovery_seconds"] for r in c_runs]
             c_rec_tp90 = [r["recovery"]["throughput_90pct_recovery_seconds"] for r in c_runs]
             c_pw = [r["baselines"]["post_warmup_baseline_rec_per_sec"] for r in c_runs]
+            c_b10 = [r["baselines"]["baseline_10s_window_rec_per_sec"] for r in c_runs]
             c_deg_pw = [((p - t) / p) * 100.0 for p, t in zip(c_pw, c_tdfs)]
             c_deg_ctrl = [((control_reference_tp - t) / control_reference_tp) * 100.0 for t in c_tdfs]
+            c_m_tdf = compute_sample_stats(c_tdfs, ddof=1)["mean"]
+            c_m_pw = compute_sample_stats(c_pw, ddof=1)["mean"]
             exp_stats["campaign_only_r3_r5"] = {
                 "n_runs": len(c_runs),
+                "post_warmup_baseline": compute_sample_stats(c_pw, ddof=1),
+                "baseline_10s_window": compute_sample_stats(c_b10, ddof=1),
                 "throughput_during_fault_window": compute_sample_stats(c_tdfs, ddof=1),
+                "degradation_ratio_of_means_vs_post_warmup": round((1.0 - c_m_tdf / c_m_pw) * 100.0, 1),
+                "degradation_ratio_of_means_vs_control": round((1.0 - c_m_tdf / control_reference_tp) * 100.0, 1),
                 "degradation_pct_vs_post_warmup": compute_sample_stats(c_deg_pw, ddof=1),
                 "degradation_pct_vs_control": compute_sample_stats(c_deg_ctrl, ddof=1),
                 "container_recovery_seconds": compute_sample_stats(c_rec_cont, ddof=1),
@@ -528,7 +550,7 @@ def build_master(base_path: Path) -> Dict[str, Any]:
     master = {
         "metadata": {
             "description": "ChaosFlow Evaluation Single Source of Truth (Master Results)",
-            "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+            "generated_at": "2026-10-23T13:56:09.671214+00:00",
             "statistical_convention": {
                 "standard_deviation": "sample standard deviation (ddof=1, N-1 denominator)",
                 "control_during_fault_reference_rec_per_sec": control_reference_tp,
