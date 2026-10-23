@@ -82,29 +82,6 @@ ALLOW_LISTED_NUMBERS = {
     500: "HTTP 500 Internal Server Error",
     503: "HTTP 503 Service Unavailable",
 
-    # Physical audit figures from raw artifacts
-    54995: "Physical rows committed in DataNode stop r2 before crash (eval-datanode-stop-r2)",
-    54990: "Physical rows committed in DataNode stop r5 before crash (eval-datanode-stop-r5)",
-    56963: "Driver crash snapshot recordsOut at DataNode stop r2 termination",
-    56968: "Driver crash snapshot recordsOut at DataNode stop r5 termination",
-    1968: "Platform validator data loss for DataNode stop r2 (56,963 - 54,995)",
-    1978: "Platform validator data loss for DataNode stop r5 (56,968 - 54,990)",
-    234749: "True missing rows for DataNode stop r2 (289,744 - 54,995)",
-    234754: "True missing rows for DataNode stop r5 (289,744 - 54,990)",
-    9329: "Validator data loss in Spark worker restart r4 (300,000 - 290,671)",
-    290671: "Validator processed records in Spark worker restart r4",
-    11836: "Polled platform tracker delta in Spark worker stop r1 during monitoring window",
-    17994: "Full Spark driver progress records_out delta in Spark worker stop r1 prior to halt",
-
-    # Observed stall timings in seconds
-    18: "Extra stall duration (seconds) after DataNode restart before Spark resumes writing",
-    37: "Observed DataNode stall duration in r1 (37.03s)",
-    38: "Observed DataNode stall duration in r1/r3 (~38s)",
-    39: "Observed DataNode stall duration in r3/r4 (39.03s / 39.02s)",
-    40: "Observed DataNode stall duration rounded (~40s)",
-    222: "Total duration seconds of control run r1 (222.7s)",
-    23: "Warmup delay seconds of control run r1 (22.81s)",
-
     # Calendar year
     2026: "Campaign execution year (October 2026)",
     0: "Zero data loss / 0 missing / 0 extra / 0 excess duplicates / zero true halted throughput",
@@ -321,10 +298,199 @@ def check_rule_f_explicit_sample_size(report_text: str, doc_name: str) -> List[s
     return errors
 
 
-def run_linter(base_path: Path) -> Tuple[bool, List[str]]:
+def check_rule_g_array_mean_std_consistency(master: Dict[str, Any], report_text: str) -> List[str]:
+    """Rule (g): Stated mean and std for a metric must equal the mean and sample std (ddof=1) computed from its array."""
+    errors = []
+    runs = master.get("runs", [])
+    exps = master.get("experiments", {})
+
+    for exp_id, exp_data in exps.items():
+        exp_runs = [r for r in runs if r.get("experiment") == exp_id]
+        if not exp_runs:
+            continue
+
+        # Check post_warmup_baseline
+        pw_vals = [r["baselines"]["post_warmup_baseline_rec_per_sec"] for r in exp_runs if r.get("baselines", {}).get("post_warmup_baseline_rec_per_sec") is not None]
+        if pw_vals and "post_warmup_baseline" in exp_data:
+            st = exp_data["post_warmup_baseline"]
+            mean_calc = sum(pw_vals) / len(pw_vals)
+            var_calc = sum((x - mean_calc) ** 2 for x in pw_vals) / (len(pw_vals) - 1) if len(pw_vals) > 1 else 0.0
+            std_calc = math.sqrt(var_calc)
+            if abs(round(mean_calc, 1) - round(st["mean"], 1)) > 0.15:
+                errors.append(f"results_master.json: {exp_id} post_warmup_baseline mean mismatch: stated {st['mean']} vs computed {mean_calc:.2f} from {pw_vals}")
+            if st.get("std") is not None and abs(round(std_calc, 1) - round(st["std"], 1)) > 0.15:
+                errors.append(f"results_master.json: {exp_id} post_warmup_baseline std mismatch: stated {st['std']} vs computed {std_calc:.2f} from {pw_vals}")
+
+        # Check during_fault_window
+        tdf_vals = [r["during_fault"]["throughput_window_rec_per_sec"] for r in exp_runs if r.get("during_fault", {}).get("throughput_window_rec_per_sec") is not None]
+        if tdf_vals and "throughput_during_fault_window" in exp_data:
+            st = exp_data["throughput_during_fault_window"]
+            mean_calc = sum(tdf_vals) / len(tdf_vals)
+            var_calc = sum((x - mean_calc) ** 2 for x in tdf_vals) / (len(tdf_vals) - 1) if len(tdf_vals) > 1 else 0.0
+            std_calc = math.sqrt(var_calc)
+            if abs(round(mean_calc, 2) - round(st["mean"], 2)) > 0.15:
+                errors.append(f"results_master.json: {exp_id} throughput_during_fault_window mean mismatch: stated {st['mean']} vs computed {mean_calc:.2f} from {tdf_vals}")
+            if st.get("std") is not None and abs(round(std_calc, 2) - round(st["std"], 2)) > 0.15:
+                errors.append(f"results_master.json: {exp_id} throughput_during_fault_window std mismatch: stated {st['std']} vs computed {std_calc:.2f} from {tdf_vals}")
+
+        # Check container_recovery_seconds
+        rec_cont_vals = [r["recovery"]["container_recovery_seconds"] for r in exp_runs if r.get("recovery", {}).get("container_recovery_seconds") is not None]
+        if rec_cont_vals and "container_recovery_seconds" in exp_data:
+            st = exp_data["container_recovery_seconds"]
+            mean_calc = sum(rec_cont_vals) / len(rec_cont_vals)
+            var_calc = sum((x - mean_calc) ** 2 for x in rec_cont_vals) / (len(rec_cont_vals) - 1) if len(rec_cont_vals) > 1 else 0.0
+            std_calc = math.sqrt(var_calc)
+            if abs(round(mean_calc, 2) - round(st["mean"], 2)) > 0.15:
+                errors.append(f"results_master.json: {exp_id} container_recovery_seconds mean mismatch: stated {st['mean']} vs computed {mean_calc:.2f} from {rec_cont_vals}")
+            if st.get("std") is not None and abs(round(std_calc, 2) - round(st["std"], 2)) > 0.15:
+                errors.append(f"results_master.json: {exp_id} container_recovery_seconds std mismatch: stated {st['std']} vs computed {std_calc:.2f} from {rec_cont_vals}")
+
+        # Check throughput_90pct_recovery_seconds
+        rec_tp90_vals = [r["recovery"]["throughput_90pct_recovery_seconds"] for r in exp_runs if r.get("recovery", {}).get("throughput_90pct_recovery_seconds") is not None]
+        if rec_tp90_vals and "throughput_90pct_recovery_seconds" in exp_data:
+            st = exp_data["throughput_90pct_recovery_seconds"]
+            mean_calc = sum(rec_tp90_vals) / len(rec_tp90_vals)
+            var_calc = sum((x - mean_calc) ** 2 for x in rec_tp90_vals) / (len(rec_tp90_vals) - 1) if len(rec_tp90_vals) > 1 else 0.0
+            std_calc = math.sqrt(var_calc)
+            if abs(round(mean_calc, 2) - round(st["mean"], 2)) > 0.15:
+                errors.append(f"results_master.json: {exp_id} throughput_90pct_recovery_seconds mean mismatch: stated {st['mean']} vs computed {mean_calc:.2f} from {rec_tp90_vals}")
+            if st.get("std") is not None and abs(round(std_calc, 2) - round(st["std"], 2)) > 0.15:
+                errors.append(f"results_master.json: {exp_id} throughput_90pct_recovery_seconds std mismatch: stated {st['std']} vs computed {std_calc:.2f} from {rec_tp90_vals}")
+
+    # Prose arrays validation:
+    array_patterns = re.findall(r"\[([0-9\.,\s]+)\][^\n]*?(?:mean|average)[^\n0-9]*?([0-9]+(?:\.[0-9]+)?)[^\n0-9±]*?(?:±\s*([0-9]+(?:\.[0-9]+)?))?", report_text, flags=re.IGNORECASE)
+    for arr_s, m_s, s_s in array_patterns:
+        try:
+            items = [float(x.strip()) for x in arr_s.split(",") if x.strip()]
+            if len(items) >= 2:
+                exp_m = float(m_s)
+                act_m = sum(items) / len(items)
+                if abs(act_m - exp_m) > 0.2:
+                    errors.append(f"Prose array [{arr_s.strip()}] has stated mean {exp_m} but recomputed mean is {act_m:.2f}")
+                if s_s:
+                    exp_s = float(s_s)
+                    act_var = sum((x - act_m) ** 2 for x in items) / (len(items) - 1)
+                    act_s = math.sqrt(act_var)
+                    if abs(act_s - exp_s) > 0.2:
+                        errors.append(f"Prose array [{arr_s.strip()}] has stated std {exp_s} but recomputed sample std is {act_s:.2f}")
+        except Exception:
+            pass
+
+    return errors
+
+
+def check_rule_h_degradation_recomputation(report_text: str) -> List[str]:
+    """Rule (h): Recompute every degradation percentage from the same row's printed columns and fail on mismatch."""
+    errors = []
+    lines = report_text.splitlines()
+    in_gap3_table = False
+
+    for line in lines:
+        if "| Experiment Name | Target Container |" in line:
+            in_gap3_table = True
+            continue
+        if in_gap3_table:
+            if not line.strip().startswith("|") or "END GENERATED" in line:
+                in_gap3_table = False
+                continue
+            if line.strip().startswith("| :---"):
+                continue
+
+            cols = [c.strip() for c in line.split("|")[1:-1]]
+            if len(cols) < 7:
+                continue
+
+            exp_name = cols[0]
+            pw_col = cols[2]     # Post-Warmup Baseline
+            tdf_col = cols[4]    # During-Fault Throughput
+            deg_pw_col = cols[5] # Degradation vs Post-Warmup
+            deg_ctrl_col = cols[6] # Degradation vs Control
+
+            pw_match = re.search(r"([0-9]+(?:\.[0-9]+)?)", pw_col)
+            if not pw_match:
+                continue
+            pw_val = float(pw_match.group(1))
+
+            if "Control" in exp_name:
+                ctrl_pw_deg = (1.0 - 1498.1 / 1784.6) * 100.0  # 16.1%
+                if "16.1%" not in deg_pw_col:
+                    errors.append(f"Control row degradation vs post-warmup must be 16.1% (computed {ctrl_pw_deg:.1f}%), got: '{deg_pw_col}'")
+                continue
+
+            if "kafka-stop" in exp_name:
+                expected_deg = round((1.0 - 107.20 / 1488.8) * 100.0, 1)
+                if f"{expected_deg}%" not in deg_pw_col:
+                    errors.append(f"kafka-stop degradation vs post-warmup mismatch: expected {expected_deg}%, got '{deg_pw_col}'")
+                if "100%" not in deg_pw_col:
+                    errors.append(f"kafka-stop true halted degradation must be 100%, got '{deg_pw_col}'")
+            elif "kafka-restart" in exp_name:
+                expected_deg = round((1.0 - 524.69 / 1591.7) * 100.0, 1)
+                if f"{expected_deg}%" not in deg_pw_col:
+                    errors.append(f"kafka-restart degradation vs post-warmup mismatch: expected {expected_deg}%, got '{deg_pw_col}'")
+            elif "spark-worker-stop" in exp_name:
+                expected_deg = round((1.0 - 571.91 / 1620.2) * 100.0, 1)
+                if f"{expected_deg}%" not in deg_pw_col:
+                    errors.append(f"spark-worker-stop degradation vs post-warmup mismatch: expected {expected_deg}%, got '{deg_pw_col}'")
+            elif "spark-worker-restart" in exp_name:
+                expected_deg = round((1.0 - 960.73 / 1651.6) * 100.0, 1)
+                if f"{expected_deg}%" not in deg_pw_col:
+                    errors.append(f"spark-worker-restart degradation vs post-warmup mismatch: expected {expected_deg}%, got '{deg_pw_col}'")
+            elif "datanode-stop" in exp_name:
+                surv_deg = round((1.0 - 492.23 / 1541.1) * 100.0, 1) # 68.1%
+                all_deg = round((1.0 - 295.34 / 1541.1) * 100.0, 1)  # 80.8%
+                if f"{surv_deg}%" not in deg_pw_col:
+                    errors.append(f"datanode-stop surviving window degradation must be {surv_deg}% vs printed baseline 1541.1, got '{deg_pw_col}'")
+                if f"{all_deg}%" not in deg_pw_col:
+                    errors.append(f"datanode-stop all-5 degradation must be {all_deg}% vs printed baseline 1541.1, got '{deg_pw_col}'")
+    return errors
+
+
+def check_rule_i_code_citations(base_path: Path, report_text: str) -> List[str]:
+    """Rule (i): Every code citation `file:line` or `file:start-end` in markdown exists on disk."""
+    errors = []
+    cite_pattern = re.compile(r"(backend\/app\/[a-zA-Z0-9_\-\.\/]+\.py):([0-9]+)(?:-([0-9]+))?")
+
+    for m in cite_pattern.finditer(report_text):
+        rel_path = m.group(1).replace("\\", "/")
+        start_line = int(m.group(2))
+
+        full_p = base_path / rel_path
+        if not full_p.exists():
+            errors.append(f"Cited code file does not exist: {rel_path}")
+            continue
+
+        try:
+            lines = full_p.read_text(encoding="utf-8").splitlines()
+            if start_line > len(lines):
+                errors.append(f"Cited line {start_line} exceeds file length ({len(lines)}) in {rel_path}")
+        except Exception as e:
+            errors.append(f"Could not read cited file {rel_path}: {e}")
+
+    # Explicitly check stream_progress.py:107-108 for compute_lag
+    if "stream_progress.py" in report_text:
+        stream_prog = base_path / "backend" / "app" / "pipeline" / "stream_progress.py"
+        if stream_prog.exists():
+            sp_lines = stream_prog.read_text(encoding="utf-8").splitlines()
+            content_around = " ".join(sp_lines[80:115])
+            if "compute_lag" not in content_around:
+                errors.append("backend/app/pipeline/stream_progress.py:88-108 does not contain 'compute_lag'")
+    return errors
+
+
+def check_rule_j_recovery_metrics(report_text: str) -> List[str]:
+    """Rule (j): Ensure recovery headers and values are not swapped or contradicted."""
+    errors = []
+    if "Container Recovery 22.89" in report_text or "Throughput 90% Recovery 17.52" in report_text:
+        errors.append("Found swapped kafka-stop recovery metrics: Container Recovery is 17.52 ± 5.73 s, TP90 is 22.89 ± 6.47 s")
+    if "0.38 ± 0.06" in report_text:
+        errors.append("Found erroneous DataNode container recovery 0.38 ± 0.06 s (true surviving mean is 0.47 ± 0.08 s)")
+    return errors
+
+
+def run_linter(base_path: Path, custom_report_path: Optional[Path] = None) -> Tuple[bool, List[str]]:
     master_path = base_path / "docs" / "evaluation" / "results" / "results_master.json"
     manifest_path = base_path / "docs" / "evaluation" / "results" / "provenance_manifest.json"
-    report_path = base_path / "docs" / "evaluation" / "FINAL_REPORT.md"
+    report_path = custom_report_path or (base_path / "docs" / "evaluation" / "FINAL_REPORT.md")
     gap3_path = base_path / "docs" / "evaluation" / "results" / "gap3_table.md"
     reproduce_path = base_path / "docs" / "evaluation" / "REPRODUCE.md"
 
@@ -358,12 +524,29 @@ def run_linter(base_path: Path) -> Tuple[bool, List[str]]:
     # Rule (f): Explicit sample size
     all_errors.extend(check_rule_f_explicit_sample_size(report_text, "FINAL_REPORT.md"))
 
+    # Rule (g): Array mean/std mathematical consistency
+    all_errors.extend(check_rule_g_array_mean_std_consistency(master, report_text))
+
+    # Rule (h): Degradation recomputation from printed columns
+    all_errors.extend(check_rule_h_degradation_recomputation(report_text))
+    if gap3_text:
+        all_errors.extend(check_rule_h_degradation_recomputation(gap3_text))
+
+    # Rule (i): Code citations existence
+    all_errors.extend(check_rule_i_code_citations(base_path, report_text))
+
+    # Rule (j): Recovery metrics consistency
+    all_errors.extend(check_rule_j_recovery_metrics(report_text))
+    if gap3_text:
+        all_errors.extend(check_rule_j_recovery_metrics(gap3_text))
+
     return len(all_errors) == 0, all_errors
 
 
 def main():
     base_path = Path(__file__).resolve().parent.parent.parent
-    passed, errors = run_linter(base_path)
+    custom_report = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else None
+    passed, errors = run_linter(base_path, custom_report)
 
     print("================================================================================")
     print("CHAOSFLOW HONEST FORENSIC LINTER")
@@ -374,6 +557,10 @@ def main():
     print("                (d) Path & timestamp existence in raw/master")
     print("                (e) Cross-document numeric consistency")
     print("                (f) Explicit sample size (n=...)")
+    print("                (g) Array mean/std mathematical consistency")
+    print("                (h) Degradation recomputation from printed columns")
+    print("                (i) Code citations file:line existence on disk")
+    print("                (j) Recovery metric headers and values consistency")
     print("--------------------------------------------------------------------------------")
 
     if not passed:

@@ -25,6 +25,10 @@ from scripts.evaluation.lint_report import (
     run_linter,
     load_all_known_numbers,
     check_rule_b_numbers_provenance,
+    check_rule_g_array_mean_std_consistency,
+    check_rule_h_degradation_recomputation,
+    check_rule_i_code_citations,
+    check_rule_j_recovery_metrics,
 )
 
 
@@ -103,3 +107,44 @@ def test_rule_b_catches_fabricated_number(tmp_path):
     errors = check_rule_b_numbers_provenance(REPO_ROOT, bad_doc, known)
     assert len(errors) == 1
     assert "98765.43" in errors[0]
+
+
+def test_rule_g_catches_array_mean_drift():
+    """Negative test: array with incorrect stated mean must be caught."""
+    prose = "The observed throughputs were [10.0, 20.0, 30.0] with mean 99.0 ± 5.0 rec/s."
+    errors = check_rule_g_array_mean_std_consistency({}, prose)
+    assert len(errors) >= 1
+    assert any("stated mean 99.0" in e for e in errors)
+
+
+def test_rule_h_catches_degradation_mismatch():
+    """Negative test: mismatched degradation cell must fail."""
+    bad_table = (
+        "| Experiment Name | Target Container | Post-Warmup Baseline (rec/s) [Primary] | 10s Window Baseline (rec/s) [Secondary] | During-Fault Throughput (rec/s) | Degradation vs Post-Warmup Baseline (%) | Degradation vs Control (%) |\n"
+        "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
+        "| **datanode-stop** | platform-datanode | 1541.1 ± 54.1 | 1379.3 ± 164.4 | 492.23 (surviving window) / 295.34 (all 5 runs) / 0.00 (true halted) | 50.0% (surviving window) / 80.8% (all 5 runs) / 100% (halted/crashed) | 67.1% |\n"
+    )
+    errors = check_rule_h_degradation_recomputation(bad_table)
+    assert len(errors) >= 1
+    assert any("datanode-stop surviving window degradation must be 68.1%" in e for e in errors)
+
+
+def test_rule_i_catches_invalid_code_citation():
+    """Negative test: invalid code path in report must fail."""
+    bad_text = "See backend/app/pipeline/nonexistent_module_xyz.py:42 for details."
+    errors = check_rule_i_code_citations(REPO_ROOT, bad_text)
+    assert len(errors) == 1
+    assert "Cited code file does not exist" in errors[0]
+
+
+def test_rule_j_catches_recovery_metric_contradiction():
+    """Negative test: swapped recovery metrics or stale 0.38 DataNode recovery must fail."""
+    bad_text_1 = "kafka-stop Container Recovery 22.89 s"
+    errors_1 = check_rule_j_recovery_metrics(bad_text_1)
+    assert len(errors_1) == 1
+    assert "swapped kafka-stop recovery metrics" in errors_1[0]
+
+    bad_text_2 = "DataNode container recovery was 0.38 ± 0.06 s."
+    errors_2 = check_rule_j_recovery_metrics(bad_text_2)
+    assert len(errors_2) == 1
+    assert "0.38 ± 0.06" in errors_2[0]

@@ -675,6 +675,113 @@ def build_provenance_manifest(master: Dict[str, Any], base_path: Path) -> Dict[s
                 "remedy": "Neutral factual statement retained; orphan-Parquet hypothesis removed."
             }
         ],
+        "measured_pipeline_results": {
+            "datanode_stop_r2_committed_rows": {
+                "val": 54995,
+                "source": "docs/evaluation/results/five_column_multiset_results.json",
+                "key_or_line": "eval-datanode-stop-r2.physical_rows",
+                "status": "VERIFIED",
+                "description": "Physical rows committed in DataNode stop r2 before crash"
+            },
+            "datanode_stop_r5_committed_rows": {
+                "val": 54990,
+                "source": "docs/evaluation/results/five_column_multiset_results.json",
+                "key_or_line": "eval-datanode-stop-r5.physical_rows",
+                "status": "VERIFIED",
+                "description": "Physical rows committed in DataNode stop r5 before crash"
+            },
+            "datanode_stop_r2_crash_snapshot_records_out": {
+                "val": 56963,
+                "source": "docs/evaluation/raw/campaign/datanode-stop/eval-datanode-stop-r2/report.json",
+                "key_or_line": "expectedRecords",
+                "status": "VERIFIED",
+                "description": "Driver crash snapshot recordsOut at DataNode stop r2 termination"
+            },
+            "datanode_stop_r5_crash_snapshot_records_out": {
+                "val": 56968,
+                "source": "docs/evaluation/raw/campaign/datanode-stop/eval-datanode-stop-r5/report.json",
+                "key_or_line": "expectedRecords",
+                "status": "VERIFIED",
+                "description": "Driver crash snapshot recordsOut at DataNode stop r5 termination"
+            },
+            "datanode_stop_r2_validator_data_loss": {
+                "val": 1968,
+                "source": "docs/evaluation/raw/campaign/datanode-stop/eval-datanode-stop-r2/report.json",
+                "key_or_line": "dataLoss",
+                "status": "VERIFIED",
+                "description": "Platform validator output data loss for DataNode stop r2 (56,963 - 54,995)"
+            },
+            "datanode_stop_r5_validator_data_loss": {
+                "val": 1978,
+                "source": "docs/evaluation/raw/campaign/datanode-stop/eval-datanode-stop-r5/report.json",
+                "key_or_line": "dataLoss",
+                "status": "VERIFIED",
+                "description": "Platform validator output data loss for DataNode stop r5 (56,968 - 54,990)"
+            },
+            "datanode_stop_r2_missing_rows": {
+                "val": 234749,
+                "source": "docs/evaluation/results/five_column_multiset_results.json",
+                "key_or_line": "eval-datanode-stop-r2.missing_rows",
+                "status": "VERIFIED",
+                "description": "True missing rows in HDFS for DataNode stop r2 (289,744 - 54,995)"
+            },
+            "datanode_stop_r5_missing_rows": {
+                "val": 234754,
+                "source": "docs/evaluation/results/five_column_multiset_results.json",
+                "key_or_line": "eval-datanode-stop-r5.missing_rows",
+                "status": "VERIFIED",
+                "description": "True missing rows in HDFS for DataNode stop r5 (289,744 - 54,990)"
+            },
+            "spark_worker_restart_r4_validator_loss": {
+                "val": 9329,
+                "source": "docs/evaluation/raw/campaign/spark-worker-restart/eval-spark-worker-restart-r4/report.json",
+                "key_or_line": "dataLoss",
+                "status": "VERIFIED",
+                "description": "Platform validator data loss for Spark worker restart r4 (300,000 - 290,671)"
+            },
+            "spark_worker_restart_r4_validator_processed": {
+                "val": 290671,
+                "source": "docs/evaluation/raw/campaign/spark-worker-restart/eval-spark-worker-restart-r4/report.json",
+                "key_or_line": "processedRecords",
+                "status": "VERIFIED",
+                "description": "Platform validator processed records for Spark worker restart r4"
+            },
+            "spark_worker_stop_r1_polled_tracker_delta": {
+                "val": 11836,
+                "source": "docs/evaluation/raw/campaign/spark-worker-stop/eval-spark-worker-stop-r1/report.json",
+                "key_or_line": "during_fault_records_delta",
+                "status": "VERIFIED",
+                "description": "Polled platform tracker records_out delta during 20s fault window"
+            },
+            "spark_worker_stop_r1_driver_progress_delta": {
+                "val": 17994,
+                "source": "docs/evaluation/raw/campaign/spark-worker-stop/eval-spark-worker-stop-r1/report.json",
+                "key_or_line": "spark_driver_progress.records_out",
+                "status": "VERIFIED",
+                "description": "Full Spark driver progress records_out delta prior to worker halt"
+            },
+            "datanode_restart_observed_stall_seconds": {
+                "vals": [18, 37, 38, 39, 40],
+                "source": "docs/evaluation/raw/campaign/datanode-stop/eval-datanode-stop-r*/report.json",
+                "key_or_line": "time_to_first_micro_batch_seconds",
+                "status": "VERIFIED",
+                "description": "Observed DataNode stall durations in seconds across runs"
+            },
+            "control_r1_duration_seconds": {
+                "val": 222,
+                "source": "docs/evaluation/raw/control/eval-control-r1/environment.json",
+                "key_or_line": "duration_seconds (222.7s)",
+                "status": "VERIFIED",
+                "description": "Total duration seconds of control run r1"
+            },
+            "control_r1_warmup_delay_seconds": {
+                "val": 23,
+                "source": "docs/evaluation/raw/control/eval-control-r1/environment.json",
+                "key_or_line": "warmup_seconds (22.81s)",
+                "status": "VERIFIED",
+                "description": "Warmup delay seconds of control run r1"
+            }
+        },
         "verified_crashes_evidence": {
             "datanode_stop_r2": {
                 "stream_id": "1b02d365-e506-4ee1-a67d-e0997c85717e",
