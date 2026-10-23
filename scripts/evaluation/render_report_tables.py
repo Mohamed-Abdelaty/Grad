@@ -3,7 +3,7 @@ render_report_tables.py
 -----------------------
 Generates all markdown tables in docs/evaluation/FINAL_REPORT.md and
 docs/evaluation/results/gap3_table.md from docs/evaluation/results/results_master.json.
-Guarantees 100% mathematical consistency and traceability across documentation.
+Guarantees mathematical consistency and traceability across documentation.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ def generate_gap3_primary_table(master: Dict[str, Any]) -> str:
     lines = [
         "| Experiment Name | Target Container | Post-Warmup Baseline (rec/s) [Primary] | 10s Window Baseline (rec/s) [Secondary] | During-Fault Throughput (rec/s) | Degradation vs Post-Warmup Baseline (%) | Degradation vs Control (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing/Extra/Excess) | Platform Validator Output | Executed (n/N) | Query Survived (n/N) | Data-Complete (n/N) |",
         "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
-        f"| **Control** (5-repetition empirical baseline, unperturbed) | None | {fmt_stat(c['post_warmup_baseline'], 1)} | {fmt_stat(c['baseline_10s_window'], 1)} | {fmt_stat(c['throughput_during_fault_window'], 1)} (unperturbed) | 16.1% drop to simulated window (-10.8% vs 10s baseline) | Baseline reference (0%) | {fmt_stat(c['container_recovery_seconds'], 2)} s | {fmt_stat(c['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(c['platform_validator_data_loss'], 1)} (filter-unaware comparison, 0 physical loss) | 5 / 5 | 5 / 5 | 5 / 5 |",
+        f"| **Control** (5-repetition empirical baseline, unperturbed) | None | {fmt_stat(c['post_warmup_baseline'], 1)} | {fmt_stat(c['baseline_10s_window'], 1)} | {fmt_stat(c['throughput_during_fault_window'], 1)} (unperturbed) | 16.1% drop to simulated window (-10.8% vs 10s baseline) | Baseline reference (0%) | {fmt_stat(c['container_recovery_seconds'], 2)} s | {fmt_stat(c['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | not run (validator is fault-run only) | 5 / 5 | 5 / 5 | 5 / 5 |",
         f"| **kafka-stop** | platform-kafka | {fmt_stat(ks['post_warmup_baseline'], 1)} | {fmt_stat(ks['baseline_10s_window'], 1)} | {fmt_float(ks['throughput_during_fault_window']['mean'])} (window incl. in-flight batch) / 0.00 (true halted) | 92.8% (window) / 100% (halted) | 92.8% (window) / 100% (halted) | {fmt_stat(ks['container_recovery_seconds'], 2)} s | {fmt_stat(ks['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(ks['platform_validator_data_loss'], 1)} (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |",
         f"| **kafka-restart** | platform-kafka | {fmt_stat(kr['post_warmup_baseline'], 1)} | {fmt_stat(kr['baseline_10s_window'], 1)} | {fmt_float(kr['throughput_during_fault_window']['mean'])} (transient ~3s restart) | {fmt_float(kr['degradation_ratio_of_means_vs_post_warmup'], 1)}% | {fmt_float(kr['degradation_ratio_of_means_vs_control'], 1)}% | {fmt_stat(kr['container_recovery_seconds'], 2)} s | {fmt_stat(kr['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(kr['platform_validator_data_loss'], 1)} (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |",
         f"| **spark-worker-stop** | platform-spark-worker | {fmt_stat(ws['post_warmup_baseline'], 1)} | {fmt_stat(ws['baseline_10s_window'], 1)} | {fmt_float(ws['throughput_during_fault_window']['mean'])} (window incl. pre-halt drain) / 0.00 (true halted) | 64.7% (window) / 100% (halted) | 61.8% (window) / 100% (halted) | {fmt_stat(ws['container_recovery_seconds'], 2)} s | {fmt_stat(ws['throughput_90pct_recovery_seconds'], 2)} s | 0.0 / 0.0 / 0.0 | {fmt_stat(ws['platform_validator_data_loss'], 1)} (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |",
@@ -67,13 +67,17 @@ def generate_30_run_audit_table(master: Dict[str, Any]) -> str:
         name = r["run_name"]
         pid = (r["pipeline_run_id"] or "—")[:8]
         hdfs_rows = f"{r['data_integrity']['physical_committed_rows']:,}"
-        pv_loss = f"{r['validator']['output_data_loss']:,}" if r['validator']['output_data_loss'] is not None else "—"
+        pv_val = r['validator']['output_data_loss']
         if exp == "control":
-            pv_str = f"{pv_loss} (filter-unaware)"
+            pv_str = "not run"
+        elif pv_val is None:
+            pv_str = "—"
         elif exp == "datanode-stop" and r["repetition"] in ("r2", "r5"):
-            pv_str = f"{pv_loss}* (not interpretable)"
+            pv_str = f"{pv_val:,}* (not interpretable)"
+        elif exp == "spark-worker-restart" and r["repetition"] == "r4":
+            pv_str = f"{pv_val:,} (UNRESOLVED counter)"
         else:
-            pv_str = f"{pv_loss} (unreliable)"
+            pv_str = f"{pv_val:,} (unreliable)"
 
         miss = f"{r['data_integrity']['missing_rows']:,}"
         extra = f"{r['data_integrity']['extra_rows']:,}"
@@ -168,6 +172,10 @@ def generate_experiment_detail_table(master: Dict[str, Any], exp_name: str) -> s
             rec_c = "N/A (crashed)"
             rec_tp = "N/A (crashed)"
             pv = f"{pv} (not interpretable)"
+        elif exp_name == "spark-worker-restart" and rep == "r4":
+            pv = f"{pv} (UNRESOLVED)"
+        elif exp_name == "control":
+            pv = "not run"
 
         lines.append(f"| {rep} | {topic} | {phys} | {miss} | {extra} | {excess} | {pw} | {tdf} | {rec_c} | {rec_tp} | {pv} |")
     return "\n".join(lines)
@@ -247,7 +255,7 @@ Evaluates system degradation, physical data integrity (5-column multiset equalit
    - *Container Recovery*: Elapsed time from fault revert command until container health check passes.
    - *Throughput 90% Recovery*: Time required for pipeline streaming throughput to return to >= 90% of pre-fault baseline.
 6. **Physical Data Loss**: Full-row 5-column multiset equality `(transaction_id, customer_id, product_id, amount, timestamp)` against the expected 289,744 post-filter records. Reported as `Missing / Extra / Excess Duplicates`.
-7. **Platform Validator Output**: Platform UI validator output. Unreliable due to filter-unaware comparison (300,000 raw input vs 289,744 post-filter output = 10,256 constant delta).
+7. **Platform Validator Output**: Platform UI validator output. Unreliable due to filter-unaware comparison (300,000 raw input vs 289,744 post-filter output = 10,256 constant delta). Control runs did not run the validator (not run).
 8. **Survival & Completeness**:
    - *Executed (n/N)*: Runs completed through test harness (5/5 for all).
    - *Query Survived (n/N)*: Structured Streaming query remained active without terminal exception (5/5 for Kafka and Spark Worker; 3/5 for DataNode under `dfs.replication=1`).
@@ -261,57 +269,7 @@ Evaluates system degradation, physical data integrity (5-column multiset equalit
     if report_path.exists():
         content = report_path.read_text(encoding="utf-8")
 
-        # Insert markers if missing
-        if "<!-- BEGIN GENERATED:gap3_primary_table -->" not in content:
-            # Wrap the table in Section 1 / Executive Summary
-            content = re.sub(
-                r"(\|[^\r\n]+Post-Warmup Baseline[^\r\n]+\|\r?\n\|(?:[:\s\-]+\|)+\r?\n(?:\|[^\r\n]+\|\r?\n)+)(?=\r?\n\s*\*\\?\*Note on During-Fault Throughput|\r?\n\s*### Core Takeaways)",
-                r"<!-- BEGIN GENERATED:gap3_primary_table -->\n\1<!-- END GENERATED:gap3_primary_table -->",
-                content,
-                count=1,
-            )
-
-        if "<!-- BEGIN GENERATED:audit_30_runs_table -->" not in content:
-            content = re.sub(
-                r"(\|[^\r\n]+Committed Rows[^\r\n]+\|\r?\n\|(?:[:\s\-]+\|)+\r?\n(?:\|[^\r\n]+\|\r?\n)+)(?=\r?\n\s*\*\*Explanation of Platform Validator Column Aggregates|\r?\n\s*### Audit Findings)",
-                r"<!-- BEGIN GENERATED:audit_30_runs_table -->\n\1<!-- END GENERATED:audit_30_runs_table -->",
-                content,
-                count=1,
-            )
-
-        if "<!-- BEGIN GENERATED:stop_faults_records_reconciliation_table -->" not in content:
-            content = re.sub(
-                r"(\|[^\r\n]+Pre-Fault Snapshot \(`records_out`\)[^\r\n]+\|\r?\n\|(?:[:\s\-]+\|)+\r?\n(?:\|[^\r\n]+\|\r?\n)+)(?=\r?\n\s*\*\\?\*Note on kafka-stop|\r?\n\s*### Root Cause Breakdown)",
-                r"<!-- BEGIN GENERATED:stop_faults_records_reconciliation_table -->\n\1<!-- END GENERATED:stop_faults_records_reconciliation_table -->",
-                content,
-                count=1,
-            )
-
-        if "<!-- BEGIN GENERATED:baseline_quantization_table -->" not in content:
-            content = re.sub(
-                r"(\|[^\r\n]+10-Second Window Baseline[^\r\n]+\|\r?\n\|(?:[:\s\-]+\|)+\r?\n(?:\|[^\r\n]+\|\r?\n)+)(?=\r?\n\s*\\?\*+Degradation percentages|\r?\n\s*### Analytical Implication)",
-                r"<!-- BEGIN GENERATED:baseline_quantization_table -->\n\1<!-- END GENERATED:baseline_quantization_table -->",
-                content,
-                count=1,
-            )
-
-        if "<!-- BEGIN GENERATED:datanode_timeline_table -->" not in content:
-            content = re.sub(
-                r"(\|[^\r\n]+Pre-Fault Snapshot TS[^\r\n]+\|\r?\n\|(?:[:\s\-]+\|)+\r?\n(?:\|[^\r\n]+\|\r?\n)+)(?=\r?\n\s*\*\\?\*Note on r5 revert counter|\r?\n\s*### Root Cause Analysis: Surviving)",
-                r"<!-- BEGIN GENERATED:datanode_timeline_table -->\n\1<!-- END GENERATED:datanode_timeline_table -->",
-                content,
-                count=1,
-            )
-
-        if "<!-- BEGIN GENERATED:gap3_section5_table -->" not in content:
-            content = re.sub(
-                r"(### Primary Gap 3 Comparison Table[\s\S]*?\r?\n\r?\n)(\|[^\r\n]+Post-Warmup Baseline[\s\S]*?\| 6942\.8 \(unreliable\) \| 5 / 5 \| 3 / 5 \|)(?=\r?\n\r?\n---\r?\n\r?\n### Superseded Baseline Table)",
-                r"\1<!-- BEGIN GENERATED:gap3_section5_table -->\n\2\n<!-- END GENERATED:gap3_section5_table -->",
-                content,
-                count=1,
-            )
-
-        # Now replace all generated blocks
+        # Replace all generated blocks
         content = replace_generated_block(content, "gap3_primary_table", generate_gap3_primary_table(master))
         content = replace_generated_block(content, "audit_30_runs_table", generate_30_run_audit_table(master))
         content = replace_generated_block(content, "stop_faults_records_reconciliation_table", generate_stop_faults_reconciliation_table(master))

@@ -1,0 +1,846 @@
+{
+  "metadata": {
+    "title": "ChaosFlow Evaluation Provenance Manifest",
+    "generated_at": "2026-10-23T18:45:17.551001+00:00",
+    "description": "Exhaustive provenance mapping for every numeric figure, table cell, and factual metric in evaluation artifacts.",
+    "conventions": {
+      "sample_std": "ddof=1 (N-1 denominator)",
+      "timestamps": "UTC ISO 8601",
+      "raw_directory": "docs/evaluation/raw (read-only committed evidence)"
+    }
+  },
+  "dataset_metrics": {
+    "raw_csv_rows": {
+      "val": 300000,
+      "source": "backend/sample-data/sales_300k.csv",
+      "key_or_line": "wc -l minus header",
+      "method": "line_count - 1",
+      "code": "scripts/evaluation/build_master.py:build_master",
+      "status": "VERIFIED",
+      "description": "Total source CSV records submitted to platform pipeline"
+    },
+    "expected_post_filter_rows": {
+      "val": 289744,
+      "source": "backend/sample-data/sales_300k.csv",
+      "key_or_line": "count(amount is not null and amount > 0)",
+      "method": "CSV row filter expression",
+      "code": "scripts/evaluation/build_master.py:build_master",
+      "status": "VERIFIED",
+      "description": "Expected post-filter row count in clean pipeline output"
+    },
+    "filter_removed_rows": {
+      "val": 10256,
+      "source": "backend/sample-data/sales_300k.csv",
+      "key_or_line": "300000 - 289744",
+      "method": "subtraction",
+      "code": "scripts/evaluation/build_master.py:build_master",
+      "status": "VERIFIED",
+      "description": "Total rows filtered out (5,124 null amount + 5,132 non-positive amount)"
+    },
+    "baseline_csv_duplicates": {
+      "val": 4730,
+      "source": "backend/sample-data/sales_300k.csv",
+      "key_or_line": "count(transaction_id duplicates)",
+      "method": "multiset duplicate count",
+      "code": "docs/evaluation/results/five_column_multiset_results.json",
+      "status": "VERIFIED",
+      "description": "Natural duplicate transaction IDs in baseline source CSV"
+    },
+    "unique_transaction_ids": {
+      "val": 285014,
+      "source": "backend/sample-data/sales_300k.csv",
+      "key_or_line": "289744 - 4730",
+      "method": "distinct transaction count",
+      "code": "docs/evaluation/results/five_column_multiset_results.json",
+      "status": "VERIFIED",
+      "description": "Unique transaction IDs in clean post-filter dataset"
+    }
+  },
+  "control_metrics": {
+    "post_warmup_baseline_rec_per_sec": {
+      "mean": 1784.6,
+      "std": 183.6,
+      "n": 5,
+      "per_run": [
+        1983.53,
+        1654.84,
+        1650.14,
+        1987.86,
+        1646.43
+      ],
+      "source": "PostgreSQL pipeline_run_events (spark_progress) / docs/evaluation/results/derived/pipeline_run_events_control.json",
+      "key_or_line": "spark_progress events: delta_records / delta_seconds (warmup_end to inj_start)",
+      "method": "microsecond telemetry rate calculation",
+      "code": "docs/evaluation/results/baseline_quantization_comparison.json",
+      "status": "VERIFIED"
+    },
+    "baseline_10s_window_rec_per_sec": {
+      "mean": 1678.5,
+      "std": 163.9,
+      "n": 5,
+      "per_run": [
+        1798.8,
+        1796.53,
+        1499.0,
+        1799.4,
+        1499.0
+      ],
+      "source": "docs/evaluation/raw/control/eval-control-r*/report.json",
+      "key_or_line": "baseline.throughput_records_per_sec",
+      "method": "mean(n=5, ddof=1)",
+      "code": "scripts/evaluation/build_master.py:build_master",
+      "status": "VERIFIED"
+    },
+    "during_fault_throughput_rec_per_sec": {
+      "mean": 1498.1,
+      "std": 1.8,
+      "n": 5,
+      "per_run": [
+        1499.0,
+        1498.46,
+        1494.8,
+        1499.0,
+        1499.0
+      ],
+      "source": "docs/evaluation/raw/control/eval-control-r*/report.json",
+      "key_or_line": "throughputDuringFault",
+      "method": "mean(n=5, ddof=1)",
+      "code": "scripts/evaluation/build_master.py:build_master",
+      "status": "VERIFIED"
+    },
+    "platform_validator_output": {
+      "val": null,
+      "status": "NOT RUN",
+      "source": "docs/evaluation/raw/control/eval-control-r*/report.json",
+      "key_or_line": "dataLoss",
+      "description": "DataConsistencyValidator only runs inside Chaos ExperimentRunner, not in run_control.py (report.json: dataLoss=null).",
+      "method": "omitted by design",
+      "code": "scripts/evaluation/run_control.py"
+    }
+  },
+  "fault_scenario_aggregates": {
+    "control": {
+      "n_runs": 5,
+      "survived_count": 5,
+      "data_complete_count": 5,
+      "post_warmup_baseline": {
+        "n": 5,
+        "mean": 1784.56,
+        "std": 183.6409,
+        "min": 1646.43,
+        "max": 1987.86,
+        "ddof": 1
+      },
+      "baseline_10s_window": {
+        "n": 5,
+        "mean": 1678.546,
+        "std": 163.9058,
+        "min": 1499.0,
+        "max": 1799.4,
+        "ddof": 1
+      },
+      "throughput_during_fault_window": {
+        "n": 5,
+        "mean": 1498.052,
+        "std": 105.7551,
+        "min": 1348.54,
+        "max": 1647.66,
+        "ddof": 1
+      },
+      "degradation_ratio_of_means_vs_post_warmup": 16.1,
+      "degradation_ratio_of_means_vs_control": 0.0,
+      "degradation_pct_vs_post_warmup": {
+        "n": 5,
+        "mean": 15.0555,
+        "std": 12.9555,
+        "min": 0.1503,
+        "max": 32.1612,
+        "ddof": 1
+      },
+      "degradation_pct_vs_control": {
+        "n": 5,
+        "mean": 0.0032,
+        "std": 7.0593,
+        "min": -9.9833,
+        "max": 9.9833,
+        "ddof": 1
+      },
+      "container_recovery_seconds": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ddof": 1
+      },
+      "throughput_90pct_recovery_seconds": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ddof": 1
+      },
+      "missing_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "extra_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "excess_duplicates": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "platform_validator_data_loss": {
+        "n": 5,
+        "mean": 10256.0,
+        "std": 0.0,
+        "min": 10256,
+        "max": 10256,
+        "ddof": 1
+      },
+      "host_memory_pressure_count": 0,
+      "host_min_ram_mb": 2243.34375
+    },
+    "kafka-stop": {
+      "n_runs": 5,
+      "survived_count": 5,
+      "data_complete_count": 5,
+      "post_warmup_baseline": {
+        "n": 5,
+        "mean": 1488.81,
+        "std": 140.7456,
+        "min": 1270.04,
+        "max": 1622.13,
+        "ddof": 1
+      },
+      "baseline_10s_window": {
+        "n": 5,
+        "mean": 1558.054,
+        "std": 131.4005,
+        "min": 1498.9,
+        "max": 1793.11,
+        "ddof": 1
+      },
+      "throughput_during_fault_window": {
+        "n": 5,
+        "mean": 107.196,
+        "std": 60.0812,
+        "min": 0.0,
+        "max": 139.17,
+        "ddof": 1
+      },
+      "degradation_ratio_of_means_vs_post_warmup": 92.8,
+      "degradation_ratio_of_means_vs_control": 92.8,
+      "degradation_pct_vs_post_warmup": {
+        "n": 5,
+        "mean": 92.5729,
+        "std": 4.2628,
+        "min": 89.3429,
+        "max": 100.0,
+        "ddof": 1
+      },
+      "degradation_pct_vs_control": {
+        "n": 5,
+        "mean": 92.8445,
+        "std": 4.0105,
+        "min": 90.7102,
+        "max": 100.0,
+        "ddof": 1
+      },
+      "container_recovery_seconds": {
+        "n": 5,
+        "mean": 17.52,
+        "std": 5.7313,
+        "min": 10.06,
+        "max": 23.0,
+        "ddof": 1
+      },
+      "throughput_90pct_recovery_seconds": {
+        "n": 5,
+        "mean": 22.89,
+        "std": 6.4715,
+        "min": 13.18,
+        "max": 27.68,
+        "ddof": 1
+      },
+      "missing_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "extra_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "excess_duplicates": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "platform_validator_data_loss": {
+        "n": 5,
+        "mean": 10256.0,
+        "std": 0.0,
+        "min": 10256,
+        "max": 10256,
+        "ddof": 1
+      },
+      "host_memory_pressure_count": 3,
+      "host_min_ram_mb": 1739.390625,
+      "campaign_only_r3_r5": {
+        "n_runs": 3,
+        "post_warmup_baseline": {
+          "n": 3,
+          "mean": 1446.04,
+          "std": 167.2575,
+          "min": 1270.04,
+          "max": 1602.91,
+          "ddof": 1
+        },
+        "baseline_10s_window": {
+          "n": 3,
+          "mean": 1597.3033,
+          "std": 169.5735,
+          "min": 1499.4,
+          "max": 1793.11,
+          "ddof": 1
+        },
+        "throughput_during_fault_window": {
+          "n": 3,
+          "mean": 132.27,
+          "std": 4.4484,
+          "min": 127.17,
+          "max": 135.35,
+          "ddof": 1
+        },
+        "degradation_ratio_of_means_vs_post_warmup": 90.9,
+        "degradation_ratio_of_means_vs_control": 91.2,
+        "degradation_pct_vs_post_warmup": {
+          "n": 3,
+          "mean": 90.7479,
+          "std": 1.3638,
+          "min": 89.3429,
+          "max": 92.0663,
+          "ddof": 1
+        },
+        "degradation_pct_vs_control": {
+          "n": 3,
+          "mean": 91.1708,
+          "std": 0.2969,
+          "min": 90.9652,
+          "max": 91.5112,
+          "ddof": 1
+        },
+        "container_recovery_seconds": {
+          "n": 3,
+          "mean": 21.6,
+          "std": 1.2145,
+          "min": 20.83,
+          "max": 23.0,
+          "ddof": 1
+        },
+        "throughput_90pct_recovery_seconds": {
+          "n": 3,
+          "mean": 27.3467,
+          "std": 0.357,
+          "min": 26.97,
+          "max": 27.68,
+          "ddof": 1
+        },
+        "host_memory_pressure_count": 1
+      }
+    },
+    "kafka-restart": {
+      "n_runs": 5,
+      "survived_count": 5,
+      "data_complete_count": 5,
+      "post_warmup_baseline": {
+        "n": 5,
+        "mean": 1591.706,
+        "std": 37.6868,
+        "min": 1544.28,
+        "max": 1620.45,
+        "ddof": 1
+      },
+      "baseline_10s_window": {
+        "n": 5,
+        "mean": 1439.198,
+        "std": 133.9564,
+        "min": 1199.57,
+        "max": 1499.47,
+        "ddof": 1
+      },
+      "throughput_during_fault_window": {
+        "n": 5,
+        "mean": 524.688,
+        "std": 316.6989,
+        "min": 0.0,
+        "max": 838.66,
+        "ddof": 1
+      },
+      "degradation_ratio_of_means_vs_post_warmup": 67.0,
+      "degradation_ratio_of_means_vs_control": 65.0,
+      "degradation_pct_vs_post_warmup": {
+        "n": 5,
+        "mean": 66.755,
+        "std": 20.4144,
+        "min": 45.6925,
+        "max": 100.0,
+        "ddof": 1
+      },
+      "degradation_pct_vs_control": {
+        "n": 5,
+        "mean": 64.9764,
+        "std": 21.14,
+        "min": 44.0184,
+        "max": 100.0,
+        "ddof": 1
+      },
+      "container_recovery_seconds": {
+        "n": 5,
+        "mean": 0.718,
+        "std": 1.3989,
+        "min": 0.07,
+        "max": 3.22,
+        "ddof": 1
+      },
+      "throughput_90pct_recovery_seconds": {
+        "n": 5,
+        "mean": 3.438,
+        "std": 2.5701,
+        "min": 1.38,
+        "max": 7.78,
+        "ddof": 1
+      },
+      "missing_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "extra_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "excess_duplicates": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "platform_validator_data_loss": {
+        "n": 5,
+        "mean": 10256.0,
+        "std": 0.0,
+        "min": 10256,
+        "max": 10256,
+        "ddof": 1
+      },
+      "host_memory_pressure_count": 0,
+      "host_min_ram_mb": 1676.328125
+    },
+    "spark-worker-stop": {
+      "n_runs": 5,
+      "survived_count": 5,
+      "data_complete_count": 5,
+      "post_warmup_baseline": {
+        "n": 5,
+        "mean": 1620.204,
+        "std": 50.2573,
+        "min": 1551.12,
+        "max": 1693.17,
+        "ddof": 1
+      },
+      "baseline_10s_window": {
+        "n": 5,
+        "mean": 1679.094,
+        "std": 164.2521,
+        "min": 1499.16,
+        "max": 1799.36,
+        "ddof": 1
+      },
+      "throughput_during_fault_window": {
+        "n": 5,
+        "mean": 571.914,
+        "std": 43.5015,
+        "min": 494.18,
+        "max": 593.18,
+        "ddof": 1
+      },
+      "degradation_ratio_of_means_vs_post_warmup": 64.7,
+      "degradation_ratio_of_means_vs_control": 61.8,
+      "degradation_pct_vs_post_warmup": {
+        "n": 5,
+        "mean": 64.6714,
+        "std": 2.9554,
+        "min": 61.7818,
+        "max": 69.4751,
+        "ddof": 1
+      },
+      "degradation_pct_vs_control": {
+        "n": 5,
+        "mean": 61.824,
+        "std": 2.9038,
+        "min": 60.4045,
+        "max": 67.0129,
+        "ddof": 1
+      },
+      "container_recovery_seconds": {
+        "n": 5,
+        "mean": 0.476,
+        "std": 0.1258,
+        "min": 0.32,
+        "max": 0.59,
+        "ddof": 1
+      },
+      "throughput_90pct_recovery_seconds": {
+        "n": 5,
+        "mean": 17.564,
+        "std": 5.4968,
+        "min": 11.92,
+        "max": 26.01,
+        "ddof": 1
+      },
+      "missing_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "extra_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "excess_duplicates": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "platform_validator_data_loss": {
+        "n": 5,
+        "mean": 10256.0,
+        "std": 0.0,
+        "min": 10256,
+        "max": 10256,
+        "ddof": 1
+      },
+      "host_memory_pressure_count": 1,
+      "host_min_ram_mb": 1691.39453125
+    },
+    "spark-worker-restart": {
+      "n_runs": 5,
+      "survived_count": 5,
+      "data_complete_count": 5,
+      "post_warmup_baseline": {
+        "n": 5,
+        "mean": 1651.56,
+        "std": 37.6644,
+        "min": 1623.04,
+        "max": 1700.48,
+        "ddof": 1
+      },
+      "baseline_10s_window": {
+        "n": 5,
+        "mean": 1439.218,
+        "std": 250.8242,
+        "min": 1199.17,
+        "max": 1798.93,
+        "ddof": 1
+      },
+      "throughput_during_fault_window": {
+        "n": 5,
+        "mean": 960.734,
+        "std": 215.0991,
+        "min": 583.45,
+        "max": 1080.04,
+        "ddof": 1
+      },
+      "degradation_ratio_of_means_vs_post_warmup": 41.8,
+      "degradation_ratio_of_means_vs_control": 35.9,
+      "degradation_pct_vs_post_warmup": {
+        "n": 5,
+        "mean": 41.6473,
+        "std": 13.671,
+        "min": 33.4557,
+        "max": 65.6891,
+        "ddof": 1
+      },
+      "degradation_pct_vs_control": {
+        "n": 5,
+        "mean": 35.8698,
+        "std": 14.3581,
+        "min": 27.906,
+        "max": 61.054,
+        "ddof": 1
+      },
+      "container_recovery_seconds": {
+        "n": 5,
+        "mean": 0.118,
+        "std": 0.0672,
+        "min": 0.07,
+        "max": 0.23,
+        "ddof": 1
+      },
+      "throughput_90pct_recovery_seconds": {
+        "n": 5,
+        "mean": 1.866,
+        "std": 1.2121,
+        "min": 0.74,
+        "max": 3.65,
+        "ddof": 1
+      },
+      "missing_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "extra_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "excess_duplicates": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "platform_validator_data_loss": {
+        "n": 5,
+        "mean": 10070.6,
+        "std": 414.567,
+        "min": 9329,
+        "max": 10256,
+        "ddof": 1
+      },
+      "host_memory_pressure_count": 2,
+      "host_min_ram_mb": 1455.78125
+    },
+    "datanode-stop": {
+      "n_runs": 5,
+      "survived_count": 3,
+      "data_complete_count": 3,
+      "post_warmup_baseline": {
+        "n": 5,
+        "mean": 1541.148,
+        "std": 54.1032,
+        "min": 1490.4,
+        "max": 1621.46,
+        "ddof": 1
+      },
+      "baseline_10s_window": {
+        "n": 5,
+        "mean": 1379.28,
+        "std": 164.3807,
+        "min": 1199.17,
+        "max": 1499.46,
+        "ddof": 1
+      },
+      "throughput_during_fault_window": {
+        "n": 3,
+        "mean": 492.2333,
+        "std": 0.3073,
+        "min": 491.95,
+        "max": 492.56,
+        "ddof": 1
+      },
+      "degradation_ratio_of_means_vs_post_warmup": 68.1,
+      "degradation_ratio_of_means_vs_control": 67.1,
+      "degradation_pct_vs_post_warmup": {
+        "n": 3,
+        "mean": 67.8698,
+        "std": 1.5506,
+        "min": 66.9512,
+        "max": 69.6601,
+        "ddof": 1
+      },
+      "degradation_pct_vs_control": {
+        "n": 3,
+        "mean": 67.1428,
+        "std": 0.0205,
+        "min": 67.121,
+        "max": 67.1617,
+        "ddof": 1
+      },
+      "container_recovery_seconds": {
+        "n": 3,
+        "mean": 0.4667,
+        "std": 0.0751,
+        "min": 0.39,
+        "max": 0.54,
+        "ddof": 1
+      },
+      "throughput_90pct_recovery_seconds": {
+        "n": 3,
+        "mean": 21.69,
+        "std": 2.1041,
+        "min": 20.01,
+        "max": 24.05,
+        "ddof": 1
+      },
+      "missing_rows": {
+        "n": 5,
+        "mean": 93900.6,
+        "std": 128578.692,
+        "min": 0,
+        "max": 234754,
+        "ddof": 1
+      },
+      "extra_rows": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "excess_duplicates": {
+        "n": 5,
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0,
+        "max": 0,
+        "ddof": 1
+      },
+      "platform_validator_data_loss": {
+        "n": 5,
+        "mean": 6942.8,
+        "std": 4536.7873,
+        "min": 1968,
+        "max": 10256,
+        "ddof": 1
+      },
+      "host_memory_pressure_count": 0,
+      "host_min_ram_mb": 1565.4140625,
+      "surviving_only": {
+        "n_runs": 3,
+        "post_warmup_baseline": {
+          "n": 3,
+          "mean": 1534.42,
+          "std": 75.3805,
+          "min": 1490.4,
+          "max": 1621.46,
+          "ddof": 1
+        },
+        "throughput_during_fault_window": {
+          "n": 3,
+          "mean": 492.2333,
+          "std": 0.3073,
+          "min": 491.95,
+          "max": 492.56,
+          "ddof": 1
+        },
+        "degradation_ratio_of_means_vs_post_warmup": 67.9,
+        "degradation_ratio_of_means_vs_control": 67.1,
+        "degradation_pct_vs_post_warmup": {
+          "n": 3,
+          "mean": 67.8698,
+          "std": 1.5506,
+          "min": 66.9512,
+          "max": 69.6601,
+          "ddof": 1
+        },
+        "degradation_pct_vs_control": {
+          "n": 3,
+          "mean": 67.1428,
+          "std": 0.0205,
+          "min": 67.121,
+          "max": 67.1617,
+          "ddof": 1
+        },
+        "container_recovery_seconds": {
+          "n": 3,
+          "mean": 0.4667,
+          "std": 0.0751,
+          "min": 0.39,
+          "max": 0.54,
+          "ddof": 1
+        },
+        "throughput_90pct_recovery_seconds": {
+          "n": 3,
+          "mean": 21.69,
+          "std": 2.1041,
+          "min": 20.01,
+          "max": 24.05,
+          "ddof": 1
+        }
+      }
+    }
+  },
+  "unresolved_items": [
+    {
+      "item": "spark-worker-restart-r4 platform validator processed records (290,671)",
+      "status": "UNRESOLVED",
+      "source": "docs/evaluation/raw/campaign/spark-worker-restart/eval-spark-worker-restart-r4/report.json",
+      "key_or_line": "processedRecords",
+      "description": "Validator reported 9,329 data loss (300,000 - 290,671). Physical audit in HDFS confirmed 289,744 committed rows. The source of 290,671 in memory/counter cannot be proven from raw logs.",
+      "remedy": "Neutral factual statement retained; orphan-Parquet hypothesis removed."
+    }
+  ],
+  "verified_crashes_evidence": {
+    "datanode_stop_r2": {
+      "stream_id": "1b02d365-e506-4ee1-a67d-e0997c85717e",
+      "failing_path": "/checkpoints/streaming-1b02d365-e506-4ee1-a67d-e0997c85717e/offsets/.19.25dd1f8e-185d-43f7-a14e-57456fc02b93.tmp",
+      "error_message": "could only be written to 0 of the 1 minReplication nodes. There are 1 datanode(s) running and 1 node(s) are excluded in this operation.",
+      "source": "docs/evaluation/results/derived/datanode_crashes_evidence.json",
+      "status": "VERIFIED"
+    },
+    "datanode_stop_r5": {
+      "stream_id": "d896f235-1be9-4148-98bd-80c4e226976e",
+      "failing_path": "/checkpoints/streaming-d896f235-1be9-4148-98bd-80c4e226976e/offsets/.19.64b59fbe-939b-4fc0-8d34-18a431678403.tmp",
+      "error_message": "could only be written to 0 of the 1 minReplication nodes. There are 1 datanode(s) running and 1 node(s) are excluded in this operation.",
+      "source": "docs/evaluation/results/derived/datanode_crashes_evidence.json",
+      "status": "VERIFIED"
+    }
+  }
+}

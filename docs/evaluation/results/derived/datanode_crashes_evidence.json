@@ -1,0 +1,86 @@
+{
+  "datanode-stop-r1": [
+    {
+      "seq": 244,
+      "event_type": "driver_stderr_tail",
+      "emitted_at": "2026-10-21T10:33:55.905779+00:00",
+      "payload": {
+        "lines": [
+          "26/10/21 10:33:34 WARN ProcessingTimeExecutor: Current batch is falling behind. The trigger interval is 2000 milliseconds, but spent 2010 milliseconds",
+          "26/10/21 10:33:52 WARN ProcessingTimeExecutor: Current batch is falling behind. The trigger interval is 2000 milliseconds, but spent 2986 milliseconds"
+        ],
+        "line_count": 2
+      }
+    }
+  ],
+  "datanode-stop-r2": [
+    {
+      "seq": 51,
+      "event_type": "driver_stderr_tail",
+      "emitted_at": "2026-10-21T10:36:11.181549+00:00",
+      "payload": {
+        "lines": [
+          "26/10/21 10:35:26 WARN AdminClientConfig: These configurations '[key.deserializer, value.deserializer, enable.auto.commit, max.poll.records, auto.offset.reset]' were supplied but are not used yet.",
+          "26/10/21 10:35:35 WARN ProcessingTimeExecutor: Current batch is falling behind. The trigger interval is 2000 milliseconds, but spent 9033 milliseconds",
+          "26/10/21 10:36:10 WARN DataStreamer: Exception in createBlockOutputStream blk_1073762188_21364",
+          "java.net.ConnectException: Connection refused",
+          "26/10/21 10:36:10 WARN DataStreamer: Abandoning BP-845831000-172.18.0.4-1792185675478:blk_1073762188_21364",
+          "26/10/21 10:36:10 WARN DataStreamer: Excluding datanode DatanodeInfoWithStorage[172.18.0.4:9866,DS-e55e85af-da5a-4a4b-b3c4-aeacb8c31b0e,DISK]",
+          "26/10/21 10:36:10 WARN DataStreamer: DataStreamer Exception",
+          "org.apache.hadoop.ipc.RemoteException(java.io.IOException): File /checkpoints/streaming-1b02d365-e506-4ee1-a67d-e0997c85717e/offsets/.19.25dd1f8e-185d-43f7-a14e-57456fc02b93.tmp could only be written to 0 of the 1 minReplication nodes. There are 1 datanode(s) running and 1 node(s) are excluded in this operation.",
+          "26/10/21 10:36:10 ERROR MicroBatchExecution: Query [id = 207f1ce8-e6a1-466c-a054-45ac9ca10e0b, runId = 8a5e83aa-e012-4625-aa70-faa40173eba0] terminated with error",
+          "org.apache.hadoop.ipc.RemoteException(java.io.IOException): File /checkpoints/streaming-1b02d365-e506-4ee1-a67d-e0997c85717e/offsets/.19.25dd1f8e-185d-43f7-a14e-57456fc02b93.tmp could only be written to 0 of the 1 minReplication nodes. There are 1 datanode(s) running and 1 node(s) are excluded in this operation."
+        ],
+        "line_count": 10
+      }
+    }
+  ],
+  "datanode-stop-r3": [
+    {
+      "seq": 245,
+      "event_type": "driver_stderr_tail",
+      "emitted_at": "2026-10-21T10:42:00.224925+00:00",
+      "payload": {
+        "lines": [
+          "26/10/21 10:41:57 WARN ProcessingTimeExecutor: Current batch is falling behind. The trigger interval is 2000 milliseconds, but spent 3027 milliseconds"
+        ],
+        "line_count": 1
+      }
+    }
+  ],
+  "datanode-stop-r4": [
+    {
+      "seq": 243,
+      "event_type": "driver_stderr_tail",
+      "emitted_at": "2026-10-21T10:49:01.13245+00:00",
+      "payload": {
+        "lines": [
+          "26/10/21 10:48:57 WARN ProcessingTimeExecutor: Current batch is falling behind. The trigger interval is 2000 milliseconds, but spent 3862 milliseconds"
+        ],
+        "line_count": 1
+      }
+    }
+  ],
+  "datanode-stop-r5": [
+    {
+      "seq": 56,
+      "event_type": "driver_stderr_tail",
+      "emitted_at": "2026-10-21T10:51:19.853753+00:00",
+      "payload": {
+        "lines": [
+          "26/10/21 10:50:36 WARN AdminClientConfig: These configurations '[key.deserializer, value.deserializer, enable.auto.commit, max.poll.records, auto.offset.reset]' were supplied but are not used yet.",
+          "26/10/21 10:50:43 WARN ProcessingTimeExecutor: Current batch is falling behind. The trigger interval is 2000 milliseconds, but spent 7514 milliseconds",
+          "26/10/21 10:51:18 WARN DataStreamer: Exception in createBlockOutputStream blk_1073763521_22697",
+          "java.net.ConnectException: Connection refused",
+          "26/10/21 10:51:18 WARN DataStreamer: Abandoning BP-845831000-172.18.0.4-1792185675478:blk_1073763521_22697",
+          "26/10/21 10:51:18 WARN DataStreamer: Excluding datanode DatanodeInfoWithStorage[172.18.0.4:9866,DS-e55e85af-da5a-4a4b-b3c4-aeacb8c31b0e,DISK]",
+          "26/10/21 10:51:18 WARN DataStreamer: DataStreamer Exception",
+          "org.apache.hadoop.ipc.RemoteException(java.io.IOException): File /checkpoints/streaming-d896f235-1be9-4148-98bd-80c4e226976e/offsets/.19.64b59fbe-939b-4fc0-8d34-18a431678403.tmp could only be written to 0 of the 1 minReplication nodes. There are 1 datanode(s) running and 1 node(s) are excluded in this operation.",
+          "26/10/21 10:51:18 ERROR MicroBatchExecution: Query [id = 4beb78a3-c999-46ce-885d-2f82df565245, runId = 6a7709f6-6b9d-4ef2-8f0c-0c1b093aa806] terminated with error",
+          "org.apache.hadoop.ipc.RemoteException(java.io.IOException): File /checkpoints/streaming-d896f235-1be9-4148-98bd-80c4e226976e/offsets/.19.64b59fbe-939b-4fc0-8d34-18a431678403.tmp could only be written to 0 of the 1 minReplication nodes. There are 1 datanode(s) running and 1 node(s) are excluded in this operation."
+        ],
+        "line_count": 10
+      }
+    }
+  ]
+}

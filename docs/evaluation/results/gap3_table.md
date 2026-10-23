@@ -6,7 +6,7 @@ Evaluates system degradation, physical data integrity (5-column multiset equalit
 <!-- BEGIN GENERATED:gap3_primary_table -->
 | Experiment Name | Target Container | Post-Warmup Baseline (rec/s) [Primary] | 10s Window Baseline (rec/s) [Secondary] | During-Fault Throughput (rec/s) | Degradation vs Post-Warmup Baseline (%) | Degradation vs Control (%) | Container Recovery (mean ± std) | Throughput 90% Recovery (mean ± std) | Physical Data Loss (Missing/Extra/Excess) | Platform Validator Output | Executed (n/N) | Query Survived (n/N) | Data-Complete (n/N) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Control** (5-repetition empirical baseline, unperturbed) | None | 1784.6 ± 183.6 | 1678.5 ± 163.9 | 1498.1 ± 105.8 (unperturbed) | 16.1% drop to simulated window (-10.8% vs 10s baseline) | Baseline reference (0%) | 0.00 s | 0.00 s | 0.0 / 0.0 / 0.0 | 10256.0 (filter-unaware comparison, 0 physical loss) | 5 / 5 | 5 / 5 | 5 / 5 |
+| **Control** (5-repetition empirical baseline, unperturbed) | None | 1784.6 ± 183.6 | 1678.5 ± 163.9 | 1498.1 ± 105.8 (unperturbed) | 16.1% drop to simulated window (-10.8% vs 10s baseline) | Baseline reference (0%) | 0.00 s | 0.00 s | 0.0 / 0.0 / 0.0 | not run (validator is fault-run only) | 5 / 5 | 5 / 5 | 5 / 5 |
 | **kafka-stop** | platform-kafka | 1488.8 ± 140.7 | 1558.1 ± 131.4 | 107.20 (window incl. in-flight batch) / 0.00 (true halted) | 92.8% (window) / 100% (halted) | 92.8% (window) / 100% (halted) | 17.52 ± 5.73 s | 22.89 ± 6.47 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |
 | **kafka-restart** | platform-kafka | 1591.7 ± 37.7 | 1439.2 ± 134.0 | 524.69 (transient ~3s restart) | 67.0% | 65.0% | 0.72 ± 1.40 s | 3.44 ± 2.57 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |
 | **spark-worker-stop** | platform-spark-worker | 1620.2 ± 50.3 | 1679.1 ± 164.3 | 571.91 (window incl. pre-halt drain) / 0.00 (true halted) | 64.7% (window) / 100% (halted) | 61.8% (window) / 100% (halted) | 0.48 ± 0.13 s | 17.56 ± 5.50 s | 0.0 / 0.0 / 0.0 | 10256.0 (unreliable) | 5 / 5 | 5 / 5 | 5 / 5 |
@@ -28,7 +28,7 @@ Evaluates system degradation, physical data integrity (5-column multiset equalit
    - *Container Recovery*: Elapsed time from fault revert command until container health check passes.
    - *Throughput 90% Recovery*: Time required for pipeline streaming throughput to return to >= 90% of pre-fault baseline.
 6. **Physical Data Loss**: Full-row 5-column multiset equality `(transaction_id, customer_id, product_id, amount, timestamp)` against the expected 289,744 post-filter records. Reported as `Missing / Extra / Excess Duplicates`.
-7. **Platform Validator Output**: Platform UI validator output. Unreliable due to filter-unaware comparison (300,000 raw input vs 289,744 post-filter output = 10,256 constant delta).
+7. **Platform Validator Output**: Platform UI validator output. Unreliable due to filter-unaware comparison (300,000 raw input vs 289,744 post-filter output = 10,256 constant delta). Control runs did not run the validator (not run).
 8. **Survival & Completeness**:
    - *Executed (n/N)*: Runs completed through test harness (5/5 for all).
    - *Query Survived (n/N)*: Structured Streaming query remained active without terminal exception (5/5 for Kafka and Spark Worker; 3/5 for DataNode under `dfs.replication=1`).

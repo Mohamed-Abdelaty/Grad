@@ -1,0 +1,7 @@
+experiment,target_container,baseline_pw_mean,baseline_pw_std,baseline_10s_mean,baseline_10s_std,during_fault_mean,during_fault_std,degradation_pw_pct,degradation_ctrl_pct,rec_container_mean,rec_container_std,rec_tp90_mean,rec_tp90_std,missing_rows,extra_rows,excess_dups,validator_output,executed_n,survived_n,complete_n
+control,None,1784.56,183.64,1678.55,163.91,1498.05,105.76,16.1,0.0,0.00,0.00,0.00,0.00,0.0,0.0,0.0,not run,5,5,5
+kafka-stop,platform-kafka,1488.81,140.75,1558.05,131.40,107.20,60.08,92.8,92.8,17.52,5.73,22.89,6.47,0.0,0.0,0.0,10256.0,5,5,5
+kafka-restart,platform-kafka,1591.71,37.69,1439.20,133.96,524.69,316.70,67.0,65.0,0.72,1.40,3.44,2.57,0.0,0.0,0.0,10256.0,5,5,5
+spark-worker-stop,platform-spark-worker,1620.20,50.26,1679.09,164.25,571.91,43.50,64.7,61.8,0.48,0.13,17.56,5.50,0.0,0.0,0.0,10256.0,5,5,5
+spark-worker-restart,platform-spark-worker,1651.56,37.66,1439.22,250.82,960.73,215.10,41.8,35.9,0.12,0.07,1.87,1.21,0.0,0.0,0.0,10070.6,5,5,5
+datanode-stop,platform-datanode,1541.15,54.10,1379.28,164.38,492.23,0.31,68.1,67.1,0.47,0.08,21.69,2.10,93900.6,0.0,0.0,6942.8,5,3,3

@@ -1,7 +1,7 @@
 {
   "metadata": {
     "description": "ChaosFlow Evaluation Single Source of Truth (Master Results)",
-    "generated_at": "2026-10-23T13:56:09.671214+00:00",
+    "generated_at": "2026-10-23T18:45:17.538793+00:00",
     "statistical_convention": {
       "standard_deviation": "sample standard deviation (ddof=1, N-1 denominator)",
       "control_during_fault_reference_rec_per_sec": 1498.1,
@@ -721,7 +721,7 @@
       "experiment": "control",
       "repetition": "r1",
       "run_name": "eval-control-r1",
-      "provenance": "campaign",
+      "provenance": "control",
       "target_container": "None",
       "target_service": "none",
       "fault_type": "no_fault",
@@ -779,7 +779,7 @@
       "statuses": {
         "driver_status": "FINISHED",
         "platform_status": "succeeded",
-        "validator_verdict": "FAIL",
+        "validator_verdict": "NOT RUN",
         "physical_loss_verdict": "VALID",
         "query_survived": true,
         "data_complete": true
@@ -795,7 +795,7 @@
       "experiment": "control",
       "repetition": "r2",
       "run_name": "eval-control-r2",
-      "provenance": "campaign",
+      "provenance": "control",
       "target_container": "None",
       "target_service": "none",
       "fault_type": "no_fault",
@@ -853,7 +853,7 @@
       "statuses": {
         "driver_status": "FINISHED",
         "platform_status": "succeeded",
-        "validator_verdict": "FAIL",
+        "validator_verdict": "NOT RUN",
         "physical_loss_verdict": "VALID",
         "query_survived": true,
         "data_complete": true
@@ -869,7 +869,7 @@
       "experiment": "control",
       "repetition": "r3",
       "run_name": "eval-control-r3",
-      "provenance": "campaign",
+      "provenance": "control",
       "target_container": "None",
       "target_service": "none",
       "fault_type": "no_fault",
@@ -927,7 +927,7 @@
       "statuses": {
         "driver_status": "FINISHED",
         "platform_status": "succeeded",
-        "validator_verdict": "FAIL",
+        "validator_verdict": "NOT RUN",
         "physical_loss_verdict": "VALID",
         "query_survived": true,
         "data_complete": true
@@ -943,7 +943,7 @@
       "experiment": "control",
       "repetition": "r4",
       "run_name": "eval-control-r4",
-      "provenance": "campaign",
+      "provenance": "control",
       "target_container": "None",
       "target_service": "none",
       "fault_type": "no_fault",
@@ -1001,7 +1001,7 @@
       "statuses": {
         "driver_status": "FINISHED",
         "platform_status": "succeeded",
-        "validator_verdict": "FAIL",
+        "validator_verdict": "NOT RUN",
         "physical_loss_verdict": "VALID",
         "query_survived": true,
         "data_complete": true
@@ -1017,7 +1017,7 @@
       "experiment": "control",
       "repetition": "r5",
       "run_name": "eval-control-r5",
-      "provenance": "campaign",
+      "provenance": "control",
       "target_container": "None",
       "target_service": "none",
       "fault_type": "no_fault",
@@ -1075,7 +1075,7 @@
       "statuses": {
         "driver_status": "FINISHED",
         "platform_status": "succeeded",
-        "validator_verdict": "FAIL",
+        "validator_verdict": "NOT RUN",
         "physical_loss_verdict": "VALID",
         "query_survived": true,
         "data_complete": true
