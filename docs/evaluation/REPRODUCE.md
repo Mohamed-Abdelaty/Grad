@@ -37,7 +37,7 @@ py -3.11 scripts/evaluation/build_master.py
 - **Output**: `docs/evaluation/results/results_master.json`
 - **Statistical Rules Applied**:
   - Sample standard deviation ($N-1$ denominator, `ddof=1`) across all metric series.
-  - Uniform control reference ($1,498.0\text{ rec/s}$, the 5-run mean simulated fault window throughput) used for all degradation comparisons.
+  - Uniform control reference ($1,498.1\text{ rec/s}$, the 5-run mean simulated fault window throughput) used for all degradation comparisons.
   - Dual baseline tracking: unquantized post-warmup baseline (primary) and 10s-window baseline (secondary).
   - Stop faults during-fault throughput reported both over the 20s window (including drain) and during true halted state ($0.00\text{ rec/s}$).
 
@@ -61,9 +61,14 @@ Verifies that every number, percentage, count, and claim in `FINAL_REPORT.md` an
 py -3.11 scripts/evaluation/lint_report.py
 ```
 - **Enforces**:
-  - All numbers traceable to `results_master.json` or allow-listed constants.
-  - Absolute ban on unqualified "zero data loss" phrases.
-  - Mandatory `[VERIFIED]` or `[HYPOTHESIS]` tags on all causal/mechanism assertions.
+  - Rule (a): Recomputation of all mean/std metrics with sample standard deviation (`ddof=1`).
+  - Rule (b): Ratio of means degradation formula ($1 - \text{mean}(\text{during}) / \text{mean}(\text{baseline})$).
+  - Rule (c): Cross-document consistency between `FINAL_REPORT.md` and `gap3_table.md`.
+  - Rule (d): Existence of all referenced file/script paths in `[VERIFIED: <path>]` tags.
+  - Rule (e): Mandatory `[HYPOTHESIS]` or `[VERIFIED]` tags on all causal/mechanism assertions.
+  - Rule (f): Accurate canonical validator formulas distinguishing normal runs, orphan part file (r4), and crash snapshots.
+  - Rule (g): Four-layer status consistency (driver, platform, validator, physical loss).
+  - Rule (h): Absolute ban on stale failing paths (`_spark_metadata/19.compact`) or unqualified claims.
 
 ### Step 4: Verify Checksums
 
@@ -90,10 +95,10 @@ print('All checksums verified successfully.')
 ```bash
 py -3.11 -m pytest tests/evaluation -v
 ```
-- Runs 33 evaluation tests covering:
+- Runs 39 evaluation tests covering:
   - Evaluation harness (`test_evaluation_harness.py`: 22 tests)
   - Statistical aggregation engine (`test_aggregate.py`: 7 tests)
-  - Master JSON and documentation consistency (`test_report_consistency.py`: 4 tests)
+  - Master JSON and documentation consistency (`test_report_consistency.py`: 10 tests)
 
 ### Backend Unit Tests
 ```bash
