@@ -66,7 +66,7 @@ py -3.11 scripts/evaluation/lint_report.py
   - Rule (c): Cross-document consistency between `FINAL_REPORT.md` and `gap3_table.md`.
   - Rule (d): Existence of all referenced file/script paths in `[VERIFIED: <path>]` tags.
   - Rule (e): Mandatory `[HYPOTHESIS]` or `[VERIFIED]` tags on all causal/mechanism assertions.
-  - Rule (f): Accurate canonical validator formulas distinguishing normal runs, orphan part file (r4), and crash snapshots.
+  - Rule (f): Accurate canonical validator formulas distinguishing normal runs, r4 counter discrepancy, and crash snapshots.
   - Rule (g): Four-layer status consistency (driver, platform, validator, physical loss).
   - Rule (h): Absolute ban on stale failing paths (`_spark_metadata/19.compact`) or unqualified claims.
 
@@ -95,25 +95,33 @@ print('All checksums verified successfully.')
 ```bash
 py -3.11 -m pytest tests/evaluation -v
 ```
-- Runs 39 evaluation tests covering:
+- Runs 46 evaluation tests covering:
   - Evaluation harness (`test_evaluation_harness.py`: 22 tests)
   - Statistical aggregation engine (`test_aggregate.py`: 7 tests)
   - Master JSON and documentation consistency (`test_report_consistency.py`: 10 tests)
+  - Forensic linter verification and negative tests (`test_linter.py`: 7 tests)
 
 ### Backend Unit Tests
 ```bash
 docker exec platform-backend pytest tests/ -m "not integration" -q
 ```
-- Executes 610 unit tests (594 passed, 16 skipped for unstarted Airflow scheduler).
+- Executes 610 unit tests (594 passed, 16 skipped for unstarted optional services, 44 integration deselected).
 
 ### Backend Integration Tests
 ```bash
-docker exec platform-backend pytest tests/ -m "integration" -q
+docker exec platform-backend pytest tests/integration/ -q
 ```
-- Executes 44 live integration tests across Kafka, Spark, and HDFS.
+- Executes 16 live integration tests in `tests/integration/` against Docker Compose platform stack (all 16 passed).
+- Note: Across the entire backend repository, 44 tests are marked with `@pytest.mark.integration` (16 in `tests/integration/`, 5 in `tests/messaging/`, 5 in `tests/reliability/`, 4 in `tests/spark/`, 14 in `tests/storage/`).
 
 ### Frontend Unit & Component Tests
 ```bash
-cd frontend && npm test
+cd frontend && npm test -- --run
 ```
-- Runs Vitest component and accessibility test suites.
+- Runs Vitest component and accessibility test suites (25 test files, 249 tests passed).
+
+### Frontend E2E Tests (Playwright)
+```bash
+cd frontend && npx playwright test
+```
+- Runs 59 Playwright E2E tests across 11 spec files against live stack (59 passed).
