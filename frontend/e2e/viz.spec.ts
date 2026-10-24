@@ -345,4 +345,41 @@ test.describe('UI-7 Pipeline Visualization E2E', () => {
 
     assertClean(audit, '10x Navigation');
   });
+
+  test('4. Scene3D error fallback: forcing WebGL context loss shows 2D SVG fallback (VizErrorBoundary)', async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await doLogin(page);
+    await clickNav(page, 'Pipelines');
+    const firstRow = page.getByTestId('runs-row').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    await firstRow.getByRole('button', { name: 'Open' }).click();
+
+    // Verify initial 3D canvas is rendered
+    await expect(page.getByTestId('viz-canvas')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('viz-mode')).toHaveText('3d', { timeout: 5000 });
+
+    // Force WebGL context loss to simulate 3D renderer failure
+    await page.evaluate(() => {
+      const canvas = document.querySelector('canvas');
+      if (canvas) {
+        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+        if (gl) {
+          const ext = (gl as any).getExtension('WEBGL_lose_context');
+          if (ext) {
+            ext.loseContext();
+          } else {
+            canvas.dispatchEvent(new Event('webglcontextlost'));
+          }
+        }
+      }
+    });
+
+    // VizErrorBoundary / onContextLost triggers fallback to 2D SVG
+    await expect(page.getByTestId('viz-mode')).toHaveText('2d', { timeout: 10_000 });
+    await expect(page.locator('[data-testid="scene-2d"]')).toBeVisible({ timeout: 10_000 });
+    const hasSvg = await page.locator('svg.pipeline-viz, [data-testid="scene-2d"]').count();
+    expect(hasSvg).toBeGreaterThan(0);
+  });
 });

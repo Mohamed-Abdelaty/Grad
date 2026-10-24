@@ -569,7 +569,7 @@ def main():
             print(f"  [X] {err}")
         sys.exit(1)
     else:
-        print("PASSED: Zero consistency errors. All figures and claims proven from raw artifacts.")
+        print("PASSED: Zero consistency errors. Rules checked: (a) [VERIFIED] tags, (b) provenance numbers, (c) log quotes, (d) paths and timestamps, (e) cross-document consistency, (f) sample size n=..., (g) array mean/std math, (h) degradation recomputation, (i) code citations, (j) recovery metrics.")
         sys.exit(0)
 
 

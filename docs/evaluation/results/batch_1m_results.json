@@ -9,12 +9,23 @@
     "throughput_rows_per_sec": 9020.39,
     "hdfs_path": "hdfs://namenode:9000/data/sales_large_clean",
     "columns": [
-      "transaction_id", "customer_id", "product_id", "category",
-      "quantity", "unit_price", "total_amount", "amount",
-      "transaction_date", "timestamp", "region", "payment_type",
-      "discount", "is_returned"
+      "transaction_id",
+      "customer_id",
+      "product_id",
+      "category",
+      "quantity",
+      "unit_price",
+      "total_amount",
+      "amount",
+      "transaction_date",
+      "timestamp",
+      "region",
+      "payment_type",
+      "discount",
+      "is_returned"
     ],
-    "error_message": null
+    "error_message": null,
+    "throughput_rows_in_per_sec": 9020.39
   },
   "with_nulls": {
     "shape": "with_nulls",
@@ -25,8 +36,15 @@
     "duration_seconds": 106.94,
     "throughput_rows_per_sec": 9163.99,
     "hdfs_path": "hdfs://namenode:9000/data/sales_large_nulls",
-    "columns": ["transaction_id", "customer_id", "product_id", "amount", "timestamp"],
-    "error_message": null
+    "columns": [
+      "transaction_id",
+      "customer_id",
+      "product_id",
+      "amount",
+      "timestamp"
+    ],
+    "error_message": null,
+    "throughput_rows_in_per_sec": 9351.04
   },
   "with_duplicates": {
     "shape": "with_duplicates",
@@ -34,11 +52,18 @@
     "status": "succeeded",
     "input_rows": 1000000,
     "output_rows": 995000,
-    "duration_seconds": 89.90,
+    "duration_seconds": 89.9,
     "throughput_rows_per_sec": 11067.85,
     "hdfs_path": "hdfs://namenode:9000/data/sales_large_duplicates",
-    "columns": ["transaction_id", "customer_id", "product_id", "amount", "timestamp"],
-    "error_message": null
+    "columns": [
+      "transaction_id",
+      "customer_id",
+      "product_id",
+      "amount",
+      "timestamp"
+    ],
+    "error_message": null,
+    "throughput_rows_in_per_sec": 11123.47
   },
   "edge_cases": {
     "shape": "edge_cases",
@@ -49,7 +74,14 @@
     "duration_seconds": 107.15,
     "throughput_rows_per_sec": 9323.38,
     "hdfs_path": "hdfs://namenode:9000/data/sales_large_edge",
-    "columns": ["transaction_id", "customer_id", "product_id", "amount", "timestamp"],
-    "error_message": null
+    "columns": [
+      "transaction_id",
+      "customer_id",
+      "product_id",
+      "amount",
+      "timestamp"
+    ],
+    "error_message": null,
+    "throughput_rows_in_per_sec": 9332.71
   }
 }
