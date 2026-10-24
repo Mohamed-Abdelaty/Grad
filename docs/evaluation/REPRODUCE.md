@@ -129,7 +129,19 @@ cd frontend && npm test -- --run
 - Runs Vitest component and accessibility test suites (25 test files, 249 tests passed).
 
 ### Frontend E2E Tests (Playwright)
-```bash
-cd frontend && npx playwright test
-```
-- Runs 59 Playwright E2E tests across 11 spec files against live stack (59 passed).
+> **Note on WSL2 Memory Ceiling**: Under standard WSL2 memory limits (5.8 GiB allocation ceiling on 16 GiB hosts), running all 60 tests sequentially in a single pass leads to container memory exhaustion during 1M-row streaming (7.7 min sequential duration vs 1.4 min in isolation). For host systems with >= 16 GB RAM, setting memory=8GB in %UserProfile%\\.wslconfig prevents host paging. To guarantee clean execution within default limits, execute in 3 chunks with stack restarts between chunks:
+
+`ash
+cd frontend
+# Chunk 1: General workspace, pipeline, and reliability specs (52 tests)
+npx playwright test e2e/bundle.spec.ts e2e/output.spec.ts e2e/pipelines.spec.ts e2e/polish.spec.ts e2e/reliability.spec.ts e2e/run-details.spec.ts e2e/screenshots.spec.ts e2e/smoke.spec.ts --reporter=line
+
+# Chunk 2: Streaming specs (3 tests)
+docker compose restart backend frontend spark-worker kafka
+npx playwright test e2e/streaming.spec.ts --reporter=line
+
+# Chunk 3: 3D Visualization and Demo specs (5 tests)
+docker compose restart backend frontend spark-worker kafka
+npx playwright test e2e/viz.spec.ts e2e/demo.spec.ts --reporter=line
+`
+- Total: 60 Playwright E2E tests across 11 spec files against live stack (all 60 passed).

@@ -179,10 +179,20 @@ python scripts/run_batch_evaluation.py
    npm run test -- --run
    ```
 
-4. **End-to-End Playwright Tests (59 Tests)**:
+4. **End-to-End Playwright Tests (60 Tests across 11 Specs)**:
+   > **Note on WSL2 Memory**: Under default WSL2 memory allocation (5.8 GiB ceiling on 16 GiB hosts), sequential execution of all 60 E2E tests without container restarts can encounter memory pressure during the 1M-row streaming pipeline test (7.7 min sequential timeout vs. 1.4 min isolated). For machines with $\ge 16$ GB RAM, creating a `%UserProfile%\.wslconfig` file with `[wsl2]\nmemory=8GB` is recommended. To run the full E2E suite deterministically within default memory budgets, execute in three isolated chunks with stack restarts between chunks:
    ```bash
    cd frontend
-   npx playwright test --workers=1 --reporter=line
+   # Chunk 1: Workspace, pipelines, output, and reliability specs (52 tests)
+   npx playwright test e2e/bundle.spec.ts e2e/output.spec.ts e2e/pipelines.spec.ts e2e/polish.spec.ts e2e/reliability.spec.ts e2e/run-details.spec.ts e2e/screenshots.spec.ts e2e/smoke.spec.ts --reporter=line
+
+   # Chunk 2: Streaming specs (3 tests)
+   docker compose restart backend frontend spark-worker kafka
+   npx playwright test e2e/streaming.spec.ts --reporter=line
+
+   # Chunk 3: 3D Visualization and Demo specs (5 tests)
+   docker compose restart backend frontend spark-worker kafka
+   npx playwright test e2e/viz.spec.ts e2e/demo.spec.ts --reporter=line
    ```
 
 ---
@@ -196,7 +206,7 @@ python scripts/run_batch_evaluation.py
 | Backend Unit Tests | Pytest unit suite | 589 passed, 16 skipped | **PASS** |
 | Backend Integration | Pytest integration suite | 44 passed | **PASS** |
 | Frontend Unit Tests | Vitest suite | 25 files, 249 tests passed | **PASS** |
-| Full E2E Playwright | Complete test suite | 59 tests passed in 10 files | **PASS** |
+| Full E2E Playwright | Complete test suite | 60 tests passed (Chunked: 52 + 3 + 5) | **PASS** |
 | Automated Demo | 9-Stage Chaos Scenario | Result PASS, MTTR < 60s | **PASS** |
 | Checkpoint Hygiene | HDFS `/checkpoints` | 0 leftover directories | **PASS** |
 
