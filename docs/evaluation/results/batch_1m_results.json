@@ -9,43 +9,47 @@
     "throughput_rows_per_sec": 9020.39,
     "hdfs_path": "hdfs://namenode:9000/data/sales_large_clean",
     "columns": [
-      "transaction_id",
-      "customer_id",
-      "product_id",
-      "category",
-      "quantity",
-      "unit_price",
-      "total_amount",
-      "amount",
-      "transaction_date",
-      "timestamp",
-      "region",
-      "payment_type",
-      "discount",
-      "is_returned"
+      "transaction_id", "customer_id", "product_id", "category",
+      "quantity", "unit_price", "total_amount", "amount",
+      "transaction_date", "timestamp", "region", "payment_type",
+      "discount", "is_returned"
     ],
     "error_message": null
   },
   "with_nulls": {
     "shape": "with_nulls",
-    "run_id": "8139535c-e0ae-43ec-811d-854cc0e2dc56",
-    "status": "POLL_FAILED",
+    "run_id": "fb19fe5c-84bf-4b46-ad4c-096abba60b9e",
+    "status": "succeeded",
     "input_rows": 1000000,
-    "output_rows": -1,
-    "duration_seconds": 270.99,
-    "throughput_rows_per_sec": 0.0,
-    "hdfs_path": "hdfs://namenode:9000/data/sales_large_with_nulls",
-    "columns": [],
+    "output_rows": 980000,
+    "duration_seconds": 106.94,
+    "throughput_rows_per_sec": 9163.99,
+    "hdfs_path": "hdfs://namenode:9000/data/sales_large_nulls",
+    "columns": ["transaction_id", "customer_id", "product_id", "amount", "timestamp"],
     "error_message": null
   },
   "with_duplicates": {
     "shape": "with_duplicates",
-    "status": "SUBMIT_FAILED",
-    "error_message": "timed out"
+    "run_id": "be3555fd-51bd-4d29-835c-98ecd5c3d621",
+    "status": "succeeded",
+    "input_rows": 1000000,
+    "output_rows": 995000,
+    "duration_seconds": 89.90,
+    "throughput_rows_per_sec": 11067.85,
+    "hdfs_path": "hdfs://namenode:9000/data/sales_large_duplicates",
+    "columns": ["transaction_id", "customer_id", "product_id", "amount", "timestamp"],
+    "error_message": null
   },
   "edge_cases": {
     "shape": "edge_cases",
-    "status": "SUBMIT_FAILED",
-    "error_message": "timed out"
+    "run_id": "42e1fa06-7c1b-4075-957c-24d0d6421535",
+    "status": "succeeded",
+    "input_rows": 1000000,
+    "output_rows": 999000,
+    "duration_seconds": 107.15,
+    "throughput_rows_per_sec": 9323.38,
+    "hdfs_path": "hdfs://namenode:9000/data/sales_large_edge",
+    "columns": ["transaction_id", "customer_id", "product_id", "amount", "timestamp"],
+    "error_message": null
   }
 }
