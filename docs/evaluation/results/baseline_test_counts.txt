@@ -1,0 +1,30 @@
+# Baseline Test Counts (Phase 0.4)
+Date: 2026-10-24T05:59:00Z
+Branch: feature/gap-closure
+HEAD: e8fe79ce2e5b3d14c1ae5ded4dbfc4d8322390b5
+
+1. Backend Unit Tests (via platform-backend container: pytest tests/ -m "not integration and not e2e"):
+   Passed: 601
+   Skipped: 16
+   Deselected: 44
+   Failed: 0
+   Errors: 0
+   Total: 661
+
+2. Evaluation Tests (pytest tests/evaluation/):
+   Passed: 50
+   Skipped: 0
+   Failed: 0
+   Total: 50
+
+3. Frontend Unit/Component Tests (Vitest: cd frontend && npm run test -- --run):
+   Passed: 248 (249 when Dashboard test runs without CPU concurrency contention)
+   Failed: 1 (Dashboard.test.tsx timeout under full-concurrency load)
+   Total: 249
+   Test Files: 25
+
+4. Playwright E2E Tests (npx playwright test --reporter=line):
+   Passed: 48
+   Failed: 11
+   Skipped / Did not run: 0
+   Total: 59

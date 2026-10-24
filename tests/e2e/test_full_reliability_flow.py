@@ -82,9 +82,13 @@ def test_run_experiment_and_wait_for_completion(client):
     final_status = None
     while time.time() < deadline:
         detail = client.get(f'/api/experiments/{exp_id}').json()
-        run = detail.get('latest_run')
-        if run and run['status'] in ('succeeded', 'failed', 'cancelled'):
-            final_status = run['status']
+        status = detail.get('status')
+        if not status:
+            run = detail.get('latest_run')
+            if run:
+                status = run.get('status')
+        if status in ('succeeded', 'failed', 'cancelled'):
+            final_status = status
             break
         time.sleep(3)
 

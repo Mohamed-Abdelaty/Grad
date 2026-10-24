@@ -137,14 +137,14 @@ class SparkJobSubmitter:
         cmd = [
             f"{spark_home}/bin/spark-submit",
             "--master", self._settings.SPARK_MASTER_URL,
+            "--conf", "spark.cores.max=1",
+            "--conf", "spark.hadoop.HADOOP_USER_NAME=root",
+            "--conf", "spark.driver.extraJavaOptions=-DHADOOP_USER_NAME=root",
+            "--conf", "spark.executor.extraJavaOptions=-DHADOOP_USER_NAME=root",
         ]
         if use_kafka:
             cmd.extend([
                 "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0",
-                "--conf", "spark.cores.max=1",
-                "--conf", "spark.hadoop.HADOOP_USER_NAME=root",
-                "--conf", "spark.driver.extraJavaOptions=-DHADOOP_USER_NAME=root",
-                "--conf", "spark.executor.extraJavaOptions=-DHADOOP_USER_NAME=root",
             ])
         cmd.extend([
             job_script,

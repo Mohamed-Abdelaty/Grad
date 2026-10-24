@@ -1,0 +1,27 @@
+{
+  "shape": "clean",
+  "run_id": "de771bd9-5b15-4d17-96e4-de6a48e04d1a",
+  "status": "succeeded",
+  "input_rows": 1000000,
+  "output_rows": 1000000,
+  "duration_seconds": 110.86,
+  "throughput_rows_per_sec": 9020.39,
+  "hdfs_path": "hdfs://namenode:9000/data/sales_large_clean",
+  "columns": [
+    "transaction_id",
+    "customer_id",
+    "product_id",
+    "category",
+    "quantity",
+    "unit_price",
+    "total_amount",
+    "amount",
+    "transaction_date",
+    "timestamp",
+    "region",
+    "payment_type",
+    "discount",
+    "is_returned"
+  ],
+  "error_message": null
+}

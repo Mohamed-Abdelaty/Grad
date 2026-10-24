@@ -1,0 +1,30 @@
+{
+  "clean": {
+    "raw_rows": 1000000,
+    "null_dropped": 0,
+    "dup_dropped": 0,
+    "filter_dropped": 0,
+    "expected_output_rows": 1000000
+  },
+  "with_nulls": {
+    "raw_rows": 1000000,
+    "null_dropped": 20000,
+    "dup_dropped": 0,
+    "filter_dropped": 0,
+    "expected_output_rows": 980000
+  },
+  "with_duplicates": {
+    "raw_rows": 1000000,
+    "null_dropped": 0,
+    "dup_dropped": 5000,
+    "filter_dropped": 0,
+    "expected_output_rows": 995000
+  },
+  "edge_cases": {
+    "raw_rows": 1000000,
+    "null_dropped": 0,
+    "dup_dropped": 0,
+    "filter_dropped": 1000,
+    "expected_output_rows": 999000
+  }
+}

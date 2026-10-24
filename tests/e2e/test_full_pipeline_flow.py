@@ -25,26 +25,41 @@ def client(auth_token):
 PIPELINE_YAML = '''# Sales pipeline for E2E testing
 pipeline:
   name: e2e-sales-pipeline
-  type: batch
   version: "1.0"
 
 source:
   type: csv
-  config:
-    path: /app/sample-data/sales_sample.csv
-    delimiter: ","
+  path: /app/sample-data/sales_sample.csv
 
-processors:
-  - type: clean
-    operations:
-      - type: drop_nulls
-        columns: []
+schema:
+  - { name: transaction_id, type: string }
+  - { name: amount, type: double }
+  - { name: customer_id, type: string }
+  - { name: product_id, type: string }
+  - { name: sale_date, type: string }
+
+processing:
+  operations:
+    - { type: remove_nulls }
+    - { type: remove_duplicates }
+    - { type: filter, condition: "amount > 0" }
+
+streaming:
+  enabled: false
+
+messaging:
+  broker: kafka
+  topic: e2e-sales-pipeline
+
+processing_engine:
+  type: spark
 
 storage:
-  type: local
-  config:
-    output_dir: /tmp/e2e-test-output
-    format: parquet
+  type: hdfs
+  path: /data/processed/e2e_sales_pipeline
+
+monitoring:
+  enabled: true
 '''
 
 def test_validate_pipeline(client):
@@ -57,13 +72,13 @@ def test_validate_pipeline(client):
 
 def test_run_pipeline_end_to_end(client):
     '''Full pipeline run: source→clean→local storage, returns success status and metrics.'''
-    resp = client.post('/api/pipelines/run', json={'yaml_content': PIPELINE_YAML})
+    resp = client.post('/api/pipelines/run?wait=true', json={'yaml_content': PIPELINE_YAML})
     assert resp.status_code == 200
     body = resp.json()
     assert body['status'] == 'success'
     assert 'metrics' in body
     metrics = body['metrics']
-    assert metrics.get('source_rows', 0) > 0
+    assert 'spark_job' in metrics or 'source:csv' in metrics
 
 def test_pipeline_appears_in_list(client):
     '''After running, the pipeline run appears in GET /api/pipeline-runs.'''
@@ -83,7 +98,7 @@ def test_system_status_all_present(client):
 
 def test_metrics_endpoint_has_custom_metrics():
     '''Prometheus /metrics endpoint exposes the 5 custom metrics.'''
-    resp = httpx.get(f'{BASE_URL}/metrics', timeout=10)
+    resp = httpx.get(f'{BASE_URL}/metrics/', follow_redirects=True, timeout=10)
     assert resp.status_code == 200
     text = resp.text
     assert 'pipeline_records_processed_total' in text

@@ -1,0 +1,29 @@
+pipeline:
+  name: sales-large-clean
+  version: "1.0"
+source:
+  type: csv
+  path: /app/sample-data/sales_large.csv
+schema:
+  - { name: transaction_id, type: string }
+  - { name: customer_id, type: string }
+  - { name: product_id, type: string }
+  - { name: amount, type: double }
+  - { name: timestamp, type: timestamp }
+processing:
+  operations:
+    - { type: remove_nulls }
+    - { type: remove_duplicates }
+    - { type: filter, condition: "amount > 0" }
+streaming:
+  enabled: false
+messaging:
+  broker: kafka
+  topic: sales-large-clean
+processing_engine:
+  type: spark
+storage:
+  type: hdfs
+  path: /data/sales_large_clean
+monitoring:
+  enabled: true

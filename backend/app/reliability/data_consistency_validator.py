@@ -34,17 +34,18 @@ class DataConsistencyValidator:
 
     def validate(
         self,
-        expected_records: int,
+        expected_records: int | None,
         output_location: dict,
         source_location: dict | str | None = None,
+        filter_accounting: dict[str, int] | None = None,
     ) -> dict[str, Any]:
         """
         Read the pipeline output and verify data completeness and consistency.
 
         Parameters
         ----------
-        expected_records : int
-            Expected number of records (from the baseline capture).
+        expected_records : int | None
+            Expected number of records (from the baseline capture or raw source count).
         output_location : dict
             Describes where to find the output.
             Must contain at least:
@@ -53,6 +54,11 @@ class DataConsistencyValidator:
         source_location : dict | str | None
             Optional input source location to distinguish pre-existing source
             duplicates from fault-induced duplicates.
+        filter_accounting : dict[str, int] | None
+            Optional transformation filter counts (e.g. ``{"null_filtered": 5124, "condition_filtered": 5132}``).
+            When provided, effective expected records are computed as:
+            ``max(0, expected_records - sum(filter_accounting.values()))``,
+            preventing false positive data loss from intentional pipeline filtering.
 
         Returns
         -------
@@ -66,6 +72,32 @@ class DataConsistencyValidator:
         storage_type = output_location.get("storage_type", "local")
         path = output_location.get("path", "")
 
+        # Compute effective expected records accounting for transformation filters
+        total_filtered = 0
+        if filter_accounting is not None:
+            if not isinstance(filter_accounting, dict):
+                raise TypeError("filter_accounting must be a dictionary")
+            for key, count in filter_accounting.items():
+                if isinstance(count, bool) or not isinstance(count, (int, float)):
+                    raise TypeError(f"filter_accounting value for '{key}' must be numeric, got {type(count).__name__}")
+                if count < 0:
+                    raise ValueError(f"filter_accounting value for '{key}' cannot be negative, got {count}")
+                total_filtered += int(count)
+
+            if expected_records is not None and total_filtered > expected_records:
+                logger.warning(
+                    "DataConsistencyValidator: total filtered records (%d) exceeds raw expected (%d); clamping effective expected to 0",
+                    total_filtered,
+                    expected_records,
+                )
+            effective_expected = (
+                max(0, expected_records - total_filtered)
+                if expected_records is not None
+                else None
+            )
+        else:
+            effective_expected = expected_records
+
         # ── Read actual output via storage plugin ──────────────────────────────
         try:
             df = self._read_output(storage_type, path)
@@ -77,10 +109,14 @@ class DataConsistencyValidator:
                 exc,
             )
             return {
-                "expected_records": expected_records,
+                "expected_records": effective_expected,
+                "raw_input_records": expected_records if filter_accounting else None,
+                "filtered_records": total_filtered if filter_accounting else 0,
+                "filter_accounting": filter_accounting or {},
                 "actual_records": 0,
-                "data_loss": expected_records,
-                "data_loss_percentage": 100.0,
+                "data_loss": effective_expected,
+                "unexpected_loss": effective_expected,
+                "data_loss_percentage": 100.0 if effective_expected else 0.0,
                 "duplicate_ids_found": 0,
                 "duplicates": 0,
                 "output_duplicates": 0,
@@ -91,11 +127,11 @@ class DataConsistencyValidator:
             }
 
         # ── Record count check ─────────────────────────────────────────────────
-        if expected_records is not None and actual_records is not None:
-            data_loss = max(0, expected_records - actual_records)
+        if effective_expected is not None and actual_records is not None:
+            data_loss = max(0, effective_expected - actual_records)
             data_loss_pct = (
-                round(data_loss / expected_records * 100.0, 4)
-                if expected_records > 0
+                round(data_loss / effective_expected * 100.0, 4)
+                if effective_expected > 0
                 else 0.0
             )
         else:
@@ -142,9 +178,13 @@ class DataConsistencyValidator:
             validation_passed = False
 
         result = {
-            "expected_records": expected_records,
+            "expected_records": effective_expected,
+            "raw_input_records": expected_records if filter_accounting else None,
+            "filtered_records": total_filtered if filter_accounting else 0,
+            "filter_accounting": filter_accounting or {},
             "actual_records": actual_records,
             "data_loss": data_loss,
+            "unexpected_loss": data_loss,
             "data_loss_percentage": data_loss_pct,
             "duplicate_ids_found": fault_induced_duplicates,
             "duplicates": fault_induced_duplicates,

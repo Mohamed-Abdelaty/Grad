@@ -350,3 +350,155 @@ class TestSourceDuplicatesSubtraction:
         assert res["data_loss_percentage"] is None
 
 
+
+
+class TestFilterAwareConsistencyValidation:
+    """Tests for transformation filter accounting and scientific data loss equation."""
+
+    def test_filter_accounting_null_and_condition_filters(
+        self, validator, parquet_fixture
+    ) -> None:
+        """
+        Verify that intentional filtering (e.g. sales_300k.csv with 5,124 nulls and
+        5,132 condition drops) yields zero unexpected data loss when accounted for.
+        """
+        # 100 rows survived out of 120 raw input
+        survived_rows = 100
+        df = pd.DataFrame({
+            "transaction_id": [f"txn_{i}" for i in range(survived_rows)],
+            "amount": [10.5 + i for i in range(survived_rows)],
+        })
+        path = parquet_fixture(df, "filtered_output.parquet")
+
+        result = validator.validate(
+            expected_records=120,
+            output_location={"storage_type": "local", "path": path},
+            filter_accounting={
+                "null_filtered": 12,
+                "condition_filtered": 8,
+            },
+        )
+        assert result["raw_input_records"] == 120
+        assert result["filtered_records"] == 20
+        assert result["expected_records"] == 100
+        assert result["actual_records"] == 100
+        assert result["data_loss"] == 0
+        assert result["unexpected_loss"] == 0
+        assert result["data_loss_percentage"] == 0.0
+        assert result["validation_passed"] is True
+
+    def test_sales_300k_exact_accounting_model(
+        self, validator, parquet_fixture
+    ) -> None:
+        """
+        Scientific model:
+        Committed Records = Raw Input (300,000) - Null Filtered (5,124) - Condition Filtered (5,132) - Unexpected Loss (0)
+        Committed Records = 289,744
+        """
+        df = pd.DataFrame({
+            "transaction_id": [f"t{i}" for i in range(289_744)],
+            "amount": [10.0] * 289_744,
+        })
+        path = parquet_fixture(df, "sales_300k_simulated.parquet")
+
+        result = validator.validate(
+            expected_records=300_000,
+            output_location={"storage_type": "local", "path": path},
+            filter_accounting={
+                "null_filtered": 5_124,
+                "condition_filtered": 5_132,
+            },
+        )
+        assert result["raw_input_records"] == 300_000
+        assert result["filtered_records"] == 10_256
+        assert result["expected_records"] == 289_744
+        assert result["actual_records"] == 289_744
+        assert result["data_loss"] == 0
+        assert result["unexpected_loss"] == 0
+        assert result["data_loss_percentage"] == 0.0
+        assert result["validation_passed"] is True
+
+    def test_filter_accounting_with_genuine_loss(
+        self, validator, parquet_fixture
+    ) -> None:
+        """
+        When intentional filtering removes 20 rows, but actual output is 5 rows short
+        of the post-filter expected count, the validator must report unexpected data_loss=5.
+        """
+        # Raw 100, filtered 20 -> expected 80, but only 75 actual rows written
+        df = pd.DataFrame({"transaction_id": [f"t{i}" for i in range(75)]})
+        path = parquet_fixture(df, "loss_output.parquet")
+
+        result = validator.validate(
+            expected_records=100,
+            output_location={"storage_type": "local", "path": path},
+            filter_accounting={"null_filtered": 20},
+        )
+        assert result["raw_input_records"] == 100
+        assert result["filtered_records"] == 20
+        assert result["expected_records"] == 80
+        assert result["actual_records"] == 75
+        assert result["data_loss"] == 5
+        assert result["unexpected_loss"] == 5
+        assert result["data_loss_percentage"] == 6.25  # 5 / 80 * 100
+        assert result["validation_passed"] is False
+
+    def test_filter_accounting_exceeding_raw_records_clamps_to_zero(
+        self, validator, parquet_fixture
+    ) -> None:
+        """If filter count exceeds raw input, effective expected records must clamp to 0."""
+        df = pd.DataFrame({"transaction_id": []})
+        path = parquet_fixture(df, "empty_output.parquet")
+
+        result = validator.validate(
+            expected_records=50,
+            output_location={"storage_type": "local", "path": path},
+            filter_accounting={"total_filtered": 60},
+        )
+        assert result["expected_records"] == 0
+        assert result["actual_records"] == 0
+        assert result["data_loss"] == 0
+        assert result["validation_passed"] is True
+
+    def test_filter_accounting_negative_value_raises_value_error(
+        self, validator, parquet_fixture
+    ) -> None:
+        """Negative filter values must be rejected with ValueError."""
+        import pytest
+        df = pd.DataFrame({"transaction_id": ["t1"]})
+        path = parquet_fixture(df, "neg_test.parquet")
+        with pytest.raises(ValueError, match="cannot be negative"):
+            validator.validate(
+                expected_records=10,
+                output_location={"storage_type": "local", "path": path},
+                filter_accounting={"dropped_negative": -5},
+            )
+
+    def test_filter_accounting_non_numeric_value_raises_type_error(
+        self, validator, parquet_fixture
+    ) -> None:
+        """Non-numeric filter counts must be rejected with TypeError."""
+        import pytest
+        df = pd.DataFrame({"transaction_id": ["t1"]})
+        path = parquet_fixture(df, "non_num_test.parquet")
+        with pytest.raises(TypeError, match="must be numeric"):
+            validator.validate(
+                expected_records=10,
+                output_location={"storage_type": "local", "path": path},
+                filter_accounting={"dropped": "ten"},
+            )
+
+    def test_filter_accounting_non_dict_raises_type_error(
+        self, validator, parquet_fixture
+    ) -> None:
+        """Non-dictionary filter accounting must be rejected with TypeError."""
+        import pytest
+        df = pd.DataFrame({"transaction_id": ["t1"]})
+        path = parquet_fixture(df, "non_dict_test.parquet")
+        with pytest.raises(TypeError, match="must be a dictionary"):
+            validator.validate(
+                expected_records=10,
+                output_location={"storage_type": "local", "path": path},
+                filter_accounting=[10, 20],  # type: ignore
+            )
+
