@@ -12,7 +12,7 @@ export function RecentExperimentsList({ experiments, selectedId, onSelect }: Pro
     return (
       <div
         data-testid="recent-experiments"
-        className="bg-slate-900 border border-slate-800 rounded-xl p-6 text-center text-slate-500 text-xs"
+        className="bg-slate-900 border border-slate-800 rounded-xl p-6 text-center text-slate-400 text-xs"
       >
         No experiments created yet.
       </div>

@@ -1,7 +1,7 @@
 {
   "metadata": {
     "description": "ChaosFlow Evaluation Single Source of Truth (Master Results)",
-    "generated_at": "2026-10-24T21:20:43.734511+00:00",
+    "generated_at": "2026-10-24T22:49:18.892565+00:00",
     "statistical_convention": {
       "standard_deviation": "sample standard deviation (ddof=1, N-1 denominator)",
       "control_during_fault_reference_rec_per_sec": 1498.1,

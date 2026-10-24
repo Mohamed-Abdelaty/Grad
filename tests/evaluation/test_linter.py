@@ -18,6 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 LINTER_PATH = REPO_ROOT / "scripts" / "evaluation" / "lint_report.py"
 
 from scripts.evaluation.lint_report import (
+    ALLOW_LISTED_NUMBERS,
     check_rule_a_verified_tags,
     check_rule_c_log_quotes,
     check_rule_d_paths_and_timestamps,
@@ -148,3 +149,48 @@ def test_rule_j_catches_recovery_metric_contradiction():
     errors_2 = check_rule_j_recovery_metrics(bad_text_2)
     assert len(errors_2) == 1
     assert "0.38 ± 0.06" in errors_2[0]
+
+
+def test_no_measured_master_numbers_in_allow_list():
+    """Ensure that ALLOW_LISTED_NUMBERS contains only true constants, never measured experiment metrics."""
+    with open(REPO_ROOT / "docs" / "evaluation" / "results" / "results_master.json", "r", encoding="utf-8") as f:
+        master = json.load(f)
+
+    # Collect measured metrics from runs
+    measured_numbers = set()
+    for run in master.get("runs", []):
+        for field in ["during_fault", "recovery", "records_accounting", "baselines"]:
+            data = run.get(field, {})
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    if isinstance(v, (int, float)) and not isinstance(v, bool) and v not in (0, 0.0):
+                        measured_numbers.add(v)
+                        measured_numbers.add(round(v, 2))
+
+    for exp_name, exp_data in master.get("experiments", {}).items():
+        if isinstance(exp_data, dict):
+            for k in [
+                "post_warmup_baseline",
+                "baseline_10s_window",
+                "throughput_during_fault_window",
+                "container_recovery_seconds",
+                "throughput_90pct_recovery_seconds",
+            ]:
+                stats = exp_data.get(k, {})
+                if isinstance(stats, dict):
+                    for stat_key in ["mean", "std", "min", "max"]:
+                        v = stats.get(stat_key)
+                        if isinstance(v, (int, float)) and not isinstance(v, bool) and v not in (0, 0.0):
+                            measured_numbers.add(v)
+                            measured_numbers.add(round(v, 2))
+
+    violations = []
+    for num in ALLOW_LISTED_NUMBERS:
+        if num in measured_numbers:
+            violations.append(num)
+
+    assert not violations, (
+        f"Measured experiment results found in ALLOW_LISTED_NUMBERS: {violations}. "
+        "Measured numbers must resolve through provenance_manifest.json with a valid source file:key, not the allow-list."
+    )
+
