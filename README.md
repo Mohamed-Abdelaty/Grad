@@ -48,7 +48,13 @@ Get the full 13-container stack running in three commands:
 
 ```powershell
 # 1. Generate secrets and environment config (.env)
+# Windows PowerShell:
 .\scripts\setup-env.ps1
+
+# Linux / macOS / Bash:
+# cp .env.example .env, then generate strong passwords for POSTGRES_PASSWORD,
+# JWT_SECRET_KEY, GRAFANA_ADMIN_PASSWORD, and ADMIN_PASSWORD.
+# (Note: Pydantic strictly validates that placeholder passwords like 'change-me-before-running' are replaced)
 
 # 2. Build and launch all container services
 docker compose up -d --build
@@ -132,7 +138,7 @@ Resilience reports feature a side-by-side **Comparison Table** comparing baselin
 
 ### Dataset Generation (Prerequisites for Large/Reliability Tests)
 
-ChaosFlow includes a deterministic data generator for large-scale and reliability testing:
+ChaosFlow includes deterministic data generators for large-scale and reliability testing:
 ```powershell
 # Generate 1M-row dataset for integration & streaming tests
 python scripts/generate_sales_data.py --rows 1000000 --out backend/sample-data/sales_large.csv
@@ -140,13 +146,23 @@ python scripts/generate_sales_data.py --rows 1000000 --out backend/sample-data/s
 # Generate 300k-row dataset for fault injection evidence & multi-repetition tests
 # (produces exactly 300,000 rows, 4,932 duplicate extra rows, 4,842 duplicated IDs)
 python scripts/generate_sales_data.py --rows 300000 --seed 42 --out backend/sample-data/sales_300k.csv
+
+# Generate all 4 large dataset evaluation shapes (clean, with_nulls, with_duplicates, edge_cases):
+python scripts/generate_large_dataset.py --shape clean --rows 1000000 --out backend/sample-data/sales_large.csv
+python scripts/generate_large_dataset.py --shape with_nulls --rows 1000000 --out backend/sample-data/sales_large_nulls.csv
+python scripts/generate_large_dataset.py --shape with_duplicates --rows 1000000 --out backend/sample-data/sales_large_duplicates.csv
+python scripts/generate_large_dataset.py --shape edge_cases --rows 1000000 --out backend/sample-data/sales_large_edge.csv
+
+# Run the 1M-row batch pipeline evaluation benchmark across all 4 shapes:
+python scripts/run_batch_evaluation.py
 ```
-*(Note: Playwright's global setup automatically runs the generator if these files are absent.)*
+*(Note: Playwright's global setup automatically runs `generate_sales_data.py` if those test datasets are absent.)*
 
 
 1. **Static Analysis & Linting**:
    ```bash
    cd frontend
+   npm install   # Prerequisite: install frontend dependencies
    npm run lint
    npm run build
    ```

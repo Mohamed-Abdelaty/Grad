@@ -157,9 +157,9 @@ During `spark-worker-stop`, `kafka-stop`, and `datanode-stop`, the platform repo
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `eval-kafka-stop-r1` | 38,986 | 38,986 | 38,986 | **0 rec/s (0.00)** | 0 rows | 289,744 |
 | `eval-kafka-stop-r2` | 38,974 | 41,761 | 41,761 | **0 rec/s (0.00)** | 2,787 rows | 289,744 |
-| `eval-kafka-stop-r3` | 38,987 | 41,986 | 41,986 | **0 rec/s (0.00)** | 2,999 rows | 289,744 |
-| `eval-kafka-stop-r4` | 36,687 | 39,686 | 39,686 | **0 rec/s (0.00)** | 2,999 rows | 289,744 |
-| `eval-kafka-stop-r5` | 32,989 | 35,988 | 35,988 | **0 rec/s (0.00)** | 2,999 rows | 289,744 |
+| `eval-kafka-stop-r3` | 38,987 | 41,676 | 41,676 | **0 rec/s (0.00)** | 2,689 rows | 289,744 |
+| `eval-kafka-stop-r4` | 36,687 | 39,235 | 39,235 | **0 rec/s (0.00)** | 2,548 rows | 289,744 |
+| `eval-kafka-stop-r5` | 32,989 | 35,700 | 35,700 | **0 rec/s (0.00)** | 2,711 rows | 289,744 |
 | `eval-spark-worker-stop-r1` | 38,987 | 53,982 | 56,981 | **0 rec/s (0.00)** | 17,994 rows | 289,744 |
 | `eval-spark-worker-stop-r2` | 38,982 | 53,982 | 56,981 | **0 rec/s (0.00)** | 17,999 rows | 289,744 |
 | `eval-spark-worker-stop-r3` | 38,980 | 53,980 | 56,980 | **0 rec/s (0.00)** | 18,000 rows | 289,744 |
@@ -171,7 +171,7 @@ During `spark-worker-stop`, `kafka-stop`, and `datanode-stop`, the platform repo
 | `eval-datanode-stop-r4` | 38,987 | 53,982 | 53,982 | **0 rec/s (0.00)** | 14,995 rows | 289,744 |
 | `eval-datanode-stop-r5` | 38,977 | 53,969 | 56,968* | **0 rec/s (0.00)** | 14,992 rows | 54,990 |
 <!-- END GENERATED:stop_faults_records_reconciliation_table -->
-*\*Note on kafka-stop: The Kafka container halts quickly (1.4–2.4s). The non-zero throughput (~130 rec/s) is explained by the completion of exactly one in-flight micro-batch of ~2,999 records that Spark had already pulled into executor memory prior to Kafka halting. Once that single in-flight batch committed at t+5s, throughput remained 0.0 rec/s for the remaining 15 seconds of the fault window.*
+*\*Note on kafka-stop: The Kafka container halts quickly (1.4–2.4s). The non-zero throughput (~130 rec/s) is explained by the completion of in-flight micro-batches of 2,787 (r2), 2,689 (r3), 2,548 (r4), and 2,711 (r5) records (mean 2,683.8 rows across the 4 non-zero runs; average window throughput 134.00 rec/s over 20s) that Spark had already pulled into executor memory prior to Kafka halting. Once that in-flight batch committed, throughput remained 0.00 rec/s for the remaining duration of the fault window until after fault revert.*
 
 ### Baseline Quantization Measurement Limitation [VERIFIED: docs/evaluation/results/results_master.json]
 
@@ -590,6 +590,19 @@ The evaluation strictly tested 3 container targets (`platform-kafka`, `platform-
    - Inspection of start timestamps across all 30 evaluation runs confirms that all 25 fault injection runs (kafka-stop, kafka-restart, spark-worker-stop, spark-worker-restart, datanode-stop) were executed between 2026-10-20 23:11 UTC and 2026-10-21 10:51 UTC, whereas the 5 empirical control runs (eval-control-r1 through 
 5) were executed subsequently between 2026-10-21 12:56 UTC and 13:21 UTC.
    - The control runs were not interleaved with the fault runs, creating a potential run-order confound from accumulated HDFS blocks, Kafka disk volume segments, and hypervisor memory caching across consecutive runs.
+5. **Flaky Streaming Chaos Test Under Resource Contention**:
+   - `backend/tests/integration/test_streaming_chaos.py::test_streaming_pipeline_survives_kafka_restart` tests end-to-end resilience and zero data loss of a 300,000-row streaming pipeline during Kafka container restart.
+   - An earlier audit run observed failure: `Producer lost records: 284556 != 300000`.
+   - Technical Root Cause: `backend/app/messaging/kafka_config.py:35-43` sets librdkafka `delivery.timeout.ms: 120000` (120s) and `retries: 10`, while `backend/app/messaging/kafka_producer.py:204,287,298-312` executes `self.flush(timeout=60.0)`. During Kafka container restart under memory pressure or initial cold Maven artifact downloads, broker reconnect and in-flight queue draining exceeds 60 seconds. Consequently, `flush(60.0)` returns early before all delivery report callbacks fire, causing `publish_csv` to return a partial count before completion.
+   - Empirical Isolation Verification: Re-evaluated across 5 consecutive runs in isolation with pre-warmed ivy dependency cache, the test passed 5 of 5 times (0% failure rate; 300,000 published, 300,000 ingested, 300,000 output; mean duration 53.62s).
+   - Baseline Comparison at Commit 4bacaf0: Marked UNRESOLVED because the stack cannot run across two commits with diverging schema/migrations without image rebuilds that are blocked by Debian mirror latency.
+6. **Playwright E2E Resource Sensitivity**:
+   - The full Playwright test suite (60 tests) executes with `workers: 1` and requires at least 2.5 GB of free host RAM. Under concurrent heavy container workloads (Airflow, Prometheus, Grafana), browser process launching and Vite dev-server HMR can encounter transient timeouts. Stopping non-essential containers during Playwright runs eliminates these timeouts.
+7. **Platform Validator Scope & Blind Spots (Validator Defect #2)**:
+   - The platform's built-in data integrity validator (`backend/app/reliability/experiment_runner.py:1039`) operates only on streaming runs and compares output rows against the streaming tracker's `records_out` counter rather than total source input rows (300,000).
+   - Consequently, if a streaming query crashes prematurely during a container outage (as observed in `datanode-stop` runs r2 and r5 at ~55k rows), the validator evaluates loss against the ~55k rows processed before the crash, remaining completely blind to the ~234,750 unprocessed rows dropped upon query death. Physical multiset comparison against HDFS storage is required for truthful loss accounting.
+8. **Batch Mode Fault Injection: NOT EVALUATED**:
+   - The fault-injection evaluation was conducted strictly on streaming pipelines. Batch mode fault injection (e.g., container failure during a 1M-row batch Spark execution) was NOT evaluated in this study.
 
 ---
 
