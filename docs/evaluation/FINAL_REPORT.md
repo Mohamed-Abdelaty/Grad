@@ -116,7 +116,7 @@ The 'Platform Validator Output' column in Gap 3 reports the arithmetic mean acro
 - `kafka-restart`: **10,256.0** (all 5 runs reported 10,256).
 - `spark-worker-stop`: **10,256.0** (all 5 runs reported 10,256).
 - `spark-worker-restart`: **10,070.6** (runs r1, r2, r3, r5 reported 10,256; r4 reported 9,329). In r4, validator output 9,329 = 300,000 − 290,671; the 290,671 counter source is UNRESOLVED; physical audit shows 289,744 committed rows. Arithmetic mean: $(10,256 \times 4 + 9,329) / 5 = 10,070.6$. Actual physical output on HDFS was exactly 289,744.
-- `datanode-stop`: **6,942.8** (surviving runs r1, r3, r4 reported 10,256; crashed runs r2 and r5 reported 1,968 and 1,978). In r2 and r5, the query crashed at ~55k rows, and the validator computed the difference between CSV input and crash-time tracker output. Arithmetic mean: $(10,256 \times 3 + 1,968 + 1,978) / 5 = 6,942.8$. Actual committed HDFS rows: 289,744 in r1, r3, r4; 54,995 in r2; 54,990 in r5.
+- `datanode-stop`: **6,942.8** (surviving runs r1, r3, r4 reported 10,256; crashed runs r2 and r5 reported 1,968 and 1,978). In crashed runs r2 and r5, the query halted at ~55k rows. The validator reported 1,968 and 1,978 ($56,963 - 54,995 = 1,968$ and $56,968 - 54,990 = 1,978$). Analysis of `sales_300k.csv` proves that among the first 56,963 and 56,968 rows, exactly 1,981 rows fail the pipeline filter rules (968 null rows + 1,013 non-positive amounts). The reported deltas of 1,968 and 1,978 match these filtered rows within 13 and 3 rows, confirming they are a pipeline filter artifact rather than uncommitted batch fragments. Crucially, the platform validator (`backend/app/reliability/experiment_runner.py:1039`) compares output against processed-so-far tracker `records_out` rather than total source records (300,000), remaining completely blind to the 234,749 and 234,754 unprocessed rows dropped upon crash (Validator Defect #2). Arithmetic mean: $(10,256 \times 3 + 1,968 + 1,978) / 5 = 6,942.8$. Actual committed HDFS rows: 289,744 in r1, r3, r4; 54,995 in r2; 54,990 in r5.
 
 Therefore, the claim that exactly 289,744 rows were committed applies to **all 20 broker and compute worker runs, all 5 control runs, and the 3 surviving datanode runs (28 of 30 total runs)**; in `datanode-stop` runs r2 and r5, exactly 54,995 and 54,990 rows were committed before storage crash.
 
@@ -578,7 +578,18 @@ The evaluation strictly tested 3 container targets (`platform-kafka`, `platform-
      - `datanode-stop`: 0 of 5 runs
    - The lowest free host RAM observed across all runs was **1,455.8 MB** (in `spark-worker-restart-r5`).
 2. **Gap 1 Batch Mode Evaluation**:
-   - **Gap 1 batch mode: NOT EVALUATED**. The campaign evaluated streaming pipelines exclusively.
+   - **Gap 1 batch mode: EVALUATED AT HEAD UNDER SEPARATE CONFIGURATION**. The campaign evaluated streaming pipelines exclusively. The 1M batch evaluation on 4 data shapes (clean, with_nulls, with_duplicates, edge_cases) was executed subsequently at HEAD under tuned executor memory parameters (SPARK_WORKER_CORES: 4, spark.cores.max: 4, spark.executor.memory: 2G).
+3. **Configuration Drift Between Fault Campaign and HEAD [VERIFIED: docs/evaluation/raw/campaign/datanode-stop/eval-datanode-stop-r1/environment.json]**:
+   - The fault injection campaign was executed under commit 9b52db4 with the campaign configuration:
+     - Worker Cores: SPARK_WORKER_CORES: 2
+     - Submitter settings: spark.cores.max=1, driver default 1G, executor default 1G
+     - Orchestrator: uvicorn app.main:app --reload
+   - Subsequent changes at HEAD tuned SPARK_WORKER_CORES to 4, spark.cores.max to 4, spark.executor.memory to 2G, and changed uvicorn to --workers 1.
+   - **Crucial Limitation**: These later configuration changes were NOT re-evaluated under fault injection. The 1M batch throughput evaluation and the fault-injection campaign results operate under different infrastructure configurations.
+4. **Run Order Confound (Non-Interleaved Control Group) [VERIFIED: docs/evaluation/results/results_master.json]**:
+   - Inspection of start timestamps across all 30 evaluation runs confirms that all 25 fault injection runs (kafka-stop, kafka-restart, spark-worker-stop, spark-worker-restart, datanode-stop) were executed between 2026-10-20 23:11 UTC and 2026-10-21 10:51 UTC, whereas the 5 empirical control runs (eval-control-r1 through 
+5) were executed subsequently between 2026-10-21 12:56 UTC and 13:21 UTC.
+   - The control runs were not interleaved with the fault runs, creating a potential run-order confound from accumulated HDFS blocks, Kafka disk volume segments, and hypervisor memory caching across consecutive runs.
 
 ---
 
@@ -595,7 +606,7 @@ eport.json:baseline | **VERIFIED** | mean(n=5, ddof=1) in scripts/evaluation/bui
 | **4** | DataNode Timeline Timestamps | r1: 10:30:20.707; r2: 10:35:59.855; r3: 10:38:26.212; r4: 10:45:26.082; r5: 10:51:07.729 (UTC) | docs/evaluation/raw/campaign/datanode-stop/eval-datanode-stop-r*/report.json | phases.injecting.startedAt, pre_fault_accounting | **VERIFIED** | Direct timestamp extraction in scripts/evaluation/analyze_datanode_timeline.py |
 | **5** | Kafka Stop Aggregates | Campaign r3–r5 during-fault: **132.27 ± 4.45 rec/s**; all valid n=4: **134.00 ± 5.01 rec/s**; true-halted: **0.00 rec/s**; recovery: **27.35 ± 0.36 s** (campaign), **22.89 ± 6.47 s** (all-5) | docs/evaluation/raw/campaign/kafka-stop/eval-kafka-stop-r*/report.json | 	hroughputDuringFault, 
 ecovery_time_seconds | **VERIFIED** | mean(ddof=1) in scripts/evaluation/build_master.py:build_master |
-| **6** | DataNode Recovery & Counters | 90% throughput recovery (surviving n=3): **21.69 ± 2.10 s**; container recovery (surviving n=3): **0.47 ± 0.08 s** (all-5: **0.44 ± 0.06 s**); committed rows r2/r5: **54,995** / **54,990**; halt records_out: **53,965** / **53,969** | docs/evaluation/results/derived/pipeline_run_events_datanode.json | throughput_90pct_recovery_seconds, physical_rows | **VERIFIED** | mean(n=3, ddof=1) in scripts/evaluation/build_master.py:build_master |
+| **6** | DataNode Recovery & Counters | 90% throughput recovery (surviving n=3): **21.69 ± 2.10 s**; container recovery (surviving n=3): **0.47 ± 0.08 s** (all-5: **0.44 ± 0.07 s**); committed rows r2/r5: **54,995** / **54,990**; halt records_out: **53,965** / **53,969** | docs/evaluation/results/derived/pipeline_run_events_datanode.json | throughput_90pct_recovery_seconds, physical_rows | **VERIFIED** | mean(n=3, ddof=1) in scripts/evaluation/build_master.py:build_master |
 | **7** | Validator Output & Verdict | Control verdict: **not run** (dataLoss=null); fault runs: **10,256** constant delta (,000 - 289,744$) due to 
 emove_nulls and mount > 0 | ackend/app/reliability/data_consistency_validator.py:71-95 | data_loss = expected_records - processed_records | **VERIFIED** | Direct code analysis and raw control report dataLoss=null verification |
 | **8** | Degradation Formulas & Values | Uniform ratio-of-means:  - 	ext{mean}(	ext{during}) / 	ext{mean}(	ext{baseline})$; control reference = **1,498.1 rec/s** | docs/evaluation/results/results_master.json | experiments.*.degradation_ratio_of_means_vs_post_warmup | **VERIFIED** | Statistical aggregation in scripts/evaluation/build_master.py:build_master |

@@ -6,6 +6,14 @@ This document provides exact, deterministic instructions to reproduce the evalua
 
 ## 1. Environment & Prerequisites
 
+> [!IMPORTANT]
+> **Configuration Drift Notice**: The 30 fault-injection campaign runs recorded in docs/evaluation/raw/ were conducted under the campaign configuration (commit 9b52db4):
+> - SPARK_WORKER_CORES: 2, SPARK_WORKER_MEMORY: 2G
+> - spark.cores.max: 1, Driver Memory: 1G, Executor Memory: 1G
+> - Backend: uvicorn app.main:app --reload
+> Subsequent HEAD tuning for 1M batch processing increased SPARK_WORKER_CORES to 4, spark.cores.max to 4, and spark.executor.memory to 2G. These batch settings were NOT re-evaluated under fault injection.
+
+
 - **Python**: Python 3.11 (`py -3.11` on Windows or `python3.11` on Linux/macOS)
 - **Node.js**: Node 18+ and npm
 - **Docker**: Docker engine running with platform containers:
