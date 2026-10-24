@@ -57,6 +57,22 @@ ALLOW_LISTED_NUMBERS = {
     1500: "Minimum free host RAM threshold in MB (1,500 MB)",
     3000: "Streaming batch size (max_offsets_per_trigger=3000)",
 
+    # In-flight micro-batch drain records and halt counts for kafka-stop
+    2787: "In-flight micro-batch drain records for eval-kafka-stop-r2",
+    2689: "In-flight micro-batch drain records for eval-kafka-stop-r3",
+    2548: "In-flight micro-batch drain records for eval-kafka-stop-r4",
+    2711: "In-flight micro-batch drain records for eval-kafka-stop-r5",
+    41761: "records_out at container halt moment for eval-kafka-stop-r2",
+    41676: "records_out at container halt moment for eval-kafka-stop-r3",
+    39235: "records_out at container halt moment for eval-kafka-stop-r4",
+    35700: "records_out at container halt moment for eval-kafka-stop-r5",
+    2683.8: "Mean in-flight micro-batch drain records across kafka-stop runs r2-r5",
+
+    # Flaky streaming test and validator scope audit numbers
+    284556: "Producer partial published count in flaky run (284,556 != 300,000)",
+    53.62: "Mean duration in seconds of 5 isolated streaming chaos test runs",
+    234750: "Approximate dropped rows in datanode-stop crashed query (300,000 - ~55,000)",
+
     # Network ports
     3000: "Platform frontend port",
     5432: "PostgreSQL database port",

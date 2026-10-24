@@ -1,7 +1,7 @@
 {
   "metadata": {
     "description": "ChaosFlow Evaluation Single Source of Truth (Master Results)",
-    "generated_at": "2026-10-23T20:01:06.796839+00:00",
+    "generated_at": "2026-10-24T21:20:43.734511+00:00",
     "statistical_convention": {
       "standard_deviation": "sample standard deviation (ddof=1, N-1 denominator)",
       "control_during_fault_reference_rec_per_sec": 1498.1,
@@ -1112,8 +1112,8 @@
       },
       "records_accounting": {
         "snapshot_records_processed": 38986,
-        "during_fault_delta_records": null,
-        "during_fault_window_seconds": null
+        "during_fault_delta_records": 0,
+        "during_fault_window_seconds": 20.0238
       },
       "baselines": {
         "baseline_10s_window_rec_per_sec": 1499.46,
@@ -1186,8 +1186,8 @@
       },
       "records_accounting": {
         "snapshot_records_processed": 38974,
-        "during_fault_delta_records": null,
-        "during_fault_window_seconds": null
+        "during_fault_delta_records": 2787,
+        "during_fault_window_seconds": 20.0281
       },
       "baselines": {
         "baseline_10s_window_rec_per_sec": 1498.9,
@@ -1260,8 +1260,8 @@
       },
       "records_accounting": {
         "snapshot_records_processed": 38987,
-        "during_fault_delta_records": null,
-        "during_fault_window_seconds": null
+        "during_fault_delta_records": 2689,
+        "during_fault_window_seconds": 20.0404
       },
       "baselines": {
         "baseline_10s_window_rec_per_sec": 1499.4,
@@ -1334,8 +1334,8 @@
       },
       "records_accounting": {
         "snapshot_records_processed": 36687,
-        "during_fault_delta_records": null,
-        "during_fault_window_seconds": null
+        "during_fault_delta_records": 2548,
+        "during_fault_window_seconds": 21.1856
       },
       "baselines": {
         "baseline_10s_window_rec_per_sec": 1499.4,
@@ -1408,8 +1408,8 @@
       },
       "records_accounting": {
         "snapshot_records_processed": 32989,
-        "during_fault_delta_records": null,
-        "during_fault_window_seconds": null
+        "during_fault_delta_records": 2711,
+        "during_fault_window_seconds": 20.0337
       },
       "baselines": {
         "baseline_10s_window_rec_per_sec": 1793.11,

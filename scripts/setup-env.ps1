@@ -18,8 +18,8 @@ param(
     [string]$ExamplePath = ".env.example"
 )
 
-$targetPath = [System.IO.Path]::GetFullPath($EnvPath)
-$sourcePath = [System.IO.Path]::GetFullPath($ExamplePath)
+$targetPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($EnvPath)
+$sourcePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ExamplePath)
 
 if ((Test-Path $targetPath) -and -not $Force) {
     Write-Error "File $targetPath already exists. Pass -Force to overwrite."
