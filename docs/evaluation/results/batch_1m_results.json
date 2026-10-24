@@ -1,0 +1,51 @@
+{
+  "clean": {
+    "shape": "clean",
+    "run_id": "de771bd9-5b15-4d17-96e4-de6a48e04d1a",
+    "status": "succeeded",
+    "input_rows": 1000000,
+    "output_rows": 1000000,
+    "duration_seconds": 110.86,
+    "throughput_rows_per_sec": 9020.39,
+    "hdfs_path": "hdfs://namenode:9000/data/sales_large_clean",
+    "columns": [
+      "transaction_id",
+      "customer_id",
+      "product_id",
+      "category",
+      "quantity",
+      "unit_price",
+      "total_amount",
+      "amount",
+      "transaction_date",
+      "timestamp",
+      "region",
+      "payment_type",
+      "discount",
+      "is_returned"
+    ],
+    "error_message": null
+  },
+  "with_nulls": {
+    "shape": "with_nulls",
+    "run_id": "8139535c-e0ae-43ec-811d-854cc0e2dc56",
+    "status": "POLL_FAILED",
+    "input_rows": 1000000,
+    "output_rows": -1,
+    "duration_seconds": 270.99,
+    "throughput_rows_per_sec": 0.0,
+    "hdfs_path": "hdfs://namenode:9000/data/sales_large_with_nulls",
+    "columns": [],
+    "error_message": null
+  },
+  "with_duplicates": {
+    "shape": "with_duplicates",
+    "status": "SUBMIT_FAILED",
+    "error_message": "timed out"
+  },
+  "edge_cases": {
+    "shape": "edge_cases",
+    "status": "SUBMIT_FAILED",
+    "error_message": "timed out"
+  }
+}

@@ -1,0 +1,6 @@
+PHASE2 BASELINE - 2026-10-24T14:08:00Z
+Backend unit   : 601 passed, 16 skipped
+Integration    : 44 passed
+Evaluation     : 50 passed
+Vitest         : 248 passed, 1 failed (Dashboard.test.tsx timeout)
+Playwright E2E : 46 passed, 13 failed

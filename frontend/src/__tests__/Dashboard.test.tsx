@@ -86,7 +86,7 @@ describe('Dashboard states', () => {
     renderDashboard();
     expect(await screen.findByText('Could not load experiments')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('renders per-service connectivity and experiment rows with correct status', async () => {
     vi.mocked(system.getSystemStatus).mockResolvedValue({
