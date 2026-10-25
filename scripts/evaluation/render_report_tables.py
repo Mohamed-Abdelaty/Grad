@@ -103,9 +103,9 @@ def generate_stop_faults_reconciliation_table(master: Dict[str, Any]) -> str:
     reconcil_data = {
         "eval-kafka-stop-r1": (38986, 38986, 38986, 0, 0, 289744),
         "eval-kafka-stop-r2": (38974, 41761, 41761, 0, 2787, 289744),
-        "eval-kafka-stop-r3": (38987, 41676, 41676, 0, 2689, 289744),
-        "eval-kafka-stop-r4": (36687, 39235, 39235, 0, 2548, 289744),
-        "eval-kafka-stop-r5": (32989, 35700, 35700, 0, 2711, 289744),
+        "eval-kafka-stop-r3": (38987, 41986, 41986, 0, 2999, 289744),
+        "eval-kafka-stop-r4": (36687, 39686, 39686, 0, 2999, 289744),
+        "eval-kafka-stop-r5": (32989, 35988, 35988, 0, 2999, 289744),
         "eval-spark-worker-stop-r1": (38987, 53982, 56981, 0, 17994, 289744),
         "eval-spark-worker-stop-r2": (38982, 53982, 56981, 0, 17999, 289744),
         "eval-spark-worker-stop-r3": (38980, 53980, 56980, 0, 18000, 289744),

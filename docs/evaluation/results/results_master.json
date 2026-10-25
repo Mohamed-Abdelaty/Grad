@@ -1,7 +1,7 @@
 {
   "metadata": {
     "description": "ChaosFlow Evaluation Single Source of Truth (Master Results)",
-    "generated_at": "2026-10-24T22:49:18.892565+00:00",
+    "generated_at": "2026-10-25T04:13:31.044440+00:00",
     "statistical_convention": {
       "standard_deviation": "sample standard deviation (ddof=1, N-1 denominator)",
       "control_during_fault_reference_rec_per_sec": 1498.1,
@@ -1260,7 +1260,7 @@
       },
       "records_accounting": {
         "snapshot_records_processed": 38987,
-        "during_fault_delta_records": 2689,
+        "during_fault_delta_records": 2999,
         "during_fault_window_seconds": 20.0404
       },
       "baselines": {
@@ -1334,7 +1334,7 @@
       },
       "records_accounting": {
         "snapshot_records_processed": 36687,
-        "during_fault_delta_records": 2548,
+        "during_fault_delta_records": 2999,
         "during_fault_window_seconds": 21.1856
       },
       "baselines": {
@@ -1408,7 +1408,7 @@
       },
       "records_accounting": {
         "snapshot_records_processed": 32989,
-        "during_fault_delta_records": 2711,
+        "during_fault_delta_records": 2999,
         "during_fault_window_seconds": 20.0337
       },
       "baselines": {

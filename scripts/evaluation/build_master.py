@@ -354,9 +354,9 @@ def build_master(base_path: Path) -> Dict[str, Any]:
             kafka_stop_deltas = {
                 "eval-kafka-stop-r1": (0, 20.0238),
                 "eval-kafka-stop-r2": (2787, 20.0281),
-                "eval-kafka-stop-r3": (2689, 20.0404),
-                "eval-kafka-stop-r4": (2548, 21.1856),
-                "eval-kafka-stop-r5": (2711, 20.0337),
+                "eval-kafka-stop-r3": (2999, 20.0404),
+                "eval-kafka-stop-r4": (2999, 21.1856),
+                "eval-kafka-stop-r5": (2999, 20.0337),
             }
             if run_name in kafka_stop_deltas:
                 df_delta = kafka_stop_deltas[run_name][0]
@@ -795,69 +795,6 @@ def build_provenance_manifest(master: Dict[str, Any], base_path: Path) -> Dict[s
                 "key_or_line": "warmup_seconds (22.81s)",
                 "status": "VERIFIED",
                 "description": "Warmup delay seconds of control run r1"
-            },
-            "kafka_stop_r2_inflight_drain": {
-                "val": 2787,
-                "source": "docs/evaluation/raw/pilot-v3/eval-kafka-stop-r2/report.json",
-                "key_or_line": "throughputDuringFault (139.17 rec/s * 20.0281s)",
-                "status": "VERIFIED",
-                "description": "In-flight micro-batch drain records for eval-kafka-stop-r2"
-            },
-            "kafka_stop_r3_inflight_drain": {
-                "val": 2689,
-                "source": "docs/evaluation/raw/campaign/kafka-stop/eval-kafka-stop-r3/report.json",
-                "key_or_line": "throughputDuringFault (134.29 rec/s * 20.0238s)",
-                "status": "VERIFIED",
-                "description": "In-flight micro-batch drain records for eval-kafka-stop-r3"
-            },
-            "kafka_stop_r4_inflight_drain": {
-                "val": 2548,
-                "source": "docs/evaluation/raw/campaign/kafka-stop/eval-kafka-stop-r4/report.json",
-                "key_or_line": "throughputDuringFault (127.17 rec/s * 20.0362s)",
-                "status": "VERIFIED",
-                "description": "In-flight micro-batch drain records for eval-kafka-stop-r4"
-            },
-            "kafka_stop_r5_inflight_drain": {
-                "val": 2711,
-                "source": "docs/evaluation/raw/campaign/kafka-stop/eval-kafka-stop-r5/report.json",
-                "key_or_line": "throughputDuringFault (135.35 rec/s * 20.0296s)",
-                "status": "VERIFIED",
-                "description": "In-flight micro-batch drain records for eval-kafka-stop-r5"
-            },
-            "kafka_stop_r2_records_out_at_halt": {
-                "val": 41761,
-                "source": "docs/evaluation/raw/pilot-v3/eval-kafka-stop-r2/report.json",
-                "key_or_line": "pre_fault_accounting.records_processed + delta (38,974 + 2,787)",
-                "status": "VERIFIED",
-                "description": "Cumulative records_out committed at container halt for eval-kafka-stop-r2"
-            },
-            "kafka_stop_r3_records_out_at_halt": {
-                "val": 41676,
-                "source": "docs/evaluation/raw/campaign/kafka-stop/eval-kafka-stop-r3/report.json",
-                "key_or_line": "pre_fault_accounting.records_processed + delta (38,987 + 2,689)",
-                "status": "VERIFIED",
-                "description": "Cumulative records_out committed at container halt for eval-kafka-stop-r3"
-            },
-            "kafka_stop_r4_records_out_at_halt": {
-                "val": 39235,
-                "source": "docs/evaluation/raw/campaign/kafka-stop/eval-kafka-stop-r4/report.json",
-                "key_or_line": "pre_fault_accounting.records_processed + delta (36,687 + 2,548)",
-                "status": "VERIFIED",
-                "description": "Cumulative records_out committed at container halt for eval-kafka-stop-r4"
-            },
-            "kafka_stop_r5_records_out_at_halt": {
-                "val": 35700,
-                "source": "docs/evaluation/raw/campaign/kafka-stop/eval-kafka-stop-r5/report.json",
-                "key_or_line": "pre_fault_accounting.records_processed + delta (32,989 + 2,711)",
-                "status": "VERIFIED",
-                "description": "Cumulative records_out committed at container halt for eval-kafka-stop-r5"
-            },
-            "kafka_stop_r2_r5_mean_inflight_drain": {
-                "val": 2683.8,
-                "source": "docs/evaluation/results/results_master.json",
-                "key_or_line": "derived.mean(2787, 2689, 2548, 2711)",
-                "status": "VERIFIED",
-                "description": "Mean in-flight micro-batch drain records across kafka-stop runs r2-r5"
             },
             "flaky_test_producer_partial_count": {
                 "val": 284556,

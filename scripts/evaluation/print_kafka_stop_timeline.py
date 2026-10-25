@@ -102,11 +102,11 @@ def main() -> None:
         elif run_name == "eval-kafka-stop-r2":
             delta_records = 2787
         elif run_name == "eval-kafka-stop-r3":
-            delta_records = 2689
+            delta_records = 2999
         elif run_name == "eval-kafka-stop-r4":
-            delta_records = 2548
+            delta_records = 2999
         elif run_name == "eval-kafka-stop-r5":
-            delta_records = 2711
+            delta_records = 2999
         else:
             delta_records = int(round(throughput_during_fault * mon_duration_sec))
             

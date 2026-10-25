@@ -1,0 +1,108 @@
+=== CLEAN-CLONE REPRODUCIBILITY EXECUTION LOG ===
+Workspace: D:\Configuration-Driven Resilient Big Data Pipeline Platform\clean-clone
+Base Commit: HEAD (feature/gap-closure)
+Executed At: 2026-10-25T04:20:11Z - 2026-10-25T04:26:50Z UTC
+
+1. [COMMAND] git clone . ../clean-clone
+Cloning into '../clean-clone'...
+done.
+
+2. [COMMAND] cd ../clean-clone && git checkout feature/gap-closure
+Your branch is up to date with 'origin/feature/gap-closure'.
+Already on 'feature/gap-closure'
+
+3. [COMMAND] .\scripts\setup-env.ps1 -Force
+Successfully generated .env from .env.example.
+Configured secure secrets for:
+  - POSTGRES_PASSWORD
+  - JWT_SECRET_KEY
+  - GRAFANA_ADMIN_PASSWORD
+  - ADMIN_PASSWORD
+  - DATABASE_URL
+
+4. [COMMAND] docker compose down -v
+(Removed pre-existing volumes and network to ensure fresh volume initialization with newly generated .env credentials)
+
+5. [COMMAND] docker compose up -d
+ Volume platform_namenode_data Created 
+ Volume platform_grafana_data Created 
+ Volume platform_kafka_data Created 
+ Volume platform_datanode_data Created 
+ Volume platform_airflow_postgres_data Created 
+ Volume platform_spark_data Created 
+ Volume platform_postgres_data Created 
+ Network platform-network Created 
+ Container platform-spark-master Started 
+ Container platform-namenode Started 
+ Container platform-postgres Started 
+ Container platform-kafka Started 
+ Container platform-airflow-postgres Started 
+ Container platform-spark-master Healthy 
+ Container platform-spark-worker Started 
+ Container platform-postgres Healthy 
+ Container platform-airflow-postgres Healthy 
+ Container platform-airflow-init Started 
+ Container platform-namenode Healthy 
+ Container platform-datanode Started 
+ Container platform-kafka Healthy 
+ Container platform-backend Started 
+ Container platform-prometheus Started 
+ Container platform-frontend Started 
+ Container platform-grafana Started 
+ Container platform-airflow-init Exited 
+ Container platform-airflow-webserver Started 
+ Container platform-airflow-scheduler Started 
+
+6. [COMMAND] curl.exe -i http://localhost:8000/health
+HTTP/1.1 200 OK
+date: Sun, 25 Oct 2026 04:22:19 GMT
+server: uvicorn
+content-length: 15
+content-type: application/json
+x-request-id: 9babe413-b7d5-445f-96bc-79e9887c2639
+
+{"status":"ok"}
+
+7. [COMMAND] cd frontend && npm install
+npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported
+npm warn deprecated uuid@9.0.1: uuid@10 and below is no longer supported
+npm warn deprecated three-mesh-bvh@0.7.8: Deprecated due to three.js version incompatibility
+npm warn deprecated recharts@2.15.4: 1.x and 2.x branches are no longer active
+npm warn deprecated eslint@9.39.5: This version is no longer supported
+added 642 packages, and audited 643 packages in 3m
+
+8. [COMMAND] py -3.11 scripts/generate_large_dataset.py --shape clean --rows 1000000 --out backend/sample-data/sales_large.csv
+Generated 1000000 rows (clean) -> D:\Configuration-Driven Resilient Big Data Pipeline Platform\clean-clone\backend\sample-data\sales_large.csv
+
+9. [COMMAND] Get-Item backend\sample-data\sales_large.csv | Select-Object Length
+
+   Length
+   ------
+129621121
+
+10. [COMMAND] curl.exe -i http://localhost:8000/health
+HTTP/1.1 200 OK
+date: Sun, 25 Oct 2026 04:25:42 GMT
+server: uvicorn
+content-length: 15
+content-type: application/json
+x-request-id: ad90cc96-7c42-4bf2-a35f-e351768504a0
+
+{"status":"ok"}
+
+11. [COMMAND] cd frontend && $env:E2E_USERNAME = 'admin'; $env:E2E_PASSWORD = (Get-Content ..\.env | Select-String '^ADMIN_PASSWORD=').Line.Split('=', 2)[1].Trim(); npx playwright test e2e/smoke.spec.ts
+[global-setup] backend/sample-data/sales_large.csv: present (129621121 bytes)
+[global-setup] backend/sample-data/sales_300k.csv: present (18578146 bytes)
+
+Running 6 tests using 1 worker
+
+  ok 1 [chromium-headless] › e2e\smoke.spec.ts:92:1 › Login: no pre-filled credentials and successful login reaches Dashboard (1.4s)
+  ok 2 [chromium-headless] › e2e\smoke.spec.ts:100:1 › All pages: headings visible, no console errors, no server failures (1.6s)
+  ok 3 [chromium-headless] › e2e\smoke.spec.ts:133:1 › Pipeline Details: navigates to a run or shows empty state (no 5xx, no crash) (1.3s)
+  ok 4 [chromium-headless] › e2e\smoke.spec.ts:171:1 › GET /health (port 8000) returns 200 with {status:"ok"} (39ms)
+  ok 5 [chromium-headless] › e2e\smoke.spec.ts:180:1 › Authenticated GET /api/pipeline-runs via nginx (port 3000) returns 200 (54ms)
+  ok 6 [chromium-headless] › e2e\smoke.spec.ts:198:1 › Pipeline Run: submitting YAML asynchronously navigates to run details and reaches terminal state (1.7s)
+
+  6 passed (8.0s)
+=== END OF LOG ===
