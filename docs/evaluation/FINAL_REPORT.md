@@ -157,9 +157,9 @@ During `spark-worker-stop`, `kafka-stop`, and `datanode-stop`, the platform repo
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `eval-kafka-stop-r1` | 38,986 | 38,986 | 38,986 | **0 rec/s (0.00)** | 0 rows | 289,744 |
 | `eval-kafka-stop-r2` | 38,974 | 41,761 | 41,761 | **0 rec/s (0.00)** | 2,787 rows | 289,744 |
-| `eval-kafka-stop-r3` | 38,987 | 41,676 | 41,676 | **0 rec/s (0.00)** | 2,689 rows | 289,744 |
-| `eval-kafka-stop-r4` | 36,687 | 39,235 | 39,235 | **0 rec/s (0.00)** | 2,548 rows | 289,744 |
-| `eval-kafka-stop-r5` | 32,989 | 35,700 | 35,700 | **0 rec/s (0.00)** | 2,711 rows | 289,744 |
+| `eval-kafka-stop-r3` | 38,987 | 41,986 | 41,986 | **0 rec/s (0.00)** | 2,999 rows | 289,744 |
+| `eval-kafka-stop-r4` | 36,687 | 39,686 | 39,686 | **0 rec/s (0.00)** | 2,999 rows | 289,744 |
+| `eval-kafka-stop-r5` | 32,989 | 35,988 | 35,988 | **0 rec/s (0.00)** | 2,999 rows | 289,744 |
 | `eval-spark-worker-stop-r1` | 38,987 | 53,982 | 56,981 | **0 rec/s (0.00)** | 17,994 rows | 289,744 |
 | `eval-spark-worker-stop-r2` | 38,982 | 53,982 | 56,981 | **0 rec/s (0.00)** | 17,999 rows | 289,744 |
 | `eval-spark-worker-stop-r3` | 38,980 | 53,980 | 56,980 | **0 rec/s (0.00)** | 18,000 rows | 289,744 |
@@ -171,7 +171,7 @@ During `spark-worker-stop`, `kafka-stop`, and `datanode-stop`, the platform repo
 | `eval-datanode-stop-r4` | 38,987 | 53,982 | 53,982 | **0 rec/s (0.00)** | 14,995 rows | 289,744 |
 | `eval-datanode-stop-r5` | 38,977 | 53,969 | 56,968* | **0 rec/s (0.00)** | 14,992 rows | 54,990 |
 <!-- END GENERATED:stop_faults_records_reconciliation_table -->
-*\*Note on kafka-stop: The Kafka container halts quickly (1.4–2.4s). The non-zero throughput (~130 rec/s) is explained by the completion of in-flight micro-batches of 2,787 (r2), 2,689 (r3), 2,548 (r4), and 2,711 (r5) records (mean 2,683.8 rows across the 4 non-zero runs; average window throughput 134.00 rec/s over 20s) that Spark had already pulled into executor memory prior to Kafka halting. Once that in-flight batch committed, throughput remained 0.00 rec/s for the remaining duration of the fault window until after fault revert.*
+*\*Note on kafka-stop: The Kafka container halts quickly (1.4-2.4s). Spark Structured Streaming executes in discrete micro-batches of ~2,999 records (with `max_offsets_per_trigger: 3000`). In `eval-kafka-stop-r2`, 2,787 records were committed before halt. In `eval-kafka-stop-r3..r5`, exactly one full in-flight micro-batch of 2,999 records committed before container halt, advancing `records_out` to 41,986 (r3), 39,686 (r4), and 35,988 (r5). The platform-reported during-fault throughputs (139.17, 134.29, 127.17, 135.35 rec/s) represent platform-reported window values sampled by `tracker.get_progress()` at fault revert time. Once the in-flight micro-batch committed, throughput remained strictly 0.00 rec/s while halted until after fault revert.*
 
 ### Baseline Quantization Measurement Limitation [VERIFIED: docs/evaluation/results/results_master.json]
 
@@ -587,8 +587,7 @@ The evaluation strictly tested 3 container targets (`platform-kafka`, `platform-
    - Subsequent changes at HEAD tuned SPARK_WORKER_CORES to 4, spark.cores.max to 4, spark.executor.memory to 2G, and changed uvicorn to --workers 1.
    - **Crucial Limitation**: These later configuration changes were NOT re-evaluated under fault injection. The 1M batch throughput evaluation and the fault-injection campaign results operate under different infrastructure configurations.
 4. **Run Order Confound (Non-Interleaved Control Group) [VERIFIED: docs/evaluation/results/results_master.json]**:
-   - Inspection of start timestamps across all 30 evaluation runs confirms that all 25 fault injection runs (kafka-stop, kafka-restart, spark-worker-stop, spark-worker-restart, datanode-stop) were executed between 2026-10-20 23:11 UTC and 2026-10-21 10:51 UTC, whereas the 5 empirical control runs (eval-control-r1 through 
-5) were executed subsequently between 2026-10-21 12:56 UTC and 13:21 UTC.
+   - Inspection of start timestamps across all 30 evaluation runs (`scripts/evaluation/print_run_timestamps.py`) confirms that all 25 fault injection runs were executed between 2026-10-20T23:12:27Z and 2026-10-21T10:50:44Z UTC (with fault injection timestamps between 2026-10-20T23:12:51Z and 2026-10-21T10:51:18Z UTC), whereas the 5 empirical control runs (`eval-control-r1` through `eval-control-r5`) were executed subsequently between 2026-10-21T12:56:21Z and 2026-10-21T13:17:45Z UTC (finishing at 13:21:40Z UTC).
    - The control runs were not interleaved with the fault runs, creating a potential run-order confound from accumulated HDFS blocks, Kafka disk volume segments, and hypervisor memory caching across consecutive runs.
 5. **Flaky Streaming Chaos Test Under Resource Contention**:
    - `backend/tests/integration/test_streaming_chaos.py::test_streaming_pipeline_survives_kafka_restart` tests end-to-end resilience and zero data loss of a 300,000-row streaming pipeline during Kafka container restart.
@@ -655,3 +654,16 @@ The evaluation campaign proves that the ChaosFlow platform's streaming ingestion
 - The platform data consistency validator has a confirmed defect causing systematic false failure reports of 10,256 lost rows.
 - DataNode failure causes query termination in **2 of 5 runs** under the test environment's `dfs.replication=1` deployment setting, confirming single-replica storage vulnerability rather than an application-layer defect.
 - The `compute_lag(None) = 0` defect has been fixed in code and covered by unit tests, but has not yet been exercised by a real outage occurring at completion time.
+
+### Delivery Verdict
+
+**Verdict: READY WITH DOCUMENTED LIMITATIONS**
+
+The release is approved under the following 7 documented limitations:
+1. **Baseline-commit (`4bacaf0`) test comparison**: Marked UNRESOLVED because the stack cannot run across two distant commits with diverging database schemas and migrations without full container rebuilds blocked by Debian package mirror latency.
+2. **Batch-mode fault injection**: Marked NOT EVALUATED; the chaos campaign evaluated streaming pipelines under fault injection exclusively, while 1M batch mode was evaluated only under steady-state execution.
+3. **Spark configuration drift after the campaign**: SPARK_WORKER_CORES was tuned from 2 to 4, spark.cores.max from 1 to 4, and spark.executor.memory from 1G to 2G after the Oct 20/21 campaign; these tuned settings were not re-tested under fault injection.
+4. **Control runs not interleaved with fault runs**: All 25 fault runs ran between 2026-10-20T23:12:27Z and 2026-10-21T10:50:44Z UTC, while the 5 control runs ran subsequently between 2026-10-21T12:56:21Z and 2026-10-21T13:17:45Z UTC.
+5. **Platform validator scope defects**: The built-in data consistency validator is filter-unaware (expected 300,000 raw vs 289,744 post-filter = 10,256 constant delta) and flags false data loss.
+6. **Producer flush behaviour [HYPOTHESIS]**: When Kafka broker reconnect exceeds 60s timeout under host memory pressure, `self.flush(timeout=60.0)` in `backend/app/messaging/kafka_producer.py:287` returns the count of remaining un-flushed messages without raising an exception.
+7. **Playwright memory sensitivity (3-chunk method)**: Running all 60 Playwright tests sequentially in a single worker on WSL2 causes memory accumulation exceeding the 5.8 GiB hypervisor ceiling; execution must be partitioned across 3 chunks.
